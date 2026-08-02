@@ -33,7 +33,8 @@ update public.katedra_projects
  where work_type_canonical is null or work_type_canonical = '';
 
 alter table public.katedra_projects
-  alter column project_id set not null;
+  alter column project_id set not null,
+  alter column work_type_canonical set not null;
 
 -- Canonical vocabulary used in shared payloads/persistence. This does NOT widen
 -- the current Katedra v1 UI; it only prevents future cross-product one-letter codes.
@@ -54,8 +55,8 @@ begin
 end $$;
 
 -- Legacy client IDs were historically unique only per user. Preserve that safety
--- during migration. New UUID project IDs should be globally unique by convention;
--- a later cleanup can enforce a global unique constraint after legacy IDs are gone.
+-- during migration. `project_id` is opaque and guest-safe; v0.1 therefore enforces
+-- uniqueness per owner rather than pretending legacy IDs are globally unique.
 create unique index if not exists katedra_projects_user_project_idx
   on public.katedra_projects (user_id, project_id);
 
