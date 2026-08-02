@@ -44,21 +44,31 @@ This is safe enough for the current guest-first application, but ambiguous for a
 
 ### Decision
 
-Introduce one canonical ecosystem project identifier:
+A canonical ecosystem project ID must exist **from the moment the project is created**, including for a guest. Logging in must attach ownership; it must not replace project identity.
+
+Recommended new-project behavior:
 
 ```ts
-projectId: string // UUID, canonical across Lekta + Katedra
+projectId: string // opaque; new projects should use crypto.randomUUID()
 ```
 
-Keep the current local identifier only as a migration/client alias:
+The Supabase table's existing `id` remains a database-row identity, not the ecosystem project identity.
+
+Existing Katedra `k...` IDs remain valid legacy aliases during migration:
 
 ```ts
 legacyClientProjectId?: string
 ```
 
-The database UUID should become the long-term cross-product identity. New handoffs should eventually carry canonical `projectId`, while the current `k...` ID remains backward-compatible during migration.
+Migration direction:
 
-Do not delete `guest_project_id` yet.
+- new guest projects receive a UUID client-side;
+- the same UUID survives sign-in and server sync;
+- the server stores it as the canonical project identifier in a dedicated field when the schema migration is introduced;
+- old `k...` projects are accepted and can be mapped without breaking existing localStorage data;
+- do not delete `guest_project_id` until backward compatibility is no longer needed.
+
+This avoids the worst identity failure mode: a guest project changing IDs at registration.
 
 ## 3. Work type vocabulary mismatch
 
@@ -127,27 +137,29 @@ Katedra currently accepts:
 issueId || checkId || generated fallback
 ```
 
-and already has a placeholder for `ruleId`, but comments note that Lekta does not yet send it consistently.
+and already has a placeholder for `ruleId`, but current Lekta presentation issues do not consistently expose stable check/rule identity.
 
 ### Decision
 
-Cross-product issues should eventually contain stable fields:
+The shared v0.1 contract distinguishes logical identity from one analysis occurrence:
 
 ```ts
 interface LektaIssueRef {
-  issueId: string;
-  checkId: string;
-  ruleId?: string;
+  issueKey: string;              // stable logical reconciliation key
+  issueInstanceId?: string;      // one occurrence in one analysis
+  checkId?: string | null;
+  ruleId?: string | null;
   severity: 'error' | 'warning' | 'info';
   category: string;
   summary: string;
   fixable: boolean;
-  fixerId?: string;
-  location?: string;
+  fixerId?: string | null;
 }
 ```
 
-`issueId` must be stable enough to compare re-checks. A generated array-index fallback is allowed only for legacy payloads and must not be treated as durable identity.
+`issueKey` must be stable enough to compare re-checks. An array-index fallback is legacy-only and must never become canonical identity.
+
+Until the engine emits explicit IDs, Lekta's adapter may derive a conservative legacy key from stable presentation identity while leaving `checkId`, `ruleId`, and fixability unknown rather than inventing them.
 
 ## 6. Verification lifecycle
 
@@ -204,10 +216,10 @@ interface Entitlement {
   entitlementId: string;
   userId: string;
   projectId?: string;
-  product: 'lekta-check' | 'lekta-fix' | 'academic-pass' | 'academic-pass-plus';
-  status: 'active' | 'consumed' | 'expired' | 'refunded';
-  startsAt: string;
-  endsAt?: string;
+  scope: 'lekta-check' | 'lekta-fix' | 'katedra-pro' | 'academic-pass' | 'academic-pass-plus';
+  status: 'active' | 'consumed' | 'expired' | 'revoked' | 'refunded';
+  validFrom: string;
+  validUntil?: string;
 }
 ```
 
@@ -251,7 +263,7 @@ Do not:
 1. Define canonical shared TypeScript contract file(s).
 2. Add canonical `AcademicWorkType` mapping.
 3. Add canonical `LektaIssueRef` transport shape.
-4. Decide canonical UUID `projectId` migration path.
+4. Migrate project creation toward one guest-safe canonical `projectId` that survives login.
 5. Add pack/version provenance fields.
 
 ### Foundation B — identity readiness
@@ -278,7 +290,7 @@ Do not:
 The foundation is ready for feature work when all of the following are true:
 
 - both repos agree on one canonical `userId` strategy;
-- both repos agree on one canonical `projectId` strategy;
+- both repos agree on one canonical `projectId` strategy that works before login;
 - both repos use the same semantic work-type vocabulary in transport/persistence contracts;
 - Lekta result payload has stable issue identity and canonical severity;
 - Katedra consumes a versioned Lekta rules projection;
