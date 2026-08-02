@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "0.1",
+  "contractVersion": "0.1",
+  "artifact": "katedra-pack.json",
+  "sourceProduct": "lekta",
+  "sourcePath": "data/profiles/verified-profiles.json",
+  "sourceVersion": "unknown-legacy",
+  "generatedAt": "2026-08-02",
+  "generationMode": "legacy-manual",
+  "status": "migration-required",
+  "note": "Existing pack predates the versioned Academic Core export seam. The next generated pack must replace sourceVersion with the exact Lekta source commit/release and generationMode with versioned-export. Do not claim this legacy artifact is pinned to a specific Lekta commit."
+}
