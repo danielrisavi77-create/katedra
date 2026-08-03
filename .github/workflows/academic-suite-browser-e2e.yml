@@ -1,0 +1,53 @@
+name: Academic Suite browser E2E
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  browser-e2e:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'architecture/lekta-katedra-foundation-v0.1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KATEDRA_E2E_URL: http://127.0.0.1:3000
+      LEKTA_PREVIEW_URL: https://deploy-preview-25--lektahr.netlify.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install Playwright runner (ephemeral)
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Build Katedra
+        run: npm run build
+
+      - name: Start Katedra
+        run: |
+          npm run start -- -p 3000 > /tmp/katedra-e2e.log 2>&1 &
+          echo $! > /tmp/katedra-e2e.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/katedra-e2e.log
+          exit 1
+
+      - name: Run Lekta × Katedra browser loop
+        run: node scripts/academic-suite-browser-e2e.mjs
+
+      - name: Print Katedra server log on failure
+        if: failure()
+        run: cat /tmp/katedra-e2e.log || true
