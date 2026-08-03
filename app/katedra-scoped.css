@@ -727,6 +727,20 @@
     color:var(--mut2);justify-self:start}
   .katedra-page .board-meta b{color:var(--txt);font-weight:600;font-style:italic;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .katedra-page .scan-summary{margin:0 2px 16px}
+  .katedra-page .scan-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .katedra-page .scan-head b{font-size:14.5px}
+  .katedra-page .scan-head span{font-size:12px;color:var(--mut)}
+  .katedra-page .scan-row{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;margin-bottom:12px}
+  .katedra-page .scan-stat{display:flex;flex-direction:column;gap:2px}
+  .katedra-page .scan-stat b{font-size:21px;font-weight:800;color:var(--txt)}
+  .katedra-page .scan-stat span{font-size:10.5px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px}
+  .katedra-page .scan-line{font-size:13px;color:var(--mut);flex:1;min-width:220px;align-self:center}
+  .katedra-page .scan-risk-head{font-size:12.5px;font-weight:700;color:var(--bad);margin-bottom:6px}
+  .katedra-page .scan-risk-head.ok{color:var(--ok)}
+  .katedra-page .scan-risks{margin:0;padding-left:18px;font-size:13px;color:var(--txt)}
+  .katedra-page .scan-risks li{margin-bottom:4px}
+  .katedra-page .scan-more{font-size:12px;color:var(--mut);font-style:italic;margin-top:6px}
   .katedra-page .board-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
   /* Stupci se dodjeljuju izričito jer .board-side u DOM-u dolazi PRVI —
      tako na uskom ekranu rok i opseg ostanu iznad faza, bez order trika. */

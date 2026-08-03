@@ -294,6 +294,7 @@ function refreshProgress(){
   if(typeof renderIndeksHead === 'function') renderIndeksHead();
   if(typeof updatePaper === 'function') updatePaper();
   if(typeof renderBoardHi === 'function') renderBoardHi();
+  if(typeof renderScanSummary === 'function') renderScanSummary();
   /* Semafor na tabovima: nedostupno je vidljivo, ali zaključano. Uvjet je
      pravilo same aplikacije — faze 0–2 na 100 % prije prvog prompta. */
   const preP = totPre ? ckPre/totPre : 0;
@@ -971,6 +972,35 @@ function nextStepText(){
                   : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
     label: LIN_ST[pos]
   };
+}
+// Kompaktan "gdje sam sada" sažetak na vrhu Indeksa — isti podaci kao puna
+// checklista i nextStepText(), samo destilirani u tri broja i tri rizika.
+// Namjerno bez novog izvora istine: čita PHASES/state.checks/nextStepText().
+function renderScanSummary(){
+  const host = $('scanSummary'); if(!host) return;
+  let totAll = 0, ckAll = 0;
+  const risks = [];
+  PHASES.forEach(ph => {
+    visibleItems(ph).forEach(it => {
+      totAll++;
+      if(state.checks[ph.id+':'+it.t]) ckAll++;
+      else if(it.crit) risks.push(it.t);
+    });
+  });
+  let ns; try{ ns = nextStepText(); }catch(e){ ns = null; }
+  const rokLine = ns && ns.rok ? ns.rok.replace(/^\s*·\s*/, '') : 'Postavi rok predaje za vozni red.';
+  const hasRisks = risks.length > 0;
+  host.innerHTML =
+    '<div class="scan-head"><b>📋 Katedra Scan</b><span>Gdje stojiš upravo sada</span></div>' +
+    '<div class="scan-row">' +
+      '<div class="scan-stat"><b>' + ckAll + '/' + totAll + '</b><span>koraka riješeno</span></div>' +
+      '<div class="scan-line">' + rokLine + '</div>' +
+    '</div>' +
+    '<div class="scan-risk-head' + (hasRisks ? '' : ' ok') + '">' +
+      (hasRisks ? 'Najkritičnije još otvoreno' : '✅ Nema otvorenih kritičnih stavki — dobro stojiš') +
+    '</div>' +
+    (hasRisks ? '<ul class="scan-risks">' + risks.slice(0,3).map(t => '<li>' + escA(t) + '</li>').join('') + '</ul>' : '') +
+    (risks.length > 3 ? '<p class="scan-more">+ još ' + (risks.length - 3) + ' kritičnih stavki niže u Indeksu</p>' : '');
 }
 function renderLine(){
   const host = $('linSts'); if(!host) return;
@@ -2271,7 +2301,7 @@ $('view-auto').addEventListener('input', () => { buildAuto(); saveState(); });
 $('view-auto').addEventListener('change', () => { buildAuto(); saveState(); });
 $('copyBtn').onclick = copyPrompt;
 $('autoCopy').onclick = () => copyText($('autoOut').textContent, $('autoCopy'), val('a_tema') ? [] : ['tema']);
-$('dl_rok').addEventListener('input', () => { renderDeadlines(); renderLine(); renderIndeksHead(); updatePaper(); saveState(); if(getManifest()) ensureManifest(); });
+$('dl_rok').addEventListener('input', () => { renderDeadlines(); renderLine(); renderIndeksHead(); renderScanSummary(); updatePaper(); saveState(); if(getManifest()) ensureManifest(); });
 $('wc_total').addEventListener('input', () => { renderWC(); saveState(); });
 $('wc_unit').addEventListener('change', () => { renderWC(); saveState(); });
 $('btnDnevnik').onclick = exportDnevnik;
