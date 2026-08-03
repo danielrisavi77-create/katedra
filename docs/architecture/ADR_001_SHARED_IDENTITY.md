@@ -4,17 +4,9 @@ Status: **accepted**
 
 Date: 2026-08-03
 
-## Context
-
-Katedra already has Supabase Auth and persistent tables keyed by `auth.users(id)`. Lekta currently does not have an end-user account system that needs migration.
-
-The products must remain separate applications/brands while eventually allowing one user account and project/pass identity across both.
-
-Waiting until seamless SSO is built before choosing the identity authority would create a serious risk: Lekta could introduce a second user store and force account reconciliation later.
-
 ## Decision
 
-**The Supabase Auth project used by Katedra is the canonical identity backend for the Lekta × Katedra ecosystem.**
+**The existing Lekta Supabase Auth project (`zrrjttizjyfcxmcpgzml`) is the canonical identity backend for the Lekta × Katedra ecosystem.**
 
 Canonical cross-product `userId` is:
 
@@ -22,70 +14,71 @@ Canonical cross-product `userId` is:
 auth.users.id
 ```
 
-from that shared Supabase project.
+from the Lekta Supabase project.
 
-Lekta must not introduce a second independent production user identity store.
+Katedra must use this Auth tenant and must not maintain a second independent production identity store.
 
-## Important distinction
+## Why this project
 
-Shared identity backend does **not** mean the two top-level domains automatically share a browser session.
+Lekta already has live Auth users, production commerce, Thesis Pass products and a real Supabase migration history. Moving Katedra into that backend avoids splitting existing Lekta identity/commerce authority.
 
-There are two separate milestones:
+## Shared identity vs seamless SSO
 
-1. **Foundation (now):** both products resolve accounts to the same canonical Supabase user identity.
-2. **Unified account UX / SSO (later):** moving from one product/domain to the other can happen without asking the user to authenticate again, implemented through an explicit secure cross-domain handoff/token flow or a future shared parent-domain architecture.
+One Auth project does not automatically share cookies across `katedra.hr` and `lekta.hr`.
 
-The first decision is permanent architecture. The second is UX/integration work and may ship later.
+Two milestones remain distinct:
+
+1. **Foundation:** both products resolve accounts to the same Lekta Supabase `auth.users.id`.
+2. **Seamless SSO:** later secure cross-domain session exchange so a user does not authenticate twice.
+
+The first is backend identity architecture; the second is UX transport.
 
 ## Consequences
 
 ### Positive
 
-- no future email-based account merging;
-- purchases can attach to one `userId`;
-- projects can attach to one owner;
-- shared entitlements become straightforward;
-- Lekta can remain anonymous for free checks while still using the canonical account system when login is needed;
-- Katedra keeps its existing auth investment.
+- no account-merge problem;
+- existing Lekta users can become Katedra users without identity migration;
+- purchases/projects attach to one stable UUID;
+- existing Lekta commerce stays authoritative;
+- Katedra joins instead of forcing a migration of Lekta production systems.
 
 ### Constraints
 
-- Supabase `service_role` remains server-only in both products;
-- each app keeps its own RLS-protected domain tables unless a table is explicitly shared;
-- client code must never use email as a join key;
-- cross-domain session transfer must be designed explicitly rather than by trying to share localStorage;
-- the account system does not imply raw document cloud storage.
+- Katedra deployment env must point to Lekta Supabase;
+- Katedra Auth redirect/callback URLs must be allowed in Lekta Supabase Auth settings;
+- `service_role` remains server-only;
+- email is never a cross-product primary key;
+- local DOCX privacy is unrelated to shared identity and remains intact.
 
 ## Guest behavior
 
-A Lekta free check and a Katedra guest project may exist without `userId`.
+Guest Katedra projects and free Lekta checks may exist without `userId`.
 
-When a guest later authenticates:
+When the user authenticates:
 
-- the existing canonical `projectId` remains unchanged;
-- `ownerUserId` is attached;
-- project identity is not regenerated;
-- purchase/entitlement claiming must be server-validated.
+- the existing project UUID remains unchanged;
+- ownership attaches to the Lekta Supabase `auth.users.id`;
+- purchase/entitlement claiming is server-validated.
 
 ## Rejected alternatives
 
-### Separate Supabase/Auth project for Lekta
+### Separate Katedra Supabase
 
-Rejected because it creates duplicate identities and later account-merge complexity with no current migration benefit.
+Rejected because it would duplicate Auth and force future identity/purchase reconciliation.
 
 ### Email as shared identity
 
-Rejected because email is mutable and is not a safe primary cross-product key.
+Rejected because email is mutable and unsafe as the canonical join key.
 
-### Merge Lekta and Katedra into one application
+### Merge products
 
-Rejected. Shared identity is infrastructure; it does not change the product boundary.
+Rejected. Shared identity/backend is infrastructure; product responsibilities and brands remain separate.
 
 ## Follow-up
 
-Before Lekta introduces login-dependent functionality:
-
-1. configure it against the canonical Supabase Auth project;
-2. define its own RLS policies/tables or shared tables explicitly;
-3. implement account handoff only when the user flow requires seamless cross-domain SSO;
-4. keep anonymous Lekta analysis available where the product strategy requires it.
+1. Apply Academic Suite migrations from the Lekta repo.
+2. Point Katedra runtime env at Lekta Supabase.
+3. Add Katedra redirect URLs to Lekta Auth configuration.
+4. Validate one account in both products.
+5. Design seamless cross-domain SSO only when the UX requires it.
