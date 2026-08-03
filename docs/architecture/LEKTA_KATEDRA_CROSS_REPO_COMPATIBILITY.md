@@ -1,299 +1,138 @@
-# Lekta × Katedra — Cross-Repo Compatibility Audit v0.1
+# Lekta × Katedra — Cross-Repo Compatibility Audit v0.2
 
-Status: architecture-only; no production behavior changed.
-
-Purpose: reconcile the existing Katedra implementation with the shared foundation introduced in the Lekta repository before either application adds more integration surface.
+Status: foundation and first closed-loop integration implemented on paired architecture branches; `master` remains unchanged.
 
 ## Executive conclusion
 
-Katedra is already substantially aligned with the intended two-product ecosystem:
+Katedra and Lekta now share enough contract surface for a real closed loop without merging products:
 
-- separate product responsibility is documented;
-- Supabase auth exists;
-- a project manifest exists;
-- Lekta handoff already exists through URL payloads;
-- Katedra already consumes a Lekta-derived rules pack;
-- raw `.docx` content is not part of shared project state;
-- Katedra already distinguishes its process signal from Lekta's compliance score.
+- one canonical project identity direction;
+- one shared work-type vocabulary at the boundary;
+- one privacy-safe `LektaResult` transport;
+- stable finding identity (`checkId`, `ruleId`, `issueKey`) for re-check reconciliation;
+- Katedra workflow states that cannot self-certify a deterministic fix;
+- Lekta remains the only authority that can verify disappearance of a finding.
 
-Therefore the next step is **not** to rebuild Katedra. The next step is to normalize shared contracts and remove a few schema ambiguities before they become migration debt.
+The apps should remain separate products with a shared Academic Core and shared identity direction.
 
-## 1. Shared identity: decide backend now, seamless SSO later
-
-Current Katedra implementation already uses Supabase Auth and every persistent Katedra table is keyed by `auth.users(id)`.
-
-The current charter says "one account in V3". That should be interpreted as:
-
-- **NOW:** choose one canonical identity backend and canonical `userId` for both products;
-- **LATER/V3:** add seamless cross-domain SSO so a user does not need to authenticate again when moving between domains.
-
-This prevents Lekta from introducing a second incompatible identity store before V3.
-
-Recommended direction: Katedra's existing Supabase project is the leading candidate for the shared identity backend because Lekta currently has no user-account migration burden.
-
-Do not equate "shared identity backend" with "shared browser session". Two separate top-level domains require an explicit cross-domain sign-in handoff/token exchange for seamless SSO.
-
-## 2. Canonical Project ID ambiguity — fix before account integration
-
-Katedra currently has two project identities:
-
-1. `katedra_projects.id` — server-generated UUID primary key;
-2. `guest_project_id` / client `manifest.projectId` — locally generated string beginning with `k...` and used for sync and Lekta handoff.
-
-This is safe enough for the current guest-first application, but ambiguous for a two-app ecosystem.
-
-### Decision
-
-A canonical ecosystem project ID must exist **from the moment the project is created**, including for a guest. Logging in must attach ownership; it must not replace project identity.
-
-Recommended new-project behavior:
-
-```ts
-projectId: string // opaque; new projects should use crypto.randomUUID()
-```
-
-The Supabase table's existing `id` remains a database-row identity, not the ecosystem project identity.
-
-Existing Katedra `k...` IDs remain valid legacy aliases during migration:
-
-```ts
-legacyClientProjectId?: string
-```
-
-Migration direction:
-
-- new guest projects receive a UUID client-side;
-- the same UUID survives sign-in and server sync;
-- the server stores it as the canonical project identifier in a dedicated field when the schema migration is introduced;
-- old `k...` projects are accepted and can be mapped without breaking existing localStorage data;
-- do not delete `guest_project_id` until backward compatibility is no longer needed.
-
-This avoids the worst identity failure mode: a guest project changing IDs at registration.
-
-## 3. Work type vocabulary mismatch
-
-Katedra's database currently restricts `work_type` to:
+## 1. Canonical lifecycle
 
 ```text
-s | z | d
+OPEN
+  -> USER_CHANGED
+  -> RECHECK_REQUIRED
+  -> VERIFIED_FIXED
 ```
 
-The Lekta domain already models a wider taxonomy, including seminar, final, graduate, specialist, doctoral, article, and project.
+`VERIFIED_FIXED` is valid only when a new Lekta analysis for the same project no longer contains the same stable `issueKey`.
 
-### Decision
+If a finding is still present, it returns as `OPEN`.
 
-Shared contracts must use a canonical semantic enum, not single-character UI codes.
+`SKIPPED` remains a Katedra-only deferral state and never means resolved.
 
-Recommended ecosystem vocabulary:
+## 2. Stable finding identity
 
-```ts
-type AcademicWorkType =
-  | 'seminar'
-  | 'final'
-  | 'graduate'
-  | 'specialist'
-  | 'doctoral'
-  | 'article'
-  | 'project';
-```
+The shared result no longer relies on array-index identity.
 
-Katedra may continue using `s/z/d` internally in its legacy UI during transition, but persistence and cross-product payloads should map to the canonical enum.
+Identity order:
 
-Do not widen UI scope merely because the shared enum supports more types.
+1. authored `ruleId` when a finding maps directly to a profile rule;
+2. `ruleId + checkId` when a detailed runtime check is a child of a broader authored rule;
+3. canonical Lekta `checkId` when no authored rule applies;
+4. deterministic `engine:<category>:<slug>` for checks not yet registered in the canonical vocabulary.
 
-## 4. Issue severity mismatch
+A private location hash is appended only when the exact same logical rule/check emits multiple simultaneous occurrences. Human-facing explanatory wording is not part of normal singleton identity.
 
-Lekta's existing `Issue` type uses:
+Katedra stores a local identity sidecar:
 
 ```text
-error | warning | info
+issueKey -> checkId / ruleId
 ```
 
-Katedra currently normalizes incoming values to:
+so the existing vanilla coach engine does not need a risky large refactor.
 
-```text
-critical | warning | info
-```
+## 3. Identity source of truth inside Lekta
 
-The normalization is useful for Katedra presentation, but the shared payload should not silently change domain meaning.
+Stable cross-product check identity reuses Lekta's existing internal `check-fixer-map` exact-title registry first. Supplemental aliases exist only for non-repair checks that are not represented there.
 
-### Decision
+This avoids creating a second competing check vocabulary beside the Repair/Triage engine.
 
-Canonical transport severity:
+Exact `ruleId` coverage depends on a profile having authored `ruleEntries`. When it does not, stable `checkId` reconciliation still works and `ruleId` remains null rather than being invented.
 
-```ts
-type LektaIssueSeverity = 'error' | 'warning' | 'info';
-```
+## 4. Migration safety
 
-Katedra may map `error -> critical` only in its presentation layer.
+Legacy finding IDs are never considered eligible for automatic `VERIFIED_FIXED` merely because a new stable ID has replaced them.
 
-This preserves Lekta as the source of truth for findings while allowing Katedra's more coaching-oriented language.
+Only findings whose IDs use the new `rule:` or `check:` scheme and whose workflow status is `USER_CHANGED` or `RECHECK_REQUIRED` are verification candidates.
 
-## 5. Issue identity is not yet strong enough
+This prevents the identity migration itself from manufacturing false confirmations.
 
-Katedra currently accepts:
+## 5. Re-check semantics
 
-```text
-issueId || checkId || generated fallback
-```
+Before the user leaves Katedra for a project-bound Lekta re-check, active `USER_CHANGED` findings become `RECHECK_REQUIRED`.
 
-and already has a placeholder for `ruleId`, but current Lekta presentation issues do not consistently expose stable check/rule identity.
+When a new shared Lekta result returns:
 
-### Decision
+- same stable `issueKey` present -> finding returns as `OPEN`;
+- stable candidate absent -> Katedra records `VERIFIED_FIXED` using the new Lekta analysis ID/time;
+- legacy/non-stable previous ID -> never auto-verified;
+- new incoming stable issue -> `OPEN`.
 
-The shared v0.1 contract distinguishes logical identity from one analysis occurrence:
+The legacy Katedra engine's existing `prevIds - newIds` fixed-count behavior is preserved, but a preprocessor narrows `prevIds` to genuine stable verification candidates. This makes its existing “potvrđeno riješeno (Lekta re-check)” message semantically correct.
 
-```ts
-interface LektaIssueRef {
-  issueKey: string;              // stable logical reconciliation key
-  issueInstanceId?: string;      // one occurrence in one analysis
-  checkId?: string | null;
-  ruleId?: string | null;
-  severity: 'error' | 'warning' | 'info';
-  category: string;
-  summary: string;
-  fixable: boolean;
-  fixerId?: string | null;
-}
-```
+## 6. Privacy boundary
 
-`issueKey` must be stable enough to compare re-checks. An array-index fallback is legacy-only and must never become canonical identity.
+The cross-product handoff contains identifiers and sanitized finding metadata only.
 
-Until the engine emits explicit IDs, Lekta's adapter may derive a conservative legacy key from stable presentation identity while leaving `checkId`, `ruleId`, and fixability unknown rather than inventing them.
+It does not transfer:
 
-## 6. Verification lifecycle
+- raw `.docx` bytes;
+- document text;
+- free-form issue detail;
+- free-form document location text;
+- mentor notes;
+- source passages.
 
-The existing Katedra constitution correctly enforces that Katedra cannot mark an issue as `VERIFIED_FIXED`.
+URL fragments are used for the return handoff so the sanitized result is not sent in Katedra's server request URL.
 
-Canonical ecosystem lifecycle:
+## 7. Shared identity and project identity
 
-```text
-OPEN -> USER_CHANGED -> RECHECK_REQUIRED -> VERIFIED_FIXED
-```
+Katedra's Supabase Auth remains the proposed canonical identity backend. `auth.users.id` is the future shared `userId`; seamless cross-domain SSO remains a later UX layer.
 
-Katedra owns the middle workflow states.
-Lekta alone owns `VERIFIED_FIXED` after a new document analysis.
+New Katedra projects receive an opaque UUID before authentication. Existing `k...` project IDs remain supported during migration.
 
-Katedra's current `SKIPPED` status may remain as a user-workflow state, but it is not equivalent to resolution.
+## 8. Academic rules
 
-## 7. Academic rules pack: good seam, unsafe manual refresh
+Lekta remains the only normative source of truth. Katedra consumes a read-only projection of Lekta rules; the projection should continue moving from manually refreshed artifact toward a versioned generated export with drift detection.
 
-Katedra already consumes `public/katedra-pack.json`, whose metadata identifies Lekta's verified-profile data as its source.
+## 9. Current persistence boundary
 
-This is the correct architecture direction: Katedra consumes a read-only coach projection of Lekta rules rather than maintaining a separate faculty database.
+Active Lekta issues and `lektaFixedTotal` continue through Katedra's existing manifest/server-sync shape.
 
-The remaining risk is distribution drift. The README currently describes refreshing the pack manually.
+The richer `lektaIdentityIndex` and `lektaResolutionHistory` introduced for reconciliation are currently local manifest metadata. Cross-device persistence of the full resolution history is intentionally deferred; do not claim that capability yet.
 
-### Decision
+## 10. Deployment order
 
-Short term:
+Before these paired branches can be promoted:
 
-- keep `public/katedra-pack.json` as a versioned generated artifact;
-- add `sourceVersion` / commit SHA / pack version in metadata;
-- show/record the version used by each project.
+1. apply the additive Katedra Supabase foundation migration;
+2. deploy preview builds of both apps;
+3. browser-smoke Katedra -> Lekta -> Katedra;
+4. mark one stable finding `USER_CHANGED`;
+5. launch a project-bound re-check and confirm the transition to `RECHECK_REQUIRED`;
+6. test persistence case: same finding returns and reopens;
+7. test resolution case: finding disappears and is recorded as `VERIFIED_FIXED`;
+8. only then promote the paired PRs together.
 
-Next step:
+## 11. Still intentionally deferred
 
-- automate generation from Lekta in CI or a release artifact;
-- add a drift test that fails when the Katedra pack no longer matches the expected Lekta export.
+Do not yet:
 
-Longer term an API/package may replace the copied artifact, but that is not required for v1.
-
-## 8. Shared entitlement layer must sit above Katedra wallet
-
-Current Katedra billing uses token credits (`katedra_wallets`, top-ups, usage accounting).
-
-That implementation can remain. It solves AI variable-cost accounting.
-
-However a cross-product Pass cannot be represented only as wallet balance.
-
-### Decision
-
-Add a separate shared entitlement concept:
-
-```ts
-interface Entitlement {
-  entitlementId: string;
-  userId: string;
-  projectId?: string;
-  scope: 'lekta-check' | 'lekta-fix' | 'katedra-pro' | 'academic-pass' | 'academic-pass-plus';
-  status: 'active' | 'consumed' | 'expired' | 'revoked' | 'refunded';
-  validFrom: string;
-  validUntil?: string;
-}
-```
-
-Wallet credits remain an implementation detail for paid AI usage.
-Entitlements decide what ecosystem capabilities the user has purchased.
-
-Do not redesign Katedra's wallet before first revenue; add the entitlement layer alongside it when the first shared offer is implemented.
-
-## 9. Charter conflict: "one account in V3"
-
-The founder's newer architectural decision is that shared account identity is a foundation concern before both products independently evolve.
-
-The charter wording should therefore eventually be updated from:
-
-> one account only in V3
-
-to a distinction such as:
-
-> one canonical identity backend from foundation; seamless cross-domain SSO and unified account UX in V3.
-
-This is a documentation reconciliation, not a reason to block v1 product work.
-
-## 10. What should NOT be changed now
-
-Do not:
-
-- merge the repositories;
-- move Katedra code into Lekta;
-- replace Supabase;
-- replace Stripe;
-- rewrite the Katedra vanilla engine into React solely for architectural neatness;
-- remove guest/localStorage mode;
-- delete `guest_project_id` yet;
-- redesign Katedra wallet billing before shared Pass implementation;
-- build a generalized microservice architecture.
-
-## 11. Recommended implementation order
-
-### Foundation A — contract normalization
-
-1. Define canonical shared TypeScript contract file(s).
-2. Add canonical `AcademicWorkType` mapping.
-3. Add canonical `LektaIssueRef` transport shape.
-4. Migrate project creation toward one guest-safe canonical `projectId` that survives login.
-5. Add pack/version provenance fields.
-
-### Foundation B — identity readiness
-
-6. Declare Katedra Supabase Auth the proposed canonical identity backend.
-7. Ensure Lekta never creates a second independent user store.
-8. Define future cross-domain auth handoff, but do not build full SSO yet unless required by the first paid cross-product flow.
-
-### Foundation C — first integrated loop
-
-9. Preserve Katedra -> Lekta deep link.
-10. Make Lekta return the normalized result contract.
-11. Make Katedra consume canonical issue severity/IDs.
-12. Re-check must be the only path to `VERIFIED_FIXED`.
-
-### Foundation D — commerce
-
-13. Add shared entitlement table/model.
-14. Map Pass purchase to project/user entitlement.
-15. Keep AI wallet accounting separate from entitlement state.
-
-## 12. Definition of cross-repo foundation complete
-
-The foundation is ready for feature work when all of the following are true:
-
-- both repos agree on one canonical `userId` strategy;
-- both repos agree on one canonical `projectId` strategy that works before login;
-- both repos use the same semantic work-type vocabulary in transport/persistence contracts;
-- Lekta result payload has stable issue identity and canonical severity;
-- Katedra consumes a versioned Lekta rules projection;
-- no faculty-specific normative rule has a second independent source of truth;
-- the shared entitlement model is specified even if not yet fully implemented;
-- production behavior remains backwards-compatible during migration.
+- merge repositories;
+- build generalized microservices;
+- replace Supabase or Stripe;
+- remove guest/localStorage support;
+- redesign Katedra's AI wallet;
+- claim seamless SSO is finished;
+- claim full cross-device resolution history;
+- send raw document content between products.
