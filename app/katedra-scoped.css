@@ -677,10 +677,20 @@
   /* ══════════ RADNA PLOČA — dvostupčani raspored ══════════
      Wrapperi, a ne grid na #view-check: zatečeno sedmero djece bi s
      grid-column:2 na panelima guralo faze u četvrti red i ostavilo rupu. */
-  .katedra-page .board-hi{margin:14px 2px 10px}
-  .katedra-page .board-hi h2{font-family:var(--serif);font-size:clamp(18px,2.4vw,24px);font-weight:800;
-    letter-spacing:-.3px;color:var(--ink)}
-  .katedra-page .board-hi p{font-size:13px;color:var(--mut);margin-top:4px;max-width:60ch}
+  /* Pozdrav i podaci o radu su bili dva odvojena pojasa jedan ispod drugog;
+     sad su jedno zaglavlje — tekst lijevo, Rad i Rok desno. */
+  .katedra-page .board-hi{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+    flex-wrap:wrap;margin:16px 2px 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .katedra-page .board-hi h2{font-family:var(--serif);font-size:clamp(19px,2.5vw,25px);font-weight:800;
+    letter-spacing:-.3px;color:var(--txt)}
+  .katedra-page .board-hi p{font-size:13px;color:var(--mut);margin-top:5px;max-width:58ch}
+  .katedra-page #boardHiTxt{flex:1;min-width:260px}
+  .katedra-page .board-meta{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline;
+    font-size:12.5px;text-align:right;flex-shrink:0;max-width:300px}
+  .katedra-page .board-meta span{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--mut2);justify-self:start}
+  .katedra-page .board-meta b{color:var(--txt);font-weight:600;font-style:italic;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .katedra-page .board-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
   /* Stupci se dodjeljuju izričito jer .board-side u DOM-u dolazi PRVI —
      tako na uskom ekranu rok i opseg ostanu iznad faza, bez order trika. */
@@ -690,6 +700,14 @@
   .katedra-page .board-side{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:12px;
     position:sticky;top:112px}
   .katedra-page .board-side .dl-panel{margin:0}
+  /* U 300px stupcu se "naziv ......... datum" u jednom retku lomio na dva-tri
+     retka i popis je izgledao razbacano. Ovdje datum ide ispod naziva. */
+  .katedra-page .board-side .dl-row{display:block;padding:7px 0}
+  .katedra-page .board-side .dl-row b{display:block;font-size:12.5px;line-height:1.35}
+  .katedra-page .board-side .dl-row .date{display:block;margin-top:1px;font-size:12px;white-space:normal}
+  .katedra-page .board-side .dl-head{gap:8px}
+  .katedra-page .board-side .dl-head h3{flex-basis:100%}
+  .katedra-page .board-side .dl-head input[type="date"]{width:100%}
   @media(max-width:1000px){
     .katedra-page .board-grid{grid-template-columns:1fr}
     .katedra-page .board-main,.katedra-page .board-side{grid-column:auto;grid-row:auto}
@@ -763,9 +781,10 @@
   .katedra-page:not([data-chrome="fak"]) #fakFoot{display:none}
 
   .katedra-page[data-chrome="funnel"] #tabs,
-  .katedra-page[data-chrome="fak"] #tabs,
-  .katedra-page[data-chrome="funnel"] #stepbar,
-  .katedra-page[data-chrome="fak"] #stepbar{display:none}
+  .katedra-page[data-chrome="fak"] #tabs{display:none}
+  /* Traka koraka prati čarobnjak u chatu (Zadatak → Tip → Tema → …). Na ploči
+     ne opisuje ništa što ondje radiš, pa je ondje bila samo još jedan pojas. */
+  .katedra-page:not([data-screen="chat"]) #stepbar{display:none}
   /* #nextBar dobiva inline display iz renderLine(), pa ga CSS smije samo
      skrivati — prikaz i dalje odlučuje hasRealProgress(). */
   .katedra-page[data-chrome="funnel"] #nextBar,

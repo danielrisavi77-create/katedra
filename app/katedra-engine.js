@@ -387,7 +387,10 @@ function setTab(v){
   if(curScreen !== want){ setScreen(want, v); return; }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id==='view-'+v));
-  lsSet('rp_tab', v);   // aktivni tab preživi reload; prije se uvijek vraćalo na chat
+  // Pamti se samo izbor NAPRAVLJEN na ploci. Ekran 4 interno zove
+  // setTab('cheat'); da se i to pamtilo, nakon lijevka bi te docekao
+  // cheatsheet umjesto tvog rada.
+  if(curScreen === 'ploca') lsSet('rp_tab', v);
   if(v === 'check'){
     if(typeof renderIndeksHead === 'function') renderIndeksHead();
     // Ulazak u Indeks vodi točno na mjesto gdje treba djelovati. Dok napretka
@@ -927,6 +930,7 @@ function nextStepText(){
   const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
   return {
     pos, allDone, ready, left: pre.t - pre.c,   // ready/left koristi semafor na tabovima
+    status, rok: rokTxt,                        // linija i traka uzimaju različite dijelove
     html: allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
                   : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
     label: LIN_ST[pos]
@@ -944,10 +948,13 @@ function renderLine(){
   const tram = $('linTram'); if(tram) tram.style.left = (x - 26) + 'px';
   const fill = $('linFill'); if(fill) fill.style.width = (xN > x0 ? ((x - x0) / (xN - x0)) * 100 : 0) + '%';
   LIN_ST.forEach((_, i) => { const s = $('lst'+i); if(s) s.className = 'lin-st' + (i < pos ? ' past' : i === pos ? ' cur' : ''); });
+  // Linija i traka su donedavno prikazivale DOSLOVNO istu rečenicu, jednu
+  // ispod druge. Sad svaka nosi svoj dio: ispod tramvaja stoji koliko je
+  // ostalo i kad je rok, u traci samo sljedeći potez.
   const info = $('linInfo');
-  if(info) info.innerHTML = ns.html;
+  if(info) info.innerHTML = ns.allDone ? ns.html : ns.status + ns.rok.replace(/^\s*·\s*/, '');
   const nbTxt = $('nextBarTxt');
-  if(nbTxt) nbTxt.innerHTML = ns.html;
+  if(nbTxt) nbTxt.innerHTML = ns.allDone ? ns.html : 'Sljedeće: <b>' + ns.label + '</b>';
   const bar = $('nextBar');
   const barVisible = !ns.allDone && typeof hasRealProgress === 'function' && hasRealProgress();
   if(bar) bar.style.display = barVisible ? 'flex' : 'none';
@@ -1549,8 +1556,9 @@ function renderBoardHi(){
   // svrha ekrana ("zašto sam ovdje"), koja se nigdje drugdje ne pojavljuje.
   const zasto = 'Popis svega što treba prije i tijekom pisanja. Otvorena je faza na kojoj si — '
               + 'ostale čekaju svoj red, a rokovi sa strane računaju se iz tvog roka predaje.';
-  el.innerHTML = '<h2>' + (hasRealProgress() ? greetHtml().replace(/^👋 /, '') : 'Krenimo od početka')
-               + '</h2><p>' + zasto + '</p>';
+  const txt = $('boardHiTxt') || el;
+  txt.innerHTML = '<h2>' + (hasRealProgress() ? greetHtml().replace(/^👋 /, '') : 'Krenimo od početka')
+                + '</h2><p>' + zasto + '</p>';
 }
 function chatStart(isInitial){
   $('chatLog').innerHTML = '';
