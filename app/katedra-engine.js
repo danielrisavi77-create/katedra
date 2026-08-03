@@ -1516,9 +1516,9 @@ const MICRO = [
 // Nazivi su bili interni ("Zadatak", "Datoteke", "Prompt") i novom korisniku
 // nisu govorili ni gdje je ni kamo ide. Traka sad imenuje ono što vidi i
 // završava ciljem, a oznaka ispred kaže čega su to koraci.
-const STEPS = ['Što radimo','Tip rada','Tema','Prilozi','Detalji','Gotova uputa'];
+const STEPS = ['Što radimo','Tip rada','Tema','Prilozi','Detalji','Pisanje'];
 function setStep(i){
-  $('stepbar').innerHTML = '<span class="sb-lbl">Koraci do upute</span>' + STEPS.map((s,idx) =>
+  $('stepbar').innerHTML = '<span class="sb-lbl">Koraci do pisanja</span>' + STEPS.map((s,idx) =>
     '<span class="'+(idx<i?'done':idx===i?'cur':'')+'">'+(idx<i?'✓ ':'')+s+'</span>').join('');
   chatClockMount();   // innerHTML gore obriše sat, pa ga vrati
 }
