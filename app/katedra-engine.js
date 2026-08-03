@@ -250,7 +250,12 @@ function toggleCheck(el){
 
 function refreshProgress(){
   let totAll = 0, ckAll = 0, totPre = 0, ckPre = 0;
-  PHASES.forEach(ph => {
+  // Mentorov stol: faza na kojoj si je povučena prema naprijed, dovršene su
+  // odgurnute i blago nakrivljene, buduće prigušene. Klase se postavljaju ovdje
+  // (a ne u renderPhases) jer se stanje mijenja na svaku kvačicu, bez ponovnog
+  // crtanja cijelog popisa.
+  const curIdx = linePos();
+  PHASES.forEach((ph, idx) => {
     const items = visibleItems(ph);
     let ck = 0;
     items.forEach(it => { if(state.checks[ph.id+':'+it.t]) ck++; });
@@ -260,7 +265,11 @@ function refreshProgress(){
     const full = ck===items.length && items.length>0;
     if(cnt){ cnt.textContent = ck + '/' + items.length; cnt.classList.toggle('full', full); }
     if(bar){ bar.style.width = (items.length ? ck/items.length*100 : 0) + '%'; }
-    if(card){ card.classList.toggle('done', full); }
+    if(card){
+      card.classList.toggle('done', full);
+      card.classList.toggle('now', idx === curIdx && !full);
+      card.classList.toggle('ahead', idx > curIdx && !full);
+    }
     const stp = $('stp-'+ph.id); if(stp){ stp.classList.toggle('on', full); }
   });
   /* dnevnik: zabilježi svaku novo-dovršenu fazu (jednom) */
@@ -1381,7 +1390,26 @@ const STEPS = ['Zadatak','Tip','Tema','Datoteke','Detalji','Prompt'];
 function setStep(i){
   $('stepbar').innerHTML = STEPS.map((s,idx) =>
     '<span class="'+(idx<i?'done':idx===i?'cur':'')+'">'+(idx<i?'✓ ':'')+s+'</span>').join('');
+  chatClockMount();   // innerHTML gore obriše sat, pa ga vrati
 }
+
+/* ---------- Šahovski sat: čiji je red ----------
+   Prikazuje se samo u živom razgovoru. U čarobnjaku bi uvijek pisalo isto
+   ("na potezu: ti"), a pokazivač koji nikad ne mijenja vrijednost je šum. */
+function chatClockMount(){
+  const bar = $('stepbar'); if(!bar) return;
+  let c = $('chatClock');
+  if(!c){ c = document.createElement('div'); c.id = 'chatClock'; c.className = 'chat-clock'; }
+  if(c.parentNode !== bar) bar.appendChild(c);
+  chatTurn(chat.busy ? 'k' : 'ti');
+}
+function chatTurn(who){
+  const c = $('chatClock'); if(!c) return;
+  c.hidden = !chat.live;
+  c.innerHTML = '<i' + (who === 'ti' ? ' class="on"' : '') + '>Na potezu: ti</i>' +
+                '<i' + (who === 'k'  ? ' class="on"' : '') + '>Katedra</i>';
+}
+function chatBusy(v){ chat.busy = v; chatTurn(v ? 'k' : 'ti'); }
 function chatScroll(){ const l = $('chatLog'); l.scrollTop = l.scrollHeight; }
 function setComposer(ph){ $('chatInput').placeholder = ph; }
 function pushA(html){
@@ -1834,7 +1862,7 @@ function fileB64(f){
   });
 }
 async function liveBegin(promptText){
-  chat.live = true; chat.step = 'live'; chat.msgs = []; chat.busy = false;
+  chat.live = true; chat.step = 'live'; chat.msgs = []; chatBusy(false); chatClockMount();
   const blocks = [], skipped = [];
   for(const cf of chat.files){
     const f = cf.file;
@@ -1860,7 +1888,7 @@ async function liveSend(v){
   await liveStream();
 }
 async function liveStream(){
-  if(chat.busy) return; chat.busy = true;
+  if(chat.busy) return; chatBusy(true);
   const d = pushA(''); const bub = d.querySelector('.bub'); bub.textContent = '…';
   let full = '', outTok = 0;
   try{
@@ -1869,8 +1897,8 @@ async function liveStream(){
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ messages: chat.msgs })
     });
-    if(resp.status === 401){ d.remove(); chat.busy = false; goToLogin(); return; }
-    if(resp.status === 402){ d.remove(); chat.busy = false; showPaywall(); return; }
+    if(resp.status === 401){ d.remove(); chatBusy(false); goToLogin(); return; }
+    if(resp.status === 402){ d.remove(); chatBusy(false); showPaywall(); return; }
     if(!resp.ok){ const e = await resp.text(); throw new Error(resp.status + ' — ' + e.slice(0, 260)); }
     const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while(true){
@@ -1902,7 +1930,7 @@ async function liveStream(){
   }catch(e){
     bub.innerHTML = '⚠ <b>Greška:</b> ' + escA(String(e.message || e)) + '<br><span style="font-size:12px;color:var(--mut)">Pokušaj ponovno za koju sekundu.</span>';
   }
-  chat.busy = false; chatScroll();
+  chatBusy(false); chatScroll();
 }
 
 /* ---------- ŽIVI DOKUMENT (koncept A) + INDEKS zaglavlje ---------- *//* ---------- ŽIVI DOKUMENT (koncept A) + INDEKS zaglavlje ---------- */

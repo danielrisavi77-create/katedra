@@ -579,6 +579,30 @@
   .katedra-page .lin-tram .tr-wheel{fill:var(--acc3)}
   .katedra-page .lin-tram .tr-lamp{fill:var(--gold)}
 
+  /* ---------- MENTOROV STOL — faza na kojoj si je povučena naprijed ----------
+     Selektori nose #view-check jer ondje žive faze i ondje ih boja gazi
+     ID-specifičnošću; bez toga bi obrub aktivne faze izgubio od papir-sloja. */
+  .katedra-page .phase{transition:transform .3s ease,opacity .3s ease,border-color .2s,box-shadow .3s}
+  .katedra-page #view-check .phase.done{opacity:.6;transform:scale(.985) rotate(-.3deg)}
+  .katedra-page #view-check .phase.ahead{opacity:.52}
+  .katedra-page #view-check .phase.ahead:hover{opacity:.8}
+  .katedra-page #view-check .phase.now{transform:scale(1.012);border-color:var(--stamp);
+    box-shadow:0 12px 30px rgba(var(--shadow-rgb),.2);position:relative;z-index:2}
+  .katedra-page #view-check .phase.now .ph-tit h3::after{content:'ovo sad';margin-left:9px;font-size:9px;
+    font-weight:800;letter-spacing:.9px;text-transform:uppercase;background:var(--stamp);color:var(--paper);
+    border-radius:99px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
+  @media(prefers-reduced-motion:reduce){
+    .katedra-page #view-check .phase.done,.katedra-page #view-check .phase.now{transform:none}
+  }
+
+  /* ---------- ŠAHOVSKI SAT — čiji je red (živi razgovor) ---------- */
+  .katedra-page .chat-clock{margin-left:auto;display:inline-flex;flex-shrink:0;border:1px solid var(--line2);
+    border-radius:99px;overflow:hidden;align-self:center}
+  .katedra-page .chat-clock[hidden]{display:none}
+  .katedra-page .chat-clock i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.7px;
+    text-transform:uppercase;padding:4px 10px;color:var(--mut2);background:var(--bg2);white-space:nowrap}
+  .katedra-page .chat-clock i.on{background:var(--grad);color:var(--on-acc)}
+
   /* ---------- ONBOARDING LIJEVAK — brojač koraka ---------- */
   .katedra-page .onb-count{display:flex;align-items:center;justify-content:center;gap:10px;font-size:10.5px;
     font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut2);margin-top:14px}
