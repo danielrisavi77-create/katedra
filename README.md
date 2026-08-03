@@ -88,7 +88,10 @@ app/
   page.jsx                    tanak wrapper — samo montira vanilla engine
   katedra-engine.js           cijeli vanilla-JS engine (wizard, chat, generator,
                               Lekta handoff/coach, server-sync stanja)
-  katedra-body.js             statični HTML shell (JSON-escaped string)
+  katedra-body.js             statični HTML shell (JSON-escaped string u jednoj
+                              liniji — uređuj kroz json.loads → izmjena →
+                              json.dumps(ensure_ascii=False), pa provjeri
+                              round-trip; kriva escape sekvenca = prazna stranica)
   katedra-scoped.css          dizajn sustav (tokeni + 8 koža), skopiran na .katedra-page
   prijava/, registracija/,
   zaboravljena-lozinka/,
@@ -110,6 +113,21 @@ supabase/migrations/          katedra_credits, katedra_projects,
 public/katedra-pack.json     Lekta baza pravila (130 jedinica/395 profila) —
                               osvježi ručno kad Lekta objavi novu verziju
 ```
+
+**Navigacija.** Sučelje je linearan tok od sedam ekrana, ne skup tabova:
+tip rada → gdje si → tri pitanja → fakultet/studij/smjer → radna ploča →
+chat → povratak. Ekran je vanjski okvir (`data-screen`/`data-chrome` na
+`#katedra-root`), tab je unutarnja ploha radne ploče — `setTab()` i dalje
+jedini dira `.view.on`, `setScreen()` samo atribute. Guard stoji **unutar**
+`setTab()` jer ga zovu i inline `onclick` atributi koje generira
+`renderPhases()`. Ekran i tab pamte se lokalno (`rp_screen`, `rp_screen_max`,
+`rp_tab`), a `page.jsx` ih čita pre-paint skriptom prije prvog crtanja.
+
+Dvije zamke oko koje treba paziti pri svakoj budućoj izmjeni:
+`renderLine()` mjeri `offsetWidth`, pa na skrivenoj `.linija` daje tračnicu
+širine 0 — `setScreen()` je zato ponovo zove; i `scrollToNow()` na skrivenom
+`#view-check` dobiva same nule pa lažno javi „vidljivo", zbog čega
+`setScreen()` postavlja atribute **prije** `setTab()`.
 
 **Izgled i profil studija.** `katedra-scoped.css` drži sve boje u tokenima;
 koža je `data-skin` na `#katedra-root` (8 komada, zadana `kreda`, mijenja se
