@@ -78,7 +78,9 @@
 
   /* ---------- NEXT-STEP TRAKA (F2) — uvijek vidljiv sljedeći korak, isti CTA kroz cijelu app ---------- */
   .katedra-page .next-bar{position:sticky;top:52px;z-index:45;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 16px;margin:0 0 12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-  .katedra-page .nb-txt{flex:1;min-width:0;font-size:12.8px;color:var(--mut);line-height:1.4}
+  .katedra-page .nb-txt{flex:1;min-width:0;font-size:14px;color:var(--txt);line-height:1.35;font-weight:600}
+  .katedra-page .nb-lbl{display:block;font-size:9.5px;font-weight:800;letter-spacing:1.5px;
+    text-transform:uppercase;color:var(--mut2);margin-bottom:2px}
   .katedra-page .nb-txt b{color:var(--txt)}
   .katedra-page .nb-go{flex-shrink:0;background:var(--grad);color:var(--on-acc);border:0;border-radius:9px;padding:9px 16px;font-weight:800;font-size:12.8px;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(var(--acc-rgb),.35);white-space:nowrap}
   .katedra-page .nb-go.glow{animation:katedra-nbglow 1.8s ease-in-out infinite}
@@ -399,7 +401,10 @@
   .katedra-page #view-check .dl-row .date{color:var(--acc)}
   .katedra-page #view-check .dl-row.past .date{color:var(--stamp)}
   .katedra-page .ph-stamp{width:50px;height:50px;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center}
-  .katedra-page .ph-stamp::before{content:'';position:absolute;inset:7px;border:1px dashed var(--pl-edge3);border-radius:50%}
+  .katedra-page .ph-stamp::before{content:'';position:absolute;inset:7px;border:1px dashed var(--pl-edge3);
+    border-radius:50%;opacity:0;transition:opacity .25s}
+  .katedra-page .phase.started .ph-stamp::before,
+  .katedra-page .phase.done .ph-stamp::before{opacity:1}
   .katedra-page .ph-stamp .stp{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:6.5px;font-weight:800;letter-spacing:.7px;color:var(--stamp);border:2px solid var(--stamp);border-radius:50%;text-align:center;line-height:1.25;transform:rotate(-14deg) scale(0);opacity:0;text-transform:uppercase;padding:3px;}
   .katedra-page .ph-stamp .stp.on{animation:katedra-slam .38s cubic-bezier(.2,1.6,.4,1) forwards}
   @keyframes katedra-slam{0%{transform:rotate(8deg) scale(2);opacity:0}60%{transform:rotate(-14deg) scale(.94);opacity:.9}100%{transform:rotate(-14deg) scale(1);opacity:.85}}
@@ -770,7 +775,7 @@
     align-items:center;background:var(--grad);border-color:transparent;color:var(--on-acc)}
   .katedra-page .fun-input .onb-choice b{color:var(--on-acc)}
   /* Sporedni izbor ("preskoči") mora izgledati kao tipka, ne kao zalutali tekst. */
-  .katedra-page .onb-choices .onb-choice.ghost{background:transparent;border-color:var(--line2);text-align:center}
+  .katedra-page .onb-choices .onb-choice.ghost{background:transparent;border-color:var(--line2)}
   .katedra-page .onb-choices .onb-choice.ghost b{font-weight:600;color:var(--mut)}
   .katedra-page .onb-choices .onb-choice.ghost:hover{border-color:var(--acc);background:var(--card2)}
   .katedra-page .onb-choices .onb-choice.ghost:hover b{color:var(--txt)}

@@ -269,6 +269,9 @@ function refreshProgress(){
       card.classList.toggle('done', full);
       card.classList.toggle('now', idx === curIdx && !full);
       card.classList.toggle('ahead', idx > curIdx && !full);
+      // Isprekidani krug je mjesto na koje žig tek treba sletjeti. Dok u fazi
+      // nema nijedne kvačice djeluje kao artefakt, pa se pojavi tek s prvom.
+      card.classList.toggle('started', ck > 0);
     }
     const stp = $('stp-'+ph.id); if(stp){ stp.classList.toggle('on', full); }
   });
@@ -931,9 +934,15 @@ function nextStepText(){
   });
   const ready = pre.t && pre.c === pre.t;
   const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
+  // Prva neoznačena stavka faze na kojoj si — traka time nudi konkretan potez
+  // ("Word predložak fakulteta skinut") umjesto imena stanice, koje ionako
+  // već piše na liniji ispod tramvaja.
+  const curPh = PHASES[pos];
+  const curIt = curPh && visibleItems(curPh).find(it => !state.checks[curPh.id + ':' + it.t]);
   return {
     pos, allDone, ready, left: pre.t - pre.c,   // ready/left koristi semafor na tabovima
     status, rok: rokTxt,                        // linija i traka uzimaju različite dijelove
+    task: curIt ? curIt.t : '',
     html: allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
                   : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
     label: LIN_ST[pos]
@@ -957,7 +966,8 @@ function renderLine(){
   const info = $('linInfo');
   if(info) info.innerHTML = ns.allDone ? ns.html : ns.status + ns.rok.replace(/^\s*·\s*/, '');
   const nbTxt = $('nextBarTxt');
-  if(nbTxt) nbTxt.innerHTML = ns.allDone ? ns.html : 'Sljedeće: <b>' + ns.label + '</b>';
+  if(nbTxt) nbTxt.innerHTML = ns.allDone ? ns.html
+    : '<span class="nb-lbl">Sljedeće</span><b>' + escA(ns.task || ns.label) + '</b>';
   const bar = $('nextBar');
   const barVisible = !ns.allDone && typeof hasRealProgress === 'function' && hasRealProgress();
   if(bar) bar.style.display = barVisible ? 'flex' : 'none';
@@ -2259,6 +2269,7 @@ const FUN_MODES = {
 };
 let funPending = null;   // izbor s ekrana 2, primjenjuje se kad lijevak zavrsi
 let funStep = 0;
+const FUN_SKIPPED = 2;   // ekrani 1 i 2 su prva dva pitanja lijevka
 
 /* Tri pitanja ekrana 3. Tip rada i "gdje si" potrosili su ekrani 1 i 2, pa
    ovdje ide ostatak. Temu namjerno NE pitamo — chat je pita cim ga otvoris,
@@ -2299,9 +2310,13 @@ function funnelFinish(target){
 function funnelRender(){
   if(!$('funOpts')) return;
   if(funStep < 0 || funStep >= FUN_Q.length) funStep = 0;
-  const s = FUN_Q[funStep], left = FUN_Q.length - funStep;
-  $('funCount').innerHTML = 'Još ' + left + (left === 1 ? ' pitanje' : ' pitanja')
-    + '<span class="onb-dots">' + FUN_Q.map((_, n) => '<i' + (n <= funStep ? ' class="on"' : '') + '></i>').join('') + '</span>';
+  const s = FUN_Q[funStep];
+  // Lijevak je 5 pitanja: tip rada, gdje si, pa ova tri. Brojač ide kroz svih
+  // pet da ekrani 1 i 2 i ovaj govore istim jezikom.
+  const n = FUN_SKIPPED + funStep + 1, total = FUN_SKIPPED + FUN_Q.length;
+  $('funCount').innerHTML = 'Pitanje ' + n + ' od ' + total
+    + '<span class="onb-dots">' + Array.from({length: total}, (_, i) =>
+        '<i' + (i < n ? ' class="on"' : '') + '></i>').join('') + '</span>';
   $('funQ').textContent = s.q;
   $('funWhy').textContent = s.why || '';
   const box = $('funOpts'); box.innerHTML = '';
