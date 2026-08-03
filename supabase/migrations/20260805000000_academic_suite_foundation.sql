@@ -63,11 +63,12 @@ create unique index if not exists katedra_projects_user_project_idx
 -- the canonical ecosystem identity and must be globally unique across users so a
 -- future shared project/entitlement table can safely reference `project_id` without
 -- also requiring user identity. Do not impose this retroactively on legacy `k...`
--- aliases; enforce it only for UUID-shaped canonical IDs (including UUID fallbacks
--- derived from the existing row primary key).
+-- aliases; enforce it only for standard UUID-shaped canonical IDs (including UUID
+-- fallbacks derived from the existing row primary key). The structural regex is
+-- deliberately version-agnostic so future UUIDv7 IDs remain covered.
 create unique index if not exists katedra_projects_canonical_uuid_idx
   on public.katedra_projects (project_id)
-  where project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+  where project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
 
 comment on column public.katedra_projects.project_id is
   'Canonical Lekta×Katedra project identity. Exists before login; login attaches ownership rather than replacing project identity. New UUID IDs are globally unique; legacy k... aliases remain per-user compatible.';
