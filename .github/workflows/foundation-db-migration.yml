@@ -1,0 +1,22 @@
+name: DB authority guard
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  no-schema-authority:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert Katedra does not define live DB schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find supabase/migrations -type f -name '*.sql' -print0 2>/dev/null \
+            | xargs -0 -r grep -nEi '^[[:space:]]*(create|alter|drop)[[:space:]]+(table|policy|function|trigger|index)|^[[:space:]]*create[[:space:]]+or[[:space:]]+replace[[:space:]]+function'; then
+            echo 'Katedra must not own Supabase schema migrations. Put DB DDL in the Lekta repository.' >&2
+            exit 1
+          fi
+          echo 'PASS: Lekta repository remains the sole Supabase schema authority.'

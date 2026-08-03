@@ -1,0 +1,9 @@
+-- DEPRECATED / NO-OP
+--
+-- Katedra is no longer a Supabase schema authority.
+-- The canonical Academic Suite database is the existing Lekta Supabase project,
+-- and all shared/Katedra database migrations live in the Lekta repository.
+--
+-- Do not apply this file. It remains only as a migration-history marker on the
+-- architecture branch. See the Lekta repository:
+--   supabase/migrations/0035_academic_suite_foundation.sql
