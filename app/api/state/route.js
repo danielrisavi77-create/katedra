@@ -51,7 +51,6 @@ const WRITABLE_FIELDS = {
   unitId: 'unit_id',
   profileId: 'profile_id',
   topic: 'topic',
-  deadline: 'deadline',
   rulesetVersion: 'ruleset_version',
   lektaScore: 'lekta_score',
   lektaCheckedAt: 'lekta_checked_at',
@@ -78,6 +77,12 @@ function canonicalWorkType(body) {
     return fromLegacyKatedraWorkType(body.workType)
   }
   return null
+}
+
+function normalizeDeadline(value) {
+  if (value == null || value === '') return null
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  return undefined
 }
 
 export async function GET() {
@@ -140,6 +145,14 @@ export async function PUT(req) {
   else if (canonicalType === 'final') patch.work_type = 'z'
   else if (canonicalType === 'graduate') patch.work_type = 'd'
   else return Response.json({ error: 'Ova vrsta rada još nije podržana u Katedra v1 sučelju.' }, { status: 400 })
+
+  if (Object.prototype.hasOwnProperty.call(body, 'deadline')) {
+    const deadline = normalizeDeadline(body.deadline)
+    if (deadline === undefined) {
+      return Response.json({ error: 'Neispravan datum roka.' }, { status: 400 })
+    }
+    patch.deadline = deadline
+  }
 
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
     if (Object.prototype.hasOwnProperty.call(body, camel)) patch[column] = body[camel]
