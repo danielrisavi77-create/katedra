@@ -639,6 +639,8 @@
   .katedra-page .lp-st.p{color:var(--pl-mut2)}
   .katedra-page .lp-row.on .lp-st{color:inherit}
   .katedra-page .lp-empty{padding:18px 12px;text-align:center;font-size:12px;color:var(--pl-mut2);line-height:1.5}
+  .katedra-page .empty-note{border:1.5px dashed var(--pl-edge);border-radius:var(--rs);padding:18px 16px;
+    text-align:center;font-size:12.5px;color:var(--pl-mut);line-height:1.55;background:var(--paper2)}
 
   /* ══════════ IZBORNIK IZGLEDA (u zaglavlju) ══════════ */
   .katedra-page .skin-wrap{position:relative;flex-shrink:0}

@@ -314,11 +314,29 @@ function refreshProgress(){
 
 function escA(s){ return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 /* ---------- TABS ---------- */
+function smoothly(){ return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'; }
+// Dovedi pogled na fazu na kojoj si. Ako je već pred tobom, ne miči stranicu —
+// skrol koji se dogodi bez potrebe djeluje kao da je nešto puklo.
+function scrollToNow(){
+  const el = document.querySelector('#view-check .phase.now');
+  if(!el) return false;
+  const r = el.getBoundingClientRect(), vh = window.innerHeight || 0;
+  // Otvorena faza zna biti viša od prozora, pa "cijela stane" nije dobar uvjet —
+  // dovoljno je da ti je pred očima: počinje u gornjoj polovici ili je seže preko nje.
+  if(r.top >= 0 ? r.top <= vh * 0.5 : r.bottom >= vh * 0.5) return true;
+  el.scrollIntoView({ behavior: smoothly(), block: 'center' });
+  return true;
+}
 function setTab(v){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id==='view-'+v));
-  if(v === 'check' && typeof renderIndeksHead === 'function') renderIndeksHead();
-  window.scrollTo({top:0, behavior:'smooth'});
+  if(v === 'check'){
+    if(typeof renderIndeksHead === 'function') renderIndeksHead();
+    // Ulazak u Indeks vodi točno na mjesto gdje treba djelovati. Dok napretka
+    // nema, vrh (zaglavlje + vozni red) je prava orijentacija, pa ostaje vrh.
+    if(hasRealProgress() && scrollToNow()) return;
+  }
+  window.scrollTo({top:0, behavior: smoothly()});
 }
 function goGen(){ setTab('gen'); }
 function goAuto(){ setTab('auto'); }
@@ -753,7 +771,13 @@ function lpRenderCascade(){
 }
 function lpRender(){
   const box = $('lpCard'); if(!box || !$('lpUnit')) return;
-  const u = lpUnitObj(); if(!u){ box.innerHTML = ''; return; }
+  // Prazno stanje mora objasniti samo sebe — prije je kartica ostajala nijemo
+  // prazna (npr. ako spremljeni fakultet više ne postoji u novom packu).
+  const u = lpUnitObj();
+  if(!u){
+    box.innerHTML = '<div class="empty-note">Odaberi fakultet u prvom stupcu — ovdje će stajati pravila tvog studija: opseg, font, prored i citatni stil.</div>';
+    return;
+  }
   const p = lpProfileFor(u.id);
   const lekta = '<a class="att-btn" style="text-decoration:none" href="'+LEKTA_URL+'/?unit='+encodeURIComponent(u.id)+'" target="_blank" rel="noopener">✅ Provjeri u Lekti ↗</a>';
   if(!p){
@@ -1444,7 +1468,7 @@ function goToNextStep(pos){
   setTab('check');
   const ph = PHASES[pos]; if(!ph) return;
   if(!openPhases.has(ph.id)) togglePhase(ph.id);
-  setTimeout(() => { const el = document.getElementById('ph-'+ph.id); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); }, 60);
+  setTimeout(() => { const el = document.getElementById('ph-'+ph.id); if(el) el.scrollIntoView({behavior: smoothly(), block:'center'}); }, 60);
 }
 function chatStart(isInitial){
   $('chatLog').innerHTML = '';
