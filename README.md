@@ -15,6 +15,14 @@ je donesena, migracija još nije napravljena (Lekta danas nema prijavu). Vidi
 otvorena pitanja (koji Supabase projekt, cross-domain SSO, zajednički
 entitlementi).
 
+**Buduće (arhitektura chata):** `future/appstarter-v2/` čuva nacrt za pravi
+Anthropic tool-calling + Postgres shemu s DB-ograničenjima (npr. zamjerka
+mentora ne može se zatvoriti bez dokaza) koja bi zamijenila današnji
+model "jedan generirani prompt + jednostavan streaming chat". Namjerno
+odgođeno (rebuild core chata, ne staje u 2–3 tjedna) — vidi `NOTES.md` ondje
+za točan status i za razdiobu Katedra/Lekta odgovornosti unutar predloženog
+`run_checks` alata prije nego se ikad ožiči.
+
 ## Arhitektura
 
 ```

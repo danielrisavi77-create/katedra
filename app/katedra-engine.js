@@ -177,16 +177,23 @@ function renderPhases(){
   const pre = $('phasesPre'), post = $('phasesPost');
   pre.innerHTML = '<div class="sec-lbl"><span>Prije pisanja</span><b class="req">OBAVEZNO 100 %</b><i></i></div>';
   post.innerHTML = '<div class="sec-lbl"><span>Pisanje → predaja</span><b class="after">NAKON ZELENOG SVJETLA</b><i></i></div>';
+  // F6: prva neoznačena stavka u TRENUTNOJ fazi (linePos()) dobiva suptilan
+  // pulse — jedina vizualno naglašena stavka, ne cijeli popis.
+  const curPh = PHASES[linePos()];
+  const curPhaseId = curPh ? curPh.id : null;
   PHASES.forEach(ph => {
     const items = visibleItems(ph);
     const div = document.createElement('div');
     div.className = 'phase' + (openPhases.has(ph.id) ? ' open' : '');
     div.id = 'ph-' + ph.id;
     let ih = '';
+    let nextMarked = false;
     items.forEach((it,idx) => {
       const key = ph.id + ':' + it.t;
       const ck = state.checks[key] ? ' ck' : '';
-      ih += `<div class="item${ck}" data-key="${escA(key)}">
+      const isNext = !ck && !nextMarked && ph.id === curPhaseId;
+      if(isNext) nextMarked = true;
+      ih += `<div class="item${ck}${isNext ? ' next' : ''}" data-key="${escA(key)}">
         <div class="cb" onclick="toggleCheck(this)"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7.5 5.5 11 12 3.5" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="it-main">
           <span class="it-txt" onclick="toggleCheck(this)">${it.t}${it.crit?'<span class="badges"><span class="bdg crit">kritično</span></span>':''}</span><br>
@@ -589,10 +596,43 @@ function linePos(){
   }
   return LIN_ST.length - 1;
 }
+// Zajednička "što je sljedeće" poruka — koristi je i .linija (renderLine),
+// i sticky next-step traka (F2), i chatStart()-ov resume pozdrav (F1).
+// Jedan izvor istine umjesto tri odvojena izračuna koja mogu razići.
+function nextStepText(){
+  const pos = linePos();
+  const phLast = PHASES[PHASES.length-1], itLast = visibleItems(phLast);
+  const allDone = itLast.length && itLast.every(x2 => state.checks[phLast.id+':'+x2.t]) && pos === LIN_ST.length - 1;
+  let rokTxt = '';
+  const rv = val('dl_rok');
+  if(rv){
+    const d = Math.ceil((new Date(rv+'T12:00:00') - new Date()) / 86400000);
+    rokTxt = ' · vozni red: PREDAJA ' + new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') + (d >= 0 ? ' (za '+d+' d)' : ' — <b style="color:var(--bad)">⚠ kasniš '+(-d)+' d</b>');
+  } else rokTxt = ' · postavi rok u Indeksu za vozni red';
+  const mf = getManifest();
+  if(mf && mf.lektaScore != null){
+    const openN = (mf.lektaIssues || []).filter(x => x.status !== 'VERIFIED_FIXED').length;
+    rokTxt += ' · Lekta dokument: <b>' + mf.lektaScore + '/100</b>' + (openN ? ' ('+openN+' otvoreno)' : '');
+  }
+  let pre = {t:0, c:0};
+  PHASES.filter(p => p.grp === 'pre').forEach(p => {
+    const it = visibleItems(p); pre.t += it.length;
+    it.forEach(x2 => { if(state.checks[p.id+':'+x2.t]) pre.c++; });
+  });
+  const ready = pre.t && pre.c === pre.t;
+  const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
+  return {
+    pos, allDone,
+    html: allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
+                  : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
+    label: LIN_ST[pos]
+  };
+}
 function renderLine(){
   const host = $('linSts'); if(!host) return;
   buildLine();
-  const pos = linePos();
+  const ns = nextStepText();
+  const pos = ns.pos;
   const cx = i => { const s = $('lst'+i); return s ? s.offsetLeft + s.offsetWidth / 2 : 0; };
   const x = cx(pos), x0 = cx(0), xN = cx(LIN_ST.length - 1);
   const rail = $('linRail');
@@ -601,30 +641,14 @@ function renderLine(){
   const fill = $('linFill'); if(fill) fill.style.width = (xN > x0 ? ((x - x0) / (xN - x0)) * 100 : 0) + '%';
   LIN_ST.forEach((_, i) => { const s = $('lst'+i); if(s) s.className = 'lin-st' + (i < pos ? ' past' : i === pos ? ' cur' : ''); });
   const info = $('linInfo');
-  if(info){
-    const phLast = PHASES[PHASES.length-1], itLast = visibleItems(phLast);
-    const allDone = itLast.length && itLast.every(x2 => state.checks[phLast.id+':'+x2.t]) && pos === LIN_ST.length - 1;
-    let rokTxt = '';
-    const rv = val('dl_rok');
-    if(rv){
-      const d = Math.ceil((new Date(rv+'T12:00:00') - new Date()) / 86400000);
-      rokTxt = ' · vozni red: PREDAJA ' + new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') + (d >= 0 ? ' (za '+d+' d)' : ' — <b style="color:var(--bad)">⚠ kasniš '+(-d)+' d</b>');
-    } else rokTxt = ' · postavi rok u Indeksu za vozni red';
-    const mf = getManifest();
-    if(mf && mf.lektaScore != null){
-      const openN = (mf.lektaIssues || []).filter(x => x.status !== 'VERIFIED_FIXED').length;
-      rokTxt += ' · Lekta dokument: <b>' + mf.lektaScore + '/100</b>' + (openN ? ' ('+openN+' otvoreno)' : '');
-    }
-    let pre = {t:0, c:0};
-    PHASES.filter(p => p.grp === 'pre').forEach(p => {
-      const it = visibleItems(p); pre.t += it.length;
-      it.forEach(x2 => { if(state.checks[p.id+':'+x2.t]) pre.c++; });
-    });
-    const ready = pre.t && pre.c === pre.t;
-    const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
-    info.innerHTML = allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
-                             : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt;
-  }
+  if(info) info.innerHTML = ns.html;
+  const nbTxt = $('nextBarTxt');
+  if(nbTxt) nbTxt.innerHTML = ns.html;
+  const bar = $('nextBar');
+  const barVisible = !ns.allDone && typeof hasRealProgress === 'function' && hasRealProgress();
+  if(bar) bar.style.display = barVisible ? 'flex' : 'none';
+  const nbBtn = $('nextBarBtn');
+  if(nbBtn) nbBtn.classList.toggle('glow', barVisible);
 }
 window.addEventListener('resize', () => { if($('linSts')) renderLine(); });
 
@@ -637,7 +661,7 @@ const WC_SPLIT = {
 function renderWC(){
   const out = $('wc_out'); if(!out) return;
   const n = parseInt(val('wc_total'), 10);
-  if(!n || n < 1){ out.textContent = ''; return; }
+  if(!n || n < 1){ out.innerHTML = '<p style="font-size:12px;color:var(--mut2);font-style:italic">Upiši ukupan opseg gore da vidiš raspodjelu po poglavljima.</p>'; return; }
   const total = ($('wc_unit') && $('wc_unit').value === 'p') ? n * 300 : n;
   out.innerHTML = WC_SPLIT[state.tip].map(([nm, pct]) => {
     const w = Math.round(total * pct / 100 / 50) * 50;
@@ -726,7 +750,8 @@ function buildPrompt(){
     s += '4. Jasne pogreške ispravi odmah; stilske izmjene samo predloži i čekaj moju potvrdu.\n';
     s += '5. Nakon SVAKE runde izmjena ponovno provjeri: citate (identičan skup), brojke, polja, validaciju dokumenta.\n';
     s += '6. Na kraju: izvještaj razvrstan KRITIČNO / SREDNJE / KOZMETIČKO + točno ime finalne datoteke + podsjetnik da napravim Ctrl+A → F9 u Wordu.\n';
-    s += '7. FOKUS: ti si RECENZENT SADRŽAJA (teza, argumentacija, izvori, jezik). Strojno-formatske stavke (margine, stilovi, polja, citatna mehanika) samo označi — njih deterministički provjerava Lekta ('+LEKTA_URL+'), preporuči korisniku Lekta Check nakon ispravaka.';
+    s += '7. Sadržajna dubina (ono za što STVARNO služiš): drži li se teza kroz SVA poglavlja, ne samo u uvodu → zaključak mora eksplicitno odgovoriti na istraživačko pitanje iz uvoda, ne samo sažeti nalaze → proporcije poglavlja prati odobreni plan (poglavlje dvostruko duže/kraće od plana je nalaz) → provjeri postoje li VLASTITI izračuni gdje ih rad tvrdi, ne samo prepisani tuđi → dosljednost HR/EN terminologije između sažetka i abstracta.\n';
+    s += '8. FOKUS: ti si RECENZENT SADRŽAJA (teza, argumentacija, izvori, jezik). Strojno-formatske stavke (margine, stilovi, polja, citatna mehanika) samo označi — njih deterministički provjerava Lekta ('+LEKTA_URL+'), preporuči korisniku Lekta Check nakon ispravaka.';
     return output(s);
   }
 
@@ -743,11 +768,11 @@ function buildPrompt(){
     let s = p.join('\n');
     s += block('KOMISIJA (predvidi pitanja po njihovim područjima)', val('f_komisija'));
     s += '\n\n## ŠTO TREBAM\n';
-    s += '1. STRUKTURA PREZENTACIJE (10–12 slajdova): naslovna → problem i relevantnost → istraživačko pitanje → metoda/pristup → 3–4 ključna nalaza → zaključak i doprinos → „Hvala — pitanja”. Za svaki slajd: naslov + 3–5 natuknica + bilješka što izgovoriti.\n';
-    s += '2. GOVORNI SCENARIJ tempiran na zadano trajanje (~110 riječi/min) — prirodan govorni jezik, ne čitanje rada naglas.\n';
-    s += '3. 15 VJEROJATNIH PITANJA KOMISIJE s konkretnim odgovorima iz rada — obavezno metodološka pitanja, ograničenja rada i „zašto baš ova tema/pristup”.\n';
-    s += '4. SLABE TOČKE RADA — budi brutalan, komisija ih vidi. Za svaku: kako je priznati i obraniti u 2–3 rečenice.\n';
-    s += '5. BRZI PODSJETNIK za dan obrane: 5 ključnih brojki/nalaza koje moram znati napamet.\n';
+    s += '1. STRUKTURA PREZENTACIJE (točno 12 slajdova, ovim redom): 1 naslovnica (naslov, student, mentor sa zvanjem, ustanova, datum) · 2 zašto ova tema (problem u jednoj rečenici + zašto je relevantna sad) · 3 istraživačko pitanje i teza (doslovno iz rada, bez preformulacije) · 4 metodologija (podaci, izvori, vremenski okvir — ograničenja SAM navedi, ne čekaj pitanje) · 5–8 nalazi (jedan nalaz po slajdu, svaki s vlastitom tablicom/grafikonom i izvorom u podnožju) · 9 odgovor na istraživačko pitanje (eksplicitno, jedna rečenica) · 10 implikacije i preporuke · 11 ograničenja i dalji rad (kratko, samouvjereno) · 12 hvala + kontakt. Pravilo: max 6 redaka po slajdu, nijedan slajd bez razloga za postojanje.\n';
+    s += '2. GOVORNI SCENARIJ tempiran na zadano trajanje (~110 riječi/min) — prirodan govorni jezik, ne čitanje rada naglas. Uz svaki dio predviđeno vrijeme i kumulativa, plus naznaka što se izbacuje ako me prekinu na 7. minuti.\n';
+    s += '3. 15 PITANJA KOMISIJE, po 3 iz svake od 5 kategorija: metodološka (zašto ovaj uzorak/metoda/vremenski okvir), teorijska (zašto ovaj okvir a ne konkurentski), empirijska (odakle točno ova brojka), kritička (što nalaz NE dokazuje), praktična (što bi preporuka koštala, tko je provodi). Svaki odgovor u obliku: izravan odgovor → obrazloženje → priznata granica („izvan opsega ovog rada, ali indikacija je…").\n';
+    s += '4. SLABE TOČKE RADA — prođi rad kao NEPRIJATELJSKI RECENZENT: tanak uzorak, izvor koji nije primaran, tvrdnja bez potpore, poglavlje neproporcionalne duljine, zaključak koji ide dalje od podataka. Za svaku: priznaj granicu pa je pretvori u kontrolirani nalaz — nikad ne izmišljaj obranu koju podaci ne nose.\n';
+    s += '5. TOČNO PET brojki/nalaza koje moram znati napamet za dan obrane — svaka s izvorom i stranicom, plus JEDNOM rečenicom konteksta (u odnosu na što je to puno ili malo).\n';
     s += '6. Ako imaš pristup alatima za datoteke: ponudi izradu .pptx prezentacije iz točke 1.';
     return output(s);
   }
@@ -849,7 +874,7 @@ const MILESTONES = {
 };
 function renderDeadlines(){
   const v = $('dl_rok').value, out = $('dl_out');
-  if(!v){ out.textContent = ''; return; }
+  if(!v){ out.innerHTML = '<p style="font-size:12px;color:var(--mut2);font-style:italic">Upiši službeni rok gore da vidiš interne rokove unatrag.</p>'; return; }
   const rok = new Date(v+'T12:00:00');
   const today = new Date(); today.setHours(0,0,0,0);
   out.innerHTML = MILESTONES[state.tip].map(([lbl,off]) => {
@@ -907,6 +932,7 @@ function applyTipPlaceholders(){
 
 /* ---------- CHEATSHEET ---------- */
 $('cheatRoot').innerHTML = `
+<p class="cs full" style="font-size:12.8px;color:var(--mut);padding:2px 2px 4px;background:transparent;border:0;box-shadow:none">Brza referenca dok pišeš ili provjeravaš rad — pravila citiranja, tipografije i formata na jednom mjestu, plus pravila tvog fakulteta ispod.</p>
 <div class="cs">
   <h3><em>🏗️</em> Struktura rada — obavezni elementi</h3>
   <ol>
@@ -1150,15 +1176,40 @@ function pushChips(list){
   $('chatLog').appendChild(row); chatScroll(); return row;
 }
 
-function chatStart(){
+// Ima li korisnik već stvaran napredak (nasuprot potpuno praznog stanja)?
+// Koristi se samo pri POČETNOM učitavanju — "🔁 Ispočetka" gumbi i dalje
+// pozivaju chatStart() bez argumenta pa uvijek daju pravi svježi start.
+function hasRealProgress(){
+  const anyChecked = Object.keys(state.checks || {}).some(k => state.checks[k]);
+  const mf = getManifest();
+  return anyChecked || !!(mf && mf.topic);
+}
+function goToNextStep(pos){
+  setTab('check');
+  const ph = PHASES[pos]; if(!ph) return;
+  if(!openPhases.has(ph.id)) togglePhase(ph.id);
+  setTimeout(() => { const el = document.getElementById('ph-'+ph.id); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); }, 60);
+}
+function chatStart(isInitial){
   $('chatLog').innerHTML = '';
   Object.assign(chat, {step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null, live:false, msgs:[], busy:false});
   chatFiles = []; chatNotes = ''; chatRokVal = '';
   if(typeof updatePaper === 'function') updatePaper();
   setStep(0);
-  pushA('Bok! 👋 Ja sam <b>Katedra</b> — kopilot za seminarski, završni i diplomski.<br>Odgovoriš na par pitanja → dobiješ <b>gotovu uputu za Claude</b> + popis datoteka koje priložiti. Ništa se ne zaboravlja, ništa se ne izmišlja.<br><br><b>Što danas radimo?</b>');
-  chatModeChips();
-  setComposer('…ili odmah upiši temu rada svojim riječima');
+  if(isInitial && hasRealProgress()){
+    const ns = nextStepText();
+    const tema = val('a_tema') || val('f_tema');
+    pushA((tema ? '👋 Bok opet — nastavljaš <b>'+escA(tema)+'</b>.' : '👋 Bok opet — nastavljaš svoj rad.') + '<br>' + ns.html);
+    pushChips([
+      ['▶ Nastavi', () => goToNextStep(ns.pos)],
+      ['📋 Prikaži izbornik', () => chatModeChips(), true]
+    ]);
+    setComposer('…ili upiši poruku');
+  } else {
+    pushA('Bok! 👋 Ja sam <b>Katedra</b> — kopilot za seminarski, završni i diplomski.<br>Odgovoriš na par pitanja → dobiješ <b>gotovu uputu za Claude</b> + popis datoteka koje priložiti. Ništa se ne zaboravlja, ništa se ne izmišlja.<br><br><b>Što danas radimo?</b>');
+    chatModeChips();
+    setComposer('…ili odmah upiši temu rada svojim riječima');
+  }
 }
 function chatModeChips(){
   let list;
@@ -1446,7 +1497,7 @@ function chatFinal(){
     prompt = buildPrompt();
   }
   setStep(5);
-  const d = pushA('<b>✅ Gotovo — tvoja uputa (prompt) je spremna.</b><br>1️⃣ Klikni <b>Kopiraj</b> ispod &nbsp;·&nbsp; 2️⃣ <b>Otvori Claude</b> i zalijepi u novi razgovor &nbsp;·&nbsp; 3️⃣ Priloži datoteke s popisa (＋ u Claudeu) &nbsp;·&nbsp; 4️⃣ Pošalji — Claude preuzima i prvo ti daje plan rada na odobrenje.');
+  const d = pushA('<b>✅ Gotovo — tvoja uputa (prompt) je spremna.</b><br>Najbrže: <b>▶ Piši ovdje</b> — kreće odmah, bez copy-pastea, s automatskim praćenjem napretka i Lekta provjerom. Imaš već svoj Claude? Kopiraj prompt dolje i nastavi ručno.');
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = prompt; bub.appendChild(out);
   if(chat.files.length){
@@ -1468,9 +1519,6 @@ function chatFinal(){
     liveBegin(prompt);
   };
   acts.appendChild(live);
-  const cp = document.createElement('button'); cp.className = 'fa p'; cp.textContent = '📋 Kopiraj prompt';
-  cp.onclick = () => copyText(prompt, cp, []);
-  const open = document.createElement('a'); open.className = 'fa s'; open.href = 'https://claude.ai/new'; open.target = '_blank'; open.rel = 'noopener'; open.textContent = 'Otvori Claude ↗';
   const re = document.createElement('button'); re.className = 'fa s'; re.textContent = '🔁 Ispočetka'; re.onclick = chatStart;
   const share = document.createElement('button'); share.className = 'fa s'; share.textContent = '📤 Podijeli Katedra';
   share.onclick = async () => {
@@ -1480,9 +1528,25 @@ function chatFinal(){
   };
   if(chat.mode === 'write' || chat.mode === 'audit' || chat.mode === 'ocjena'){
     const lk = document.createElement('a'); lk.className = 'fa s'; lk.href = lektaLink(); lk.target = '_blank'; lk.rel = 'noopener'; lk.textContent = '✅ Lekta provjera ↗';
-    acts.append(cp, open, lk, share, re);
-  } else { acts.append(cp, open, share, re); }
+    acts.append(lk, share, re);
+  } else { acts.append(share, re); }
   bub.appendChild(acts);
+  // Ručni put ostaje potpuno dostupan — samo vizualno sveden na alternativu,
+  // ne na ravnopravnu opciju. "Piši ovdje" gore ostaje jedini 'fa p' gumb.
+  const manual = document.createElement('div');
+  manual.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)';
+  manual.innerHTML = '<div style="font-size:11.5px;color:var(--mut2);margin-bottom:6px">Imaš već svoj Claude Pro?</div>';
+  const manualActs = document.createElement('div'); manualActs.className = 'final-actions';
+  const cp = document.createElement('button'); cp.className = 'fa s'; cp.textContent = '📋 Kopiraj prompt';
+  cp.onclick = () => copyText(prompt, cp, []);
+  const open = document.createElement('a'); open.className = 'fa s'; open.href = 'https://claude.ai/new'; open.target = '_blank'; open.rel = 'noopener'; open.textContent = 'Otvori Claude ↗';
+  manualActs.append(cp, open);
+  manual.appendChild(manualActs);
+  const manualNote = document.createElement('div');
+  manualNote.style.cssText = 'font-size:11px;color:var(--mut2);margin-top:6px';
+  manualNote.textContent = 'Ručno kopiranje ne prati napredak, ne sinkronizira se s Lekta provjerom i ne generira AI ledger za dokaz autorstva.';
+  manual.appendChild(manualNote);
+  bub.appendChild(manual);
   if(!lsGet('rp_email_off')){
     const em = document.createElement('div'); em.className = 'auto-note'; em.style.borderLeftColor = 'var(--acc2)'; em.id = 'emailCta';
     em.innerHTML = '<b>📬 Nove verzije i predlošci</b> — ostavi mail pa ti javim nadogradnje.<br>';
@@ -1500,6 +1564,13 @@ function chatFinal(){
   pushHist({t: Date.now(), mode: chat.mode, tip: state.tip, label: histLabel, prompt});
   ensureManifest();
   rpLog('Generiran prompt: ' + histLabel + ' (' + (MODE_LBL[chat.mode]||chat.mode) + ')');
+  // F3: prvi stvarno generiran prompt otključava napredne tabove — jednosmjerno,
+  // nikad se ne vraća natrag u jednostavni mod ako korisnik sam to kasnije uključi.
+  if(!isAdv()){ lsSet('rp_adv', '1'); applyAdv(); }
+  // ensureManifest() gore upravo može promijeniti hasRealProgress() (topic se
+  // prvi put upisuje) — next-bar to inače ne bi vidio do sljedećeg checkboxa/
+  // resizea, pa bi ostao "zaostao" dok se stranica ručno ne osvježi.
+  renderLine();
 }
 function buildOcjena(){
   const names = chat.files.map(f => f.name);
@@ -1785,6 +1856,31 @@ $('btnExport').onclick = exportState;
 $('btnImport').onclick = () => $('fileImp').click();
 $('fileImp').onchange = e => { if(e.target.files[0]) importState(e.target.files[0]); e.target.value=''; };
 $('btnReset').onclick = resetAll;
+$('nextBarBtn').onclick = () => goToNextStep(nextStepText().pos);
+
+/* ---------- ONBOARDING — jedno pitanje umjesto opisa (F7) ---------- */
+// Preskoči odmah ako je već zatvoreno u prošloj posjeti — nema treptaja, nema
+// ponovnog pitanja. Prije je ovo bilo samo CSS (#onbx:checked), bez ikakve
+// perzistencije, pa se overlay vraćao na svaki reload.
+if(lsGet('rp_onb') === '1'){ const o0 = $('onb'); if(o0) o0.remove(); }
+else {
+  const onbxEl = $('onbx');
+  // Preglednici znaju "zapamtiti" stanje checkboxa preko reloada (bfcache/
+  // form restoration), neovisno o localStorageu — checkbox onda dođe već
+  // označen prije nego ovaj kod uopće stigne do njega, CSS ga odmah sakrije
+  // i overlay se čini kao da "nestane" trenutno. Eksplicitno ga resetiraj.
+  if(onbxEl) onbxEl.checked = false;
+  if(onbxEl) onbxEl.addEventListener('change', () => { if(onbxEl.checked) lsSet('rp_onb', '1'); });
+  // chatStart(true) je već napunio #chatLog s pozdravom + chipovima prije nego
+  // je korisnik uopće mogao kliknuti (overlay ga samo vizualno prekriva). Bez
+  // čišćenja ovdje, izbor iz onboardinga se samo NADODAJE na to — dvije žive,
+  // međusobno nesinkronizirane niti razgovora s dijeljenim chat objektom, koje
+  // izgledaju kao da je cijela stranica "zbagana" dok se ne osvježi stranica.
+  const onbPick = fn => { const l = $('chatLog'); if(l) l.innerHTML = ''; fn(); };
+  const pickWrite = $('onbPickWrite'); if(pickWrite) pickWrite.onclick = () => onbPick(() => chatMode('write'));
+  const pickDone = $('onbPickDone'); if(pickDone) pickDone.onclick = () => onbPick(chatDoneMenu);
+  const pickHelp = $('onbPickHelp'); if(pickHelp) pickHelp.onclick = () => onbPick(chatExplain);
+}
 
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
 const lkq = { list: [], i: 0 };
@@ -1929,7 +2025,7 @@ applyMode();
 buildAuto();
 renderDeadlines();
 renderWC();
-chatStart();
+chatStart(true);
 buildLine();
 renderLine();
 renderIndeksHead();

@@ -59,6 +59,16 @@
   .katedra-page .tabs::-webkit-scrollbar{display:none}
   .katedra-page .tabs button{border:1px solid var(--line);background:var(--card);color:var(--mut);font-weight:700;font-size:13.5px;padding:10px 16px;border-radius:99px;cursor:pointer;white-space:nowrap;transition:.18s;font-family:inherit;display:flex;gap:7px;align-items:center}
   .katedra-page .tabs button.on{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 4px 16px rgba(44,95,168,.3)}
+
+  /* ---------- NEXT-STEP TRAKA (F2) — uvijek vidljiv sljedeći korak, isti CTA kroz cijelu app ---------- */
+  .katedra-page .next-bar{position:sticky;top:52px;z-index:45;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 16px;margin:0 0 12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  .katedra-page .nb-txt{flex:1;min-width:0;font-size:12.8px;color:var(--mut);line-height:1.4}
+  .katedra-page .nb-txt b{color:var(--txt)}
+  .katedra-page .nb-go{flex-shrink:0;background:var(--grad);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-weight:800;font-size:12.8px;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(44,95,168,.35);white-space:nowrap}
+  .katedra-page .nb-go.glow{animation:katedra-nbglow 1.8s ease-in-out infinite}
+  @keyframes katedra-nbglow{0%,100%{box-shadow:0 4px 14px rgba(44,95,168,.35)}50%{box-shadow:0 4px 22px rgba(44,95,168,.65)}}
+  @media(prefers-reduced-motion: reduce){.katedra-page .nb-go.glow{animation:none}}
+
   .katedra-page .view{display:none}
   .katedra-page .view.on{display:block;animation:katedra-fade .25s ease}
   @keyframes katedra-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -100,6 +110,9 @@
   .katedra-page .cb svg{opacity:0;transform:scale(.5);transition:.15s}
   .katedra-page .item.ck .cb{background:var(--grad);border-color:transparent;box-shadow:0 3px 10px rgba(44,95,168,.4)}
   .katedra-page .item.ck .cb svg{opacity:1;transform:scale(1)}
+  .katedra-page .item.next .cb{animation:katedra-itempulse 1.8s ease-in-out infinite}
+  @keyframes katedra-itempulse{0%,100%{box-shadow:0 0 0 0 rgba(44,95,168,.4)}50%{box-shadow:0 0 0 6px rgba(44,95,168,0)}}
+  @media(prefers-reduced-motion: reduce){.katedra-page .item.next .cb{animation:none}}
   .katedra-page .it-main{flex:1;min-width:0}
   .katedra-page .it-txt{font-size:14px;font-weight:600;cursor:pointer;letter-spacing:-.1px}
   .katedra-page .item.ck .it-txt{color:var(--mut);text-decoration:line-through;text-decoration-color:rgba(139,144,165,.5)}
@@ -255,6 +268,13 @@
   .katedra-page .onb-steps span{font-size:13px;color:var(--mut);line-height:1.5}
   .katedra-page .onb-steps span b{color:var(--txt)}
   .katedra-page .onb-go{display:block;box-sizing:border-box;text-align:center;width:100%;background:var(--grad);color:#fff;border:0;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;box-shadow:0 6px 20px rgba(44,95,168,.35);user-select:none}
+  .katedra-page .onb-choices{display:flex;flex-direction:column;gap:9px;margin-bottom:14px;text-align:left}
+  .katedra-page .onb-choice{display:block;box-sizing:border-box;background:var(--card2);border:1px solid var(--line2);border-radius:12px;padding:13px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .katedra-page .onb-choice:hover{border-color:var(--acc);background:rgba(44,95,168,.08)}
+  .katedra-page .onb-choice b{display:block;font-size:14px;font-weight:800;color:var(--txt)}
+  .katedra-page .onb-choice span{display:block;font-size:12px;color:var(--mut);margin-top:2px;font-weight:400}
+  .katedra-page .onb-choice.ghost{background:transparent;border-color:transparent}
+  .katedra-page .onb-choice.ghost:hover{background:var(--card2);border-color:var(--line2)}
   .katedra-page #onbx:checked ~ .onb{display:none!important}
   .katedra-page .onb-note{font-size:11.5px;color:var(--mut2);margin-top:12px}
 
