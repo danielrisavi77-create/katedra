@@ -1,4 +1,5 @@
 import type { LektaResult } from './contracts'
+import { prepareManifestForIncomingLektaResult } from './reconciliation'
 
 function decodeUtf8Base64(value: string): unknown {
   const binary = atob(decodeURIComponent(value))
@@ -57,9 +58,9 @@ export function sharedLektaResultToLegacyPayload(result: LektaResult) {
 /**
  * Runs before `initKatedraEngine()`.
  *
- * Existing legacy #lekta= links are left untouched. Shared v0.1 links are
- * rewritten in-place to the legacy internal shape so the current engine can
- * consume them without a large risky edit.
+ * Existing legacy #lekta= links are left untouched. Shared v0.1 links first
+ * reconcile the previous stable finding set, then are rewritten to the legacy
+ * internal shape so the current engine can consume them without a large edit.
  */
 export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
   if (typeof window === 'undefined') return false
@@ -70,6 +71,11 @@ export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
     const raw = hash.slice('#lekta='.length)
     const decoded = decodeUtf8Base64(raw)
     if (!isSharedLektaResult(decoded)) return false
+
+    // This intentionally runs before the legacy engine's `lkStart()`. It makes
+    // the engine's existing prevIds-newIds fixed count semantically correct:
+    // only USER_CHANGED/RECHECK_REQUIRED findings with stable IDs are eligible.
+    prepareManifestForIncomingLektaResult(decoded)
 
     const legacy = sharedLektaResultToLegacyPayload(decoded)
     window.location.hash = `#lekta=${encodeUtf8Base64(legacy)}`
