@@ -50,6 +50,12 @@ async function clickWithoutNavigation(page, locator) {
   await locator.click()
 }
 
+async function startResolutionRound(page) {
+  const start = page.getByRole('button', { name: /Idemo redom/i }).first()
+  await start.waitFor({ state: 'visible' })
+  await start.click()
+}
+
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 const page = await context.newPage()
@@ -106,7 +112,8 @@ try {
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.checkId, 'margins')
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.ruleId, 'e2e.margins.001')
 
-  // D. User action is USER_CHANGED, never self-verification.
+  // D. Follow the real coach UX: start the round, then mark the item changed.
+  await startResolutionRound(page)
   const solved = page.getByRole('button', { name: /Riješio sam/i }).first()
   await solved.waitFor({ state: 'visible' })
   await solved.click()
@@ -134,7 +141,8 @@ try {
   assert.equal(state.lektaIssues[0].id, 'rule:e2e.margins.001')
   assert.equal(state.lektaResolutionHistory?.length || 0, 0)
 
-  // G. Change again and start another re-check.
+  // G. Change again and start another re-check through the real coach UX.
+  await startResolutionRound(page)
   const solvedAgain = page.getByRole('button', { name: /Riješio sam/i }).first()
   await solvedAgain.waitFor({ state: 'visible' })
   await solvedAgain.click()
