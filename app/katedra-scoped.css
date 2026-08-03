@@ -237,8 +237,8 @@
   .katedra-page .dl-row.past .date{color:var(--bad)}
 
   /* ---------- CHAT ---------- */
-  .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:min(78vh,900px);min-height:460px;overflow:hidden}
-  .katedra-page .chat-log{flex:1;overflow-y:auto;padding:18px 14px;display:flex;flex-direction:column;gap:12px}
+  .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:auto;min-height:210px;max-height:min(78vh,900px);overflow:hidden}
+  .katedra-page .chat-log{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 14px;display:flex;flex-direction:column;gap:12px}
   .katedra-page .msg{max-width:92%;display:flex;flex-direction:column;gap:8px;animation:katedra-fade .25s ease}
   .katedra-page .msg.a{align-self:flex-start}
   .katedra-page .msg.u{align-self:flex-end}
@@ -304,6 +304,8 @@
     border-radius:var(--rs);background:var(--card);overflow-x:auto;scrollbar-width:none;margin:0 0 12px}
   .katedra-page .stepbar::-webkit-scrollbar{display:none}
   .katedra-page .stepbar span{font-size:10.5px;font-weight:800;letter-spacing:.4px;color:var(--mut2);padding:4px 10px;border-radius:99px;white-space:nowrap;border:1px solid transparent}
+  .katedra-page .stepbar .sb-lbl{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--mut2);opacity:.75;padding:4px 10px 4px 2px;border-right:1px solid var(--line);margin-right:4px}
   .katedra-page .stepbar span.cur{color:var(--acc);background:rgba(var(--acc-rgb),.12);border-color:rgba(var(--acc-rgb),.4)}
   .katedra-page .stepbar span.done{color:var(--ok)}
 
@@ -869,3 +871,11 @@
   .katedra-page .tabs button.locked{opacity:.45;cursor:not-allowed}
   .katedra-page .tabs button.locked:hover{border-color:var(--line);color:var(--mut)}
   .katedra-page .tabs button.locked::after{content:'🔒';font-size:9px;margin-left:1px}
+
+  /* ---------- ZAGLAVLJE EKRANA START ---------- */
+  .katedra-page .chat-hi{margin:16px 2px 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .katedra-page .chat-hi h2{font-family:var(--serif);font-size:clamp(19px,2.5vw,25px);font-weight:800;
+    letter-spacing:-.3px;color:var(--txt)}
+  .katedra-page .chat-hi p{font-size:13px;color:var(--mut);margin-top:5px;max-width:64ch}
+  /* Papir je prazan dok tema ne postoji, pa ne smije nadvladati razgovor. */
+  .katedra-page .kpaper{align-self:start}

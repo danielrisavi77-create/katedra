@@ -1513,9 +1513,12 @@ const MICRO = [
   p:'Iz CIJELOG ovog razgovora generiraj DNEVNIK PROCESA IZRADE RADA (dokaz mog autorstva za mentora):\n1. Kronološka tablica: faza → što je napravljeno → moja odluka/doprinos → AI doprinos\n2. Popis svih mojih odobrenja i traženih izmjena (plan, poglavlja, revizije)\n3. Kratki narativ (pola stranice) kako je rad nastajao\nTočno i bez uljepšavanja — služi kao transparentan dokaz procesa izrade.'}
 ];
 
-const STEPS = ['Zadatak','Tip','Tema','Datoteke','Detalji','Prompt'];
+// Nazivi su bili interni ("Zadatak", "Datoteke", "Prompt") i novom korisniku
+// nisu govorili ni gdje je ni kamo ide. Traka sad imenuje ono što vidi i
+// završava ciljem, a oznaka ispred kaže čega su to koraci.
+const STEPS = ['Što radimo','Tip rada','Tema','Prilozi','Detalji','Gotova uputa'];
 function setStep(i){
-  $('stepbar').innerHTML = STEPS.map((s,idx) =>
+  $('stepbar').innerHTML = '<span class="sb-lbl">Koraci do upute</span>' + STEPS.map((s,idx) =>
     '<span class="'+(idx<i?'done':idx===i?'cur':'')+'">'+(idx<i?'✓ ':'')+s+'</span>').join('');
   chatClockMount();   // innerHTML gore obriše sat, pa ga vrati
 }
@@ -1636,8 +1639,8 @@ function chatModeChips(){
   if(h.length) list.push(['🕘 Moji promptovi ('+h.length+')', chatHistory, true]);
   pushChips(list);
 }
-function chatDoneMenu(){
-  pushU('📄 Imam gotov rad / draft');
+function chatDoneMenu(tiho){
+  if(!tiho) pushU('📄 Imam gotov rad / draft');
   pushA('<b>Što želiš s njim?</b>');
   pushChips([
     ['✅ Provjeri DOKUMENT — Lekta ↗', () => { pushU('✅ Lekta provjera dokumenta'); window.open(lektaLink(), '_blank'); pushA('Lekta provjerava <b>dokument</b> (format, struktura, citatna mehanika) — deterministički, po verificiranim pravilima tvog fakulteta. Kad dobiješ nalaze, vrati se ovdje: <b>🧠 Recenzija</b> pokriva sadržaj, a ispravke vodimo zajedno.'); chatModeChips(); }],
@@ -1689,14 +1692,22 @@ function chatMicro(){
   chatScroll();
   chatModeChips();
 }
-function chatExplain(){
-  pushU('❓ Kako ovo radi?');
+function chatExplain(tiho){
+  if(!tiho) pushU('❓ Kako ovo radi?');
   pushA('Jednostavno, 3 koraka:<br>1️⃣ <b>Odgovoriš na par pitanja</b> — vodim te korak po korak, ništa ne moraš znati unaprijed.<br>2️⃣ <b>Dodaš datoteke</b> — kažem ti točno što pomaže (upute fakulteta, literatura, draft…). Nemaš? Preskočiš.<br>3️⃣ <b>Dobiješ gotovu uputu (prompt)</b> — kopiraš je u <b>Claude</b> (claude.ai, besplatan račun), priložiš iste datoteke i pošalješ. Claude prvo napravi detaljan <b>plan rada</b>, pa piše poglavlje po poglavlje uz tvoje odobrenje.<br><br>Detalji u tabu <b>❓ Kako radi</b>. Idemo?');
   chatModeChips();
 }
-function chatMode(m){
-  chat.mode = m; pushU(MODE_LBL[m]);
+function chatMode(m, tiho){
+  chat.mode = m;
+  // tiho = izbor je napravljen na ekranu 2 lijevka, ne u chatu. Bez ovoga
+  // razgovor pocinje porukom koju korisnik nikad nije napisao, i to drugim
+  // rijecima nego sto je stvarno kliknuo.
+  if(!tiho) pushU(MODE_LBL[m]);
   if(m === 'izjava') return izjavaStart();
+  // Tip rada je prvo pitanje lijevka. Tko ga je prošao, ne pita se dvaput —
+  // papir zdesna već piše koji je rad, pa ponovno pitanje govori korisniku da
+  // ga se ne sluša.
+  if(lsGet('rp_onb') === '1'){ chatTipPick(state.tip, true); return; }
   chat.step = 'tip'; setStep(1);
   pushA('<b>Koji tip rada?</b>');
   pushChips([['Seminarski', ()=>chatTipPick('s')], ['Završni', ()=>chatTipPick('z')], ['Diplomski', ()=>chatTipPick('d')]]);
@@ -1770,8 +1781,9 @@ function izjavaFinal(mentor){
   pushHist({t: Date.now(), mode:'izjava', tip: state.tip, label: 'Izjava o AI — ' + (chat.izjNaslov || 'bez naslova').slice(0,50), prompt: t});
   rpLog('Generirana izjava o korištenju AI (razina ' + lvl + ')');
 }
-function chatTipPick(t){
-  setTip(t); pushU(TIP_UI[t]);
+function chatTipPick(t, tiho){
+  setTip(t);
+  if(!tiho) pushU(TIP_UI[t]);   // tiho = tip dolazi iz lijevka, nije odgovor u chatu
   if(chat.mode === 'write'){
     if(chat.pendingTema){ $('a_tema').value = chat.pendingTema; buildAuto(); kpType(chat.pendingTema); renderIndeksHead(); chatLearnStep(); }
     else {
@@ -2282,9 +2294,9 @@ $('nextBarBtn').onclick = () => {
    chrome (tabovi, linija, traka) uopce ne postoji dok lijevak traje.
    Svako pitanje puni pravo polje — nista se ne pita "za dojam". */
 const FUN_MODES = {
-  write: () => chatMode('write'),
-  done:  chatDoneMenu,
-  help:  chatExplain
+  write: () => chatMode('write', true),
+  done:  () => chatDoneMenu(true),
+  help:  () => chatExplain(true)
 };
 let funPending = null;   // izbor s ekrana 2, primjenjuje se kad lijevak zavrsi
 let funStep = 0;
@@ -2322,8 +2334,10 @@ function funnelFinish(target){
   // kliknuti; bez ciscenja izbor bi se samo NADODAO na to i nastale bi dvije
   // nesinkronizirane niti razgovora nad istim chat objektom.
   const l = $('chatLog'); if(l) l.innerHTML = '';
-  (funPending || FUN_MODES.write)();
+  // Zastavica MORA prije pokretanja chata: chatMode() po njoj zna da je tip
+  // rada već odgovoren na prvom ekranu i da ga ne treba pitati ponovno.
   lsSet('rp_onb', '1');
+  (funPending || FUN_MODES.write)();
   setScreen(target || 'fakultet');
 }
 function funnelRender(){
