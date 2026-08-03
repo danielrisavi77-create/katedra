@@ -1,0 +1,49 @@
+name: Claude session PR
+
+on:
+  push:
+    branches:
+      - 'claude/session-*'
+      - 'claude/rescue-*'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-draft-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open draft PR if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          existing="$(gh pr list --head "$HEAD_BRANCH" --base master --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "PR #$existing already exists for $HEAD_BRANCH"
+            exit 0
+          fi
+
+          title="Claude session: ${HEAD_BRANCH#claude/}"
+          body=$(cat <<'EOF'
+          ## Claude session
+
+          Automatically opened from the one-click **Katedra - Zavrsi** workflow.
+
+          Before push, the local workflow runs the full Katedra dev doctor (TypeScript, lint, and production build). GitHub CI remains the merge authority.
+
+          **Do not merge automatically.** Review the diff and CI first, then merge intentionally.
+          EOF
+          )
+
+          gh pr create \
+            --draft \
+            --base master \
+            --head "$HEAD_BRANCH" \
+            --title "$title" \
+            --body "$body"
