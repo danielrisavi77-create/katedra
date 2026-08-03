@@ -628,7 +628,23 @@
   .katedra-page .lp-search{margin:8px 8px 2px;background:var(--paper3);border:1px solid var(--pl-edge);
     border-radius:var(--rs);color:var(--ink);padding:7px 10px;font-family:inherit;font-size:12.5px;outline:none}
   .katedra-page .lp-search:focus{border-color:var(--stamp)}
-  .katedra-page .lp-list{max-height:210px;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:2px}
+  .katedra-page .lp-list{max-height:210px;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:2px;
+    overscroll-behavior:contain}
+  /* Chrome od v121 ignorira SVA ::-webkit-scrollbar pravila čim je zadan
+     scrollbar-width, pa je stilizacija bila mrtva a strelice su ostajale.
+     Standardna svojstva zato idu samo tamo gdje pseudoelementi ne postoje. */
+  @supports not selector(::-webkit-scrollbar){
+    .katedra-page .lp-list{scrollbar-width:thin;scrollbar-color:var(--pl-edge) transparent}
+  }
+  .katedra-page .lp-list::-webkit-scrollbar{width:10px}
+  .katedra-page .lp-list::-webkit-scrollbar-track{background:transparent}
+  /* bez ovoga na vrhu i dnu trake stoje zadane strelice preglednika */
+  .katedra-page .lp-list::-webkit-scrollbar-button{display:none;width:0;height:0}
+  .katedra-page .lp-list::-webkit-scrollbar-corner{background:transparent}
+  .katedra-page .lp-list::-webkit-scrollbar-thumb{background:var(--pl-edge);border-radius:99px;
+    border:3px solid var(--paper);background-clip:padding-box}
+  .katedra-page .lp-list::-webkit-scrollbar-thumb:hover{background:var(--pl-edge2);background-clip:padding-box;
+    border:3px solid var(--paper)}
   .katedra-page .lp-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;
     border:1px solid transparent;border-radius:var(--rs);padding:7px 9px;color:var(--ink);font-family:inherit;
     font-size:12.8px;line-height:1.35;cursor:pointer;transition:.12s}
@@ -737,21 +753,37 @@
   .katedra-page .onb-choices.big{flex-direction:row;gap:10px}
   .katedra-page .onb-choices.big .onb-choice{flex:1;text-align:center;padding:18px 12px}
   @media(max-width:560px){.katedra-page .onb-choices.big{flex-direction:column}}
-  .katedra-page .onb-back{border:0;background:transparent;color:var(--mut2);font-size:12.5px;
-    font-family:inherit;cursor:pointer;margin-top:12px;padding:6px}
-  .katedra-page .onb-back:hover{color:var(--txt);text-decoration:underline}
-  .katedra-page .fun-input{display:flex;gap:8px;margin-bottom:9px}
-  .katedra-page .fun-input input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line2);
+  /* Natrag je prava, prepoznatljiva tipka — prije je bio sivi tekst koji se
+     nije razlikovao od opisa i teško se pogađao. */
+  .katedra-page .onb-back{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);
+    background:transparent;color:var(--mut);font-size:12.5px;font-weight:700;font-family:inherit;
+    cursor:pointer;margin-top:14px;padding:9px 16px;border-radius:var(--rs);transition:.15s}
+  .katedra-page .onb-back:hover{border-color:var(--acc);color:var(--txt);background:var(--bg2)}
+
+  /* .onb-choice je blok sirine 100%, pa je gumb u retku gutao polje za unos i
+     ostavljao ga siroko 50px. U ovom retku polje dobiva prostor, gumb svoj. */
+  .katedra-page .fun-input{display:flex;gap:8px;margin-bottom:10px;align-items:stretch}
+  .katedra-page .fun-input input{flex:1 1 auto;min-width:0;background:var(--bg2);border:1px solid var(--line2);
     border-radius:12px;color:var(--txt);font-family:inherit;font-size:14px;padding:12px 14px;outline:none}
   .katedra-page .fun-input input:focus{border-color:var(--acc)}
-  .katedra-page .fun-input .onb-choice{flex:0 0 auto;padding:12px 16px}
+  .katedra-page .fun-input .onb-choice{flex:0 0 auto;width:auto;padding:12px 18px;display:flex;
+    align-items:center;background:var(--grad);border-color:transparent;color:var(--on-acc)}
+  .katedra-page .fun-input .onb-choice b{color:var(--on-acc)}
+  /* Sporedni izbor ("preskoči") mora izgledati kao tipka, ne kao zalutali tekst. */
+  .katedra-page .onb-choices .onb-choice.ghost{background:transparent;border-color:var(--line2);text-align:center}
+  .katedra-page .onb-choices .onb-choice.ghost b{font-weight:600;color:var(--mut)}
+  .katedra-page .onb-choices .onb-choice.ghost:hover{border-color:var(--acc);background:var(--card2)}
+  .katedra-page .onb-choices .onb-choice.ghost:hover b{color:var(--txt)}
   /* zaglavlje i podnožje ekrana 4 — vidljivi samo dok je chrome "fak" */
   .katedra-page .scr-head{padding:30px 2px 14px;text-align:center}
   .katedra-page .scr-head h2{font-family:var(--serif);font-size:clamp(20px,2.6vw,26px);font-weight:800;
     letter-spacing:-.3px;color:var(--txt)}
   .katedra-page .scr-head p{font-size:13px;color:var(--mut);margin:6px auto 0;max-width:62ch}
-  .katedra-page .scr-foot{display:flex;align-items:center;justify-content:center;gap:12px;padding:18px 2px 40px}
-  .katedra-page .scr-foot .onb-go{width:auto;min-width:190px}
+  .katedra-page .scr-meta{font-size:11px;color:var(--mut2);margin-top:8px;letter-spacing:.3px}
+  .katedra-page .scr-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:20px 2px 44px;max-width:1080px;margin:0 auto}
+  .katedra-page .scr-foot .onb-back{margin-top:0}
+  .katedra-page .scr-foot .onb-go{width:auto;min-width:200px}
   /* ekran povratka — jedna uputa, jedan gumb */
   .katedra-page .ret-one{background:var(--bg2);border:1.5px solid var(--acc);border-radius:14px;
     padding:16px 18px;display:flex;flex-direction:column;gap:11px;align-items:center;margin:16px 0 4px}
@@ -776,7 +808,22 @@
      Selektor MORA biti "#cheatRoot > *", ne ".cs-grid > *" — #view-help je
      također .cs-grid pa bi se inače ispraznio. */
   .katedra-page[data-chrome="fak"] #cheatRoot > *:not(#fakCard){display:none}
-  .katedra-page[data-chrome="fak"] #fakCard{grid-column:1/-1}
+  /* Kao ekran, kartica gubi vlastiti okvir, naslov i uvodni odlomak: sve troje
+     ponavlja ono što već piše u zaglavlju ekrana, a tri ugniježđena okvira su
+     glavni razlog zašto je dio djelovao razbacano. Kao tab ostaje kartica. */
+  .katedra-page[data-chrome="fak"] #fakCard{grid-column:1/-1;background:transparent;border:0;
+    padding:0;box-shadow:none}
+  .katedra-page[data-chrome="fak"] #fakCard > h3,
+  .katedra-page[data-chrome="fak"] #fakCard > p{display:none}
+  /* Stupci iste visine, popis puni ostatak — inače su bili nejednaki jer prvi
+     ima polje za pretragu, a ispod kraćih je ostajala prazna rupa. */
+  .katedra-page[data-chrome="fak"] .lp-cascade{height:min(46vh,360px);align-items:stretch}
+  .katedra-page[data-chrome="fak"] .lp-col{height:100%;min-height:0}
+  /* Bez ovoga je zadnji vidljivi redak prerezan po sredini i popis izgleda
+     odsjecen; ovako se blago stapa i vidi se da ima jos ispod. */
+  .katedra-page[data-chrome="fak"] .lp-list{flex:1;max-height:none;
+    mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent);
+    -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)}
   .katedra-page:not([data-chrome="fak"]) #fakHead,
   .katedra-page:not([data-chrome="fak"]) #fakFoot{display:none}
 

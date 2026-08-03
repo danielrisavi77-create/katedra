@@ -740,7 +740,10 @@ async function lpInit(){
   if(!sel.value) sel.selectedIndex = 0;
   sel.onchange = () => { lsSet('rp_unit', sel.value); lpRenderCascade(); };
   const metaEl = $('lpMetaCount');
-  if(metaEl) metaEl.textContent = pack.meta.counts.profiles + ' profila / ' + pack.meta.counts.units + ' fakulteta · generirano ' + pack.meta.generatedAt;
+  const metaTxt = pack.meta.counts.profiles + ' profila / ' + pack.meta.counts.units + ' fakulteta · generirano ' + pack.meta.generatedAt;
+  if(metaEl) metaEl.textContent = metaTxt;
+  // isti podatak i u zaglavlju ekrana 4, gdje je uvodni odlomak skriven
+  const fakMetaEl = $('fakMeta'); if(fakMetaEl) fakMetaEl.textContent = 'Lekta baza: ' + metaTxt;
   const search = $('lpSearch');
   if(search) search.oninput = () => lpRenderUnits(search.value);
   lpRenderCascade();
@@ -2262,9 +2265,9 @@ let funStep = 0;
    a dvostruko pitanje je upravo ono sto lijevak treba ukloniti. */
 const FUN_Q = [
   { k:'rok', q:'Kad je rok predaje?',
-    why:'Iz roka Katedra racuna interne rokove unatrag i postavlja vozni red.',
+    why:'Iz roka Katedra računa interne rokove unatrag i postavlja vozni red.',
     o:[[14,'Za dva tjedna',''], [30,'Za mjesec dana',''], [90,'Za tri mjeseca',''],
-       [0,'Jos ne znam','mozes ga upisati poslije u Indeksu']],
+       [0,'Još ne znam','možeš ga upisati poslije u Indeksu']],
     pick(v){
       if(!v) return;
       const el = $('dl_rok'); if(!el) return;
@@ -2273,13 +2276,13 @@ const FUN_Q = [
       // -> updatePaper; bez njega rok ostane samo u polju
       el.dispatchEvent(new Event('input', { bubbles:true }));
     } },
-  { k:'gradja', q:'Imas li vec gradju?',
-    why:'Ako imas, plan dobiva analizu rupa umjesto praznog starta.',
-    o:[['da','Imam biljeske ili izvore',''], ['draft','Imam draft teksta',''], ['ne','Nemam nista','']],
+  { k:'gradja', q:'Imaš li već građu?',
+    why:'Ako imaš, plan dobiva analizu rupa umjesto praznog starta.',
+    o:[['da','Imam bilješke ili izvore',''], ['draft','Imam draft teksta',''], ['ne','Nemam ništa','']],
     pick(v){ const el = $('a_gradja'); if(el){ el.checked = v !== 'ne'; buildAuto(); saveState(); } } },
   { k:'mentor', q:'Tko ti je mentor?',
-    why:'Ulazi u prompt i u naslovnicu rada. Mozes preskociti ako jos ne znas.',
-    o:[['','Jos ne znam','']],
+    why:'Ulazi u prompt i u naslovnicu rada. Možeš preskočiti ako još ne znaš.',
+    o:[['','Preskoči — javit ću poslije','']],
     input:'npr. doc. dr. sc. Ime Prezime',
     pick(v){ const el = $('f_mentor'); if(el && v){ el.value = v; buildPrompt(); saveState(); } } }
 ];
@@ -2297,7 +2300,7 @@ function funnelRender(){
   if(!$('funOpts')) return;
   if(funStep < 0 || funStep >= FUN_Q.length) funStep = 0;
   const s = FUN_Q[funStep], left = FUN_Q.length - funStep;
-  $('funCount').innerHTML = 'Jos ' + left + (left === 1 ? ' pitanje' : ' pitanja')
+  $('funCount').innerHTML = 'Još ' + left + (left === 1 ? ' pitanje' : ' pitanja')
     + '<span class="onb-dots">' + FUN_Q.map((_, n) => '<i' + (n <= funStep ? ' class="on"' : '') + '></i>').join('') + '</span>';
   $('funQ').textContent = s.q;
   $('funWhy').textContent = s.why || '';
