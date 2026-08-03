@@ -1,187 +1,151 @@
 # Academic Suite — Shared Supabase Schema v0.1
 
-Status: foundation decision
+Status: accepted foundation architecture
 
-## Core decision
+## Authority
 
-Katedra and Lekta are separate applications and brands, but they share one Supabase project as the identity/data backbone of the Academic Suite ecosystem.
+The canonical database is the existing **Lekta Supabase project** (`zrrjttizjyfcxmcpgzml`).
 
-The shared Supabase project does **not** mean that all product data is mixed together. Ownership is explicit:
+Katedra is a consumer/product namespace inside that backend. It does not own a second Supabase project or a second production migration history.
+
+Authoritative DDL lives only in the Lekta repository:
+
+- `supabase/migrations/0035_academic_suite_foundation.sql`
+- `supabase/migrations/0036_academic_suite_rls_hardening.sql`
+
+## Topology
 
 ```text
-auth.users
-    │
-    └── academic_projects          ← SHARED CORE
-          │
-          ├── katedra_project_state ← KATEDRA-OWNED
-          ├── lekta_checks          ← LEKTA-OWNED
-          └── entitlements          ← SHARED COMMERCE
+LEKTA SUPABASE
+│
+├── auth.users                         canonical account identity
+│
+├── academic_projects                  shared project identity
+│   ├── katedra_project_state          Katedra-owned workflow state
+│   └── lekta_checks                   Lekta-owned sanitized check history
+│
+├── products                           existing Lekta catalog
+├── entitlements                       existing Lekta purchase authority
+│   └── document_slots                 existing Lekta document binding
+│
+├── katedra_wallets                    Katedra AI credits
+├── katedra_topups
+├── katedra_usage
+└── katedra_projects                   temporary Katedra v1 compatibility path
 ```
 
-`auth.users.id` is the canonical account identity across both products.
-`academic_projects.id` is the canonical project UUID across both products.
+Canonical IDs:
 
-## 1. Shared Core — `academic_projects`
+- `userId = auth.users.id`
+- `projectId = academic_projects.id`
 
-One row represents one academic work regardless of which product is currently being used.
+## `academic_projects`
 
-Canonical fields include:
+One row represents one academic work regardless of which app currently owns the UI interaction.
 
-- `id` — UUID, global project identity;
-- `user_id` — owner in shared Supabase Auth;
-- `legacy_client_project_id` — temporary Katedra migration alias;
-- institution/unit/program/profile references;
-- semantic `work_type`;
-- topic/title/deadline/stage;
-- ruleset reference/version;
-- contract version;
-- timestamps.
+Contains project metadata only: owner, work type, faculty/profile references, topic/title, deadline/stage, ruleset reference/version and contract version.
 
-Raw DOCX, document text, Katedra prompts, mentor comments, or Lekta free-form document detail do not belong here.
+It must not contain raw document content.
 
-### Legacy migration rule
+## `katedra_project_state`
 
-New Katedra projects already receive a UUID before authentication. That UUID becomes `academic_projects.id` unchanged.
-
-Old Katedra projects that still use a `k...` client ID receive the already-existing `katedra_projects.id` UUID as their canonical shared ID. Their old `k...` value remains only in `legacy_client_project_id`.
-
-Therefore every shared project is unambiguous even if two historical users happened to generate the same legacy alias.
-
-## 2. Katedra-owned — `katedra_project_state`
-
-Contains Katedra process/workflow state keyed by the shared project UUID:
+Katedra-owned process state keyed by the shared project UUID:
 
 - checklist state;
-- generator/autopilot form state;
-- prompt history;
+- generator/autopilot fields;
+- prompt/process history;
 - process log;
-- local Katedra copy of latest Lekta coaching findings/score;
-- cumulative fixed count;
-- optional latest Lekta analysis reference.
+- latest sanitized Lekta coaching findings/score;
+- cumulative verified-fix count.
 
-This table exists because process/coaching state is not shared project identity.
+The current `/api/state` still writes `katedra_projects` during foundation v0.1. A DB trigger mirrors the same project into `academic_projects + katedra_project_state`.
 
-Katedra may read/write this data for the owning user.
+## `lekta_checks`
 
-## 3. Lekta-owned — `lekta_checks`
+Lekta-owned sanitized deterministic check history keyed by the same project UUID.
 
-Stores sanitized deterministic check history keyed by the same shared project UUID.
+Allowed:
 
-Allowed data:
-
-- analysis ID;
-- ruleset/profile IDs;
+- analysis/project/profile/ruleset IDs;
 - score/category scores;
-- sanitized structured issues;
-- optional non-reversible document fingerprint;
-- coverage tier;
-- timestamps.
+- sanitized structured findings;
+- optional non-reversible fingerprint;
+- coverage/timestamps.
 
-Not allowed:
+Forbidden in this foundation:
 
-- raw `.docx`;
+- `.docx` bytes;
 - document body text;
-- free-form document-derived `detail`/`location` payloads;
-- mentor notes;
+- free-form `detail` or `location` derived from the user's document;
+- mentor comments;
 - source passages.
 
-The client has read-only access through RLS. Future cloud persistence from Lekta must use a trusted server/service-role path. Browser-local DOCX analysis remains local-first.
+Client access is owner-read only. Writes remain trusted-server/service-role operations.
 
-## 4. Shared commerce — `entitlements`
+## Existing Lekta commerce stays authoritative
 
-Cross-product purchased rights live above Katedra's token wallet.
+Academic Suite does not create a second commerce model.
 
-Examples:
+Existing relation:
 
-- `lekta-check`;
-- `lekta-fix`;
-- `katedra-pro`;
-- `academic-pass`;
-- `academic-pass-plus`.
+```text
+products -> entitlements -> document_slots
+```
 
-Entitlements may be user-wide or tied to one shared project UUID.
+remains the purchase/Pass authority.
 
-Katedra's existing `katedra_wallets`, `katedra_topups`, and `katedra_usage` remain separate because they account for variable AI compute cost. Wallet balance is not the authority for ecosystem access rights.
+Foundation adds optional `academic_project_id` to `entitlements` and `document_slots`, allowing a pass/slot to refer to the same `academic_projects.id` used by Katedra.
 
-## 5. Auth
+This preserves existing Lekta products such as Thesis Pass while making them project-aware across the ecosystem.
 
-The existing Katedra Supabase Auth project becomes the canonical Academic Suite identity backend.
+## Katedra AI wallet
 
-This gives both apps the same future `user_id` without later account-merging work.
+`katedra_wallets`, `katedra_topups`, and `katedra_usage` are separate because they account for variable Anthropic token cost.
 
-Shared Supabase Auth does **not** automatically create seamless browser SSO between separate root domains (`katedra.hr` and `lekta.hr`). Cross-domain SSO/session exchange remains a later UX layer.
+They are **not** access-right authority. A future cross-product Pass is still represented by the existing Lekta commerce model.
 
-## 6. RLS ownership
+## Auth
 
-- `academic_projects`: owner CRUD (`auth.uid() = user_id`).
-- `katedra_project_state`: owner access via the parent project.
-- `lekta_checks`: owner SELECT; no client write policy.
-- `entitlements`: owner SELECT; no client write/update/delete policy.
+Katedra login/signup uses the same Lekta Supabase Auth tenant. Existing Lekta users and future Katedra users therefore share one `auth.users` namespace.
 
-Billing and Lekta cloud-check persistence remain server-authoritative.
+Separate domains do not automatically share browser cookies. Seamless cross-domain SSO is a later transport/UX layer.
 
-## 7. Compatibility phase
+## RLS
 
-The current Katedra production API already writes `katedra_projects`. Rewriting that path at the same moment as the schema migration would add unnecessary release risk.
+New private tables explicitly target `authenticated` and enforce owner predicates.
 
-Therefore foundation v0.1 keeps:
+- `academic_projects`: owner CRUD;
+- `katedra_project_state`: owner CRUD through parent project;
+- `lekta_checks`: owner SELECT only;
+- Katedra wallet/topup/usage: owner SELECT only; mutations server-side;
+- existing Lekta `entitlements` and `document_slots`: owner SELECT only, hardened to `authenticated` by migration `0036`.
+
+Database triggers reject cross-user project bindings for checks and entitlements.
+
+## Source-of-truth matrix
+
+| Concept | Authority |
+| --- | --- |
+| account | Lekta Supabase `auth.users` |
+| project identity/metadata | `academic_projects` |
+| Katedra process state | `katedra_project_state` |
+| academic rules | Lekta Academic Core |
+| deterministic check history | `lekta_checks` |
+| purchases / Thesis Pass / slots | existing Lekta `products`, `entitlements`, `document_slots` |
+| Katedra AI compute credits | `katedra_wallets/topups/usage` |
+| raw DOCX | local Lekta/browser workflow |
+| database migrations | Lekta repository only |
+
+## Compatibility phase
 
 ```text
 Katedra /api/state
       ↓
-katedra_projects           (temporary compatibility write-path)
-      ↓ DB trigger
-academic_projects
-      +
-katedra_project_state      (new canonical shared model)
+katedra_projects
+      ↓ trigger
+academic_projects + katedra_project_state
 ```
 
-The trigger also mirrors deletes during the compatibility phase.
+This keeps the existing Katedra engine stable while moving backend authority immediately.
 
-`katedra_projects` is **not** the long-term shared project model after this migration.
-
-A later migration may switch `/api/state` to write directly to `academic_projects + katedra_project_state` and then retire the compatibility table only after a safe observation window.
-
-## 8. Why not merge repositories/products
-
-Shared backend identity is an infrastructure decision, not a product merge.
-
-Repos remain separate:
-
-- `danielrisavi77-create/katedra`
-- `danielrisavi77-create/Lekta`
-
-Responsibilities remain separate:
-
-- Katedra: process, reasoning, semantic review, coaching;
-- Lekta: deterministic document verification and re-check verification.
-
-Shared Supabase only makes the same user/project/entitlement legible to both products.
-
-## 9. Source-of-truth matrix
-
-| Concept | Authority |
-| --- | --- |
-| user identity | Supabase `auth.users` |
-| project identity/metadata | `academic_projects` |
-| Katedra process state | `katedra_project_state` |
-| verified academic rules | Lekta Academic Core/rules export |
-| deterministic check history | `lekta_checks` |
-| purchased ecosystem rights | `entitlements` |
-| Katedra AI compute credits | existing Katedra wallet tables |
-| raw DOCX | local Lekta/browser workflow unless a future explicit feature changes this |
-
-## 10. Foundation v0.1 completion gate
-
-Shared Supabase foundation is technically ready when:
-
-1. migration applies on PostgreSQL 16;
-2. every legacy Katedra row backfills to one `academic_projects` row;
-3. legacy `k...` projects get canonical UUIDs without losing aliases;
-4. UUID-first projects preserve their client UUID exactly;
-5. Katedra state backfills to `katedra_project_state`;
-6. current Katedra writes mirror into shared tables;
-7. `lekta_checks` accepts sanitized check records tied to shared project IDs;
-8. `entitlements` accepts shared project/user rights;
-9. RLS is enabled on all shared tables;
-10. no raw academic document-content column exists in the shared schema.
+After an observation window, `/api/state` should write directly to shared Core and `katedra_projects` can be retired by a future Lekta migration.
