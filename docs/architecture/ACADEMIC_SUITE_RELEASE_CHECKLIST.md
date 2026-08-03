@@ -1,251 +1,137 @@
 # Lekta × Katedra — Production Release Checklist v0.1
 
-Status: required release gate for the paired foundation PRs.
+Target database: existing **Lekta Supabase** (`zrrjttizjyfcxmcpgzml`).
 
-Paired changes:
+Schema authority: `danielrisavi77-create/Lekta`.
 
-- Katedra PR #1
+Paired PRs:
+
 - Lekta PR #25
-- shared Supabase migrations, in order:
-  1. `supabase/migrations/20260805000000_academic_suite_foundation.sql`
-  2. `supabase/migrations/20260805010000_academic_suite_foundation_hardening.sql`
+- Katedra PR #1
 
-The target architecture is one Supabase project shared by both products. Katedra's existing Supabase becomes the Academic Suite identity/data backbone.
+Authoritative migrations:
 
-The migrations create the canonical shared model:
+1. `Lekta/supabase/migrations/0035_academic_suite_foundation.sql`
+2. `Lekta/supabase/migrations/0036_academic_suite_rls_hardening.sql`
 
-```text
-auth.users
-    └── academic_projects
-          ├── katedra_project_state
-          ├── lekta_checks
-          └── entitlements
-```
-
-`katedra_projects` remains temporarily as a compatibility write-path only; DB triggers mirror it into the new canonical tables.
-
-Raw thesis/DOCX content must never be introduced into the shared database as part of this release.
-
----
+Katedra-side migration files are not production authority.
 
 ## 0. Release invariant
 
-Do not deploy Katedra foundation code before **both** DB migrations are applied in order and every postcheck passes.
+Do not point the production Katedra deployment at Lekta Supabase until both migrations are applied and verified.
 
-Do not manually modify SQL while pasting it into production. Any change must first be committed and pass the PostgreSQL migration CI gate.
+Do not create a second `entitlements` or `products` model. The existing Lekta commerce tables remain authoritative.
 
----
+## 1. Preflight on Lekta Supabase
 
-## 1. Pre-migration database checks
+Run against project `zrrjttizjyfcxmcpgzml`.
 
-Run these in the **existing Katedra Supabase project** SQL editor.
-
-### 1.1 Legacy table exists
+### Existing commerce exists
 
 ```sql
-select to_regclass('public.katedra_projects') as katedra_projects;
+select to_regclass('public.products'),
+       to_regclass('public.entitlements'),
+       to_regclass('public.document_slots');
 ```
 
-Expected: `katedra_projects`.
+Expected: all non-null.
 
-### 1.2 Legacy work types are valid
+### No conflicting Academic Suite tables
 
 ```sql
-select count(*) as invalid_work_type_rows
-from public.katedra_projects
-where work_type is null or work_type not in ('s', 'z', 'd');
+select table_name
+from information_schema.tables
+where table_schema = 'public'
+  and table_name in (
+    'academic_projects','katedra_project_state','lekta_checks',
+    'katedra_projects','katedra_wallets','katedra_topups','katedra_usage'
+  );
 ```
 
-Expected: `0`.
+Before first rollout, expected: zero rows.
 
-### 1.3 Legacy client aliases are unique per owner
-
-```sql
-select user_id, guest_project_id, count(*)
-from public.katedra_projects
-where guest_project_id is not null
-  and guest_project_id <> ''
-group by user_id, guest_project_id
-having count(*) > 1;
-```
-
-Expected: zero rows.
-
-### 1.4 UUID-shaped guest IDs are globally unique
-
-```sql
-select guest_project_id, count(*)
-from public.katedra_projects
-where guest_project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-group by guest_project_id
-having count(*) > 1;
-```
-
-Expected: zero rows.
-
-### 1.5 No UUID guest ID collides with another legacy row primary key
+### Record current counts
 
 ```sql
 select
-  src.id as source_row,
-  src.guest_project_id,
-  other_row.id as colliding_row
-from public.katedra_projects src
-join public.katedra_projects other_row
-  on src.guest_project_id = other_row.id::text
- and src.id <> other_row.id
-where src.guest_project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  (select count(*) from auth.users) as auth_users,
+  (select count(*) from public.entitlements) as entitlements,
+  (select count(*) from public.document_slots) as document_slots;
 ```
 
-Expected: zero rows.
+Record values for comparison after migration.
 
-### 1.6 Record baseline
+## 2. CI gates before production DDL
 
-```sql
-select count(*) as legacy_project_rows_before
-from public.katedra_projects;
-```
+### Lekta PR #25
 
-Record this number as `N`.
+Required green:
 
----
+- Academic Suite DB
+- Foundation check
+- standard Node 20/24 check
+- conformance
+- DOCX smoke
+- security audit
+- Netlify preview
 
-## 2. Apply migrations
+### Katedra PR #1
 
-Apply **both** committed files in this exact order:
+Required green:
 
-```text
-supabase/migrations/20260805000000_academic_suite_foundation.sql
-supabase/migrations/20260805010000_academic_suite_foundation_hardening.sql
-```
+- Foundation check
+- DB authority guard
+- Academic Suite real-DOCX browser E2E
 
-Preferred methods:
+## 3. Apply database migrations
 
-1. Supabase SQL editor, executing each exact committed file in order; or
-2. `supabase db push` only if the CLI is already linked to the correct production project.
+Apply `0035` then `0036` to the **Lekta Supabase** migration history.
 
-The second migration is not optional. It adds DB-level protection against cross-user project ownership takeover and prevents project-scoped entitlements from referencing a project owned by a different user.
+Do not paste or edit a divergent copy from Katedra.
 
----
+## 4. Post-migration hard gates
 
-## 3. Post-migration hard gates
-
-Every check below must pass before application promotion.
-
-### 3.1 Legacy table lost no rows
-
-```sql
-select count(*) as legacy_project_rows_after
-from public.katedra_projects;
-```
-
-Expected: the same `N` as before migration.
-
-### 3.2 Shared tables exist
+### Shared tables exist
 
 ```sql
 select
   to_regclass('public.academic_projects') as academic_projects,
   to_regclass('public.katedra_project_state') as katedra_project_state,
   to_regclass('public.lekta_checks') as lekta_checks,
-  to_regclass('public.entitlements') as entitlements;
+  to_regclass('public.katedra_projects') as katedra_projects,
+  to_regclass('public.katedra_wallets') as katedra_wallets,
+  to_regclass('public.katedra_topups') as katedra_topups,
+  to_regclass('public.katedra_usage') as katedra_usage;
 ```
 
-Expected: all four names non-null.
+Expected: all non-null.
 
-### 3.3 One legacy project became one shared project and one Katedra state row
+### Existing Lekta commerce survived
 
 ```sql
-select
-  (select count(*) from public.katedra_projects) as legacy_rows,
-  (select count(*) from public.academic_projects) as shared_projects,
-  (select count(*) from public.katedra_project_state) as katedra_states;
+select count(*) from public.products;
+select count(*) from public.entitlements;
+select count(*) from public.document_slots;
 ```
 
-Immediately after migration, all three counts must equal `N`.
+Existing rows must not disappear.
 
-### 3.4 Legacy compatibility columns are complete
-
-```sql
-select
-  count(*) filter (where project_id is null or project_id = '') as missing_project_id,
-  count(*) filter (where work_type_canonical is null or work_type_canonical = '') as missing_work_type_canonical,
-  count(*) filter (where contract_version is null or contract_version = '') as missing_contract_version
-from public.katedra_projects;
-```
-
-Expected: `0, 0, 0`.
-
-### 3.5 Work-type mapping is exact
+### Project-aware commerce columns exist
 
 ```sql
-select count(*) as bad_mapping
-from public.katedra_projects
-where (work_type = 's' and work_type_canonical <> 'seminar')
-   or (work_type = 'z' and work_type_canonical <> 'final')
-   or (work_type = 'd' and work_type_canonical <> 'graduate');
-```
-
-Expected: `0`.
-
-### 3.6 UUID-first projects preserved their UUID exactly
-
-```sql
-select count(*) as bad_uuid_migrations
-from public.katedra_projects kp
-left join public.academic_projects ap
-  on ap.id::text = kp.guest_project_id
-where kp.guest_project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-  and ap.id is null;
-```
-
-Expected: `0`.
-
-### 3.7 Legacy `k...` projects use the old DB UUID as the new canonical ID
-
-```sql
-select count(*) as bad_legacy_migrations
-from public.katedra_projects kp
-left join public.academic_projects ap
-  on ap.id = kp.id
- and ap.user_id = kp.user_id
- and ap.legacy_client_project_id is not distinct from kp.guest_project_id
-where not (
-  kp.project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-)
-  and ap.id is null;
-```
-
-Expected: `0`.
-
-### 3.8 Katedra state was split correctly
-
-```sql
-select count(*) as projects_without_state
-from public.academic_projects ap
-left join public.katedra_project_state ks on ks.project_id = ap.id
-where ks.project_id is null;
-```
-
-Expected immediately after migration: `0`.
-
-### 3.9 Compatibility and ownership triggers exist
-
-```sql
-select tgrelid::regclass as table_name, tgname
-from pg_trigger
-where not tgisinternal
-  and tgname in (
-    'katedra_project_shared_mirror',
-    'katedra_project_shared_delete',
-    'entitlements_validate_project_owner'
+select table_name, column_name
+from information_schema.columns
+where table_schema = 'public'
+  and (
+    (table_name = 'entitlements' and column_name = 'academic_project_id') or
+    (table_name = 'document_slots' and column_name = 'academic_project_id')
   )
-order by tgname;
+order by table_name;
 ```
 
-Expected: all three trigger names.
+Expected: two rows.
 
-### 3.10 RLS enabled on every shared table
+### RLS enabled on new private tables
 
 ```sql
 select relname, relrowsecurity
@@ -254,146 +140,115 @@ where oid in (
   'public.academic_projects'::regclass,
   'public.katedra_project_state'::regclass,
   'public.lekta_checks'::regclass,
-  'public.entitlements'::regclass
+  'public.katedra_projects'::regclass,
+  'public.katedra_wallets'::regclass,
+  'public.katedra_topups'::regclass,
+  'public.katedra_usage'::regclass
 )
 order by relname;
 ```
 
-Expected: `relrowsecurity = true` for every row.
+Expected: `true` for every row.
 
-### 3.11 Privacy invariant
+### Commerce policies target authenticated
+
+```sql
+select tablename, policyname, roles
+from pg_policies
+where schemaname = 'public'
+  and tablename in ('entitlements','document_slots')
+  and policyname in ('entitlements_select_own','document_slots_select_own')
+order by tablename;
+```
+
+Expected role array: `{authenticated}`.
+
+### Privacy invariant
 
 ```sql
 select table_name, column_name
 from information_schema.columns
 where table_schema = 'public'
-  and table_name in (
-    'academic_projects',
-    'katedra_project_state',
-    'lekta_checks',
-    'entitlements'
-  )
+  and table_name in ('academic_projects','katedra_project_state','lekta_checks')
   and column_name in (
-    'docx', 'document', 'document_text', 'document_content', 'raw_document',
-    'issue_detail', 'issue_location', 'mentor_comments', 'source_passages'
+    'docx','document','document_text','document_content','raw_document',
+    'issue_detail','issue_location','mentor_comments','source_passages'
   );
 ```
 
 Expected: zero rows.
 
-The shared DB may contain sanitized structured Lekta issues. It must not contain the raw Word document or document-derived free-form text payloads.
+### Run Supabase advisors
 
----
+Run both security and performance advisors after the DDL. New WARN/ERROR findings caused by these migrations are release blockers.
 
-## 4. Katedra production environment preflight
+## 5. Katedra runtime cutover
 
-Verify the existing production deployment has the correct values:
+Update the Katedra deployment environment so these values point to the **Lekta Supabase** project:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SUPABASE_ANON_KEY (or compatible publishable key when client migration is done)
 SUPABASE_SERVICE_ROLE_KEY
+```
+
+The service-role key remains server-only and must never be committed to GitHub.
+
+Also verify:
+
+```text
 ANTHROPIC_API_KEY
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_APP_URL
 ```
 
-Rules:
+Katedra's Stripe wallet remains independent AI-credit accounting; Lekta `products/entitlements/document_slots` remain purchase/Pass authority.
 
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` point to the **same Supabase project that now hosts Academic Suite Core**.
-- `SUPABASE_SERVICE_ROLE_KEY` remains server-only.
-- Stripe/Anthropic secrets must never be exposed through `NEXT_PUBLIC_*`.
-- Stripe webhook points to the real Katedra `/api/webhook` endpoint.
+## 6. Auth configuration
 
-Known configuration debt:
+Because Katedra now uses Lekta Auth, add/verify Katedra production and callback URLs in the Lekta Supabase Auth redirect allowlist before production signup/login testing.
 
-- Katedra's legacy vanilla engine still points to the current Lekta Netlify production URL in code.
-- Lekta reverse handoff supports `VITE_KATEDRA_URL` and otherwise falls back to `https://katedra.hr` outside localhost.
-- Resolve URL configuration before a future public-domain cutover; do not perform an ad-hoc URL edit during this database release.
+Separate root domains still require a future SSO/session-exchange layer for seamless cross-domain login.
 
----
+## 7. Coordinated application promotion
 
-## 5. Required CI immediately before merge
+1. DB migrations `0035` + `0036` applied and postchecks green.
+2. Lekta PR #25 current-head CI green.
+3. Katedra PR #1 current-head CI green.
+4. Configure Katedra production env for Lekta Supabase.
+5. Deploy/merge Lekta changes.
+6. Deploy/merge Katedra changes immediately after.
+7. Run one non-sensitive real-DOCX smoke.
 
-### Lekta PR #25
+## 8. Manual post-deploy smoke
 
-Required green:
+1. Create/sign into one account through Lekta Supabase Auth.
+2. Open Katedra with the same account.
+3. Create a guest-first UUID project and save it after login.
+4. Verify matching rows in `katedra_projects`, `academic_projects`, and `katedra_project_state`.
+5. Open Lekta from Katedra with project/unit/work context.
+6. Upload a non-sensitive test `.docx` and run local analysis.
+7. Confirm `Riješi u Katedri` is visible.
+8. Return to Katedra and verify stable finding IDs.
+9. Mark one finding changed and re-check without fixing: it must reopen.
+10. Fix it and re-check: disappearance may become `VERIFIED_FIXED`.
+11. Confirm no raw document text crossed into shared Supabase.
 
-- Netlify deploy preview
-- Foundation check
-- Node 20 build gate
-- Node 24 build gate
-- full conformance matrix
-- DOCX smoke
-- security audit
+## 9. Rollback principle
 
-### Katedra PR #1
+The shared migration is additive. If an application deploy fails, roll back application code first; do not drop shared tables or existing Lekta commerce.
 
-Required green:
+Do not reverse or truncate `products`, `entitlements`, `document_slots`, or existing Lekta production data as part of an app rollback.
 
-- Foundation check (`tsc`, lint, production build)
-- Foundation DB migration (PostgreSQL 16), including ownership hardening smoke
-- Academic Suite browser E2E including the real-DOCX segment
+## 10. Foundation complete
 
----
+Foundation v0.1 is production-complete when:
 
-## 6. Coordinated promotion order
-
-After every DB postcheck passes:
-
-1. Confirm Lekta PR #25 current-head CI is green.
-2. Confirm Katedra PR #1 current-head CI is green.
-3. Merge/promote Lekta integration changes.
-4. Merge/promote Katedra foundation changes immediately after.
-5. Verify Katedra opens Lekta with `project`, `unit`, and `work` context.
-6. Verify Lekta result shows `Riješi u Katedri` in the visible result shell.
-7. Verify a new/updated Katedra project appears in both `katedra_projects` and the shared `academic_projects`/`katedra_project_state` mirror during the compatibility period.
-
----
-
-## 7. Manual post-deploy smoke
-
-Use a disposable project and a non-sensitive Word document.
-
-1. Open Katedra as a guest.
-2. Confirm a UUID `projectId` is created.
-3. Select FPZG + diplomski context.
-4. Open Lekta.
-5. Confirm FPZG + graduate context is preselected.
-6. Upload the test `.docx` using the visible upload flow.
-7. Run real local Lekta analysis.
-8. Confirm `Riješi u Katedri` is visible.
-9. Return to Katedra; stable findings must appear.
-10. Mark one finding changed.
-11. Start re-check; status becomes `RECHECK_REQUIRED`.
-12. Re-check without fixing: finding reopens as `OPEN`.
-13. Fix and re-check: disappearance can become `VERIFIED_FIXED`.
-14. Confirm the cross-product payload contains no raw document text/detail/location.
-15. If signed in, confirm the project has one `academic_projects` row and one matching `katedra_project_state` row.
-
----
-
-## 8. Rollback principle
-
-Both migrations are additive. Application rollback normally means reverting application deployment while leaving shared tables and compatibility columns/triggers in place.
-
-Do **not** drop `academic_projects`, `katedra_project_state`, `lekta_checks`, or `entitlements` during an emergency app rollback without a separate reviewed data migration.
-
-Because Katedra continues writing the legacy compatibility table in v0.1, rollback to pre-foundation application code does not require reverse data conversion.
-
----
-
-## 9. Release complete
-
-Foundation v0.1 is production-complete only when:
-
-- both shared Supabase migrations applied in order;
-- all post-migration SQL gates pass;
-- both PR CI sets are green;
-- paired production deployment completed;
-- one manual non-sensitive DOCX round-trip passes;
-- shared project mirror is observed working in production;
-- no privacy or ownership invariant is weakened.
-
-After that, the next database milestone is to move Katedra `/api/state` from the compatibility table to direct `academic_projects + katedra_project_state` writes, then eventually retire `katedra_projects` after an observation window.
+- Lekta Supabase contains the shared project/Katedra tables;
+- existing Lekta commerce remains intact;
+- both CI suites are green;
+- Katedra uses Lekta Supabase env values;
+- Auth redirects are configured;
+- one real browser/DOCX round-trip passes in production;
+- security advisors show no new blocker from the foundation migrations.
