@@ -896,8 +896,11 @@ function lpRenderUnits(filter){
   host.innerHTML = '';
   if(!units.length){ host.innerHTML = '<p class="lp-empty">Nema fakulteta za „' + escA(filter) + '”.</p>'; return; }
   units.forEach(u => {
-    // VIZIJA.md: nudimo sve sastavnice, ali status je vidljiv na svakom retku —
-    // ne skrivamo profile koji imaju samo tehničke provjere.
+    // Napomena: VIZIJA.md §Korisnik zapravo traži "tvrdu ogradu" (nudimo SAMO
+    // verified fakultete) — ovaj kod svjesno odstupa od toga i prikazuje i
+    // partial profile, jer 359/395 profila i dalje nosi stvarnu (samo užu)
+    // potvrdu, vidljivu kroz ✅/🟡 status na svakom retku. Transparentnost
+    // umjesto brisanja podataka — ali ovo NIJE ono što VIZIJA.md opisuje.
     const verified = (u.profiles || []).some(pid => LP_BY_ID[pid] && LP_BY_ID[pid].status === 'verified');
     host.appendChild(lpRow(u.name, u.inst || '', verified ? 'verified' : 'partial', u.id === cur, () => {
       const sel = $('lpUnit'); if(sel) sel.value = u.id;
@@ -1520,10 +1523,14 @@ function applyTipPlaceholders(){
 }
 
 /* ---------- CHEATSHEET ---------- */
+// Kartice dolje (do #fakCard) su OPĆE akademske heuristike — nisu sljedive do
+// pravila nijednog fakulteta, pa nose ovu oznaku da se ne mogu pomiješati s
+// pravim Lekta-verificiranim pravilima u kartici na dnu (audit nalaz #11).
+const CS_REC_BADGE = '<span style="display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.03em;color:var(--mut2);background:var(--card2);border:1px solid var(--bd);border-radius:20px;padding:1px 8px;margin-left:8px;vertical-align:middle;text-transform:none">Katedra preporuka — nije fakultetsko pravilo</span>';
 $('cheatRoot').innerHTML = `
-<p class="cs full" style="font-size:12.8px;color:var(--mut);padding:2px 2px 4px;background:transparent;border:0;box-shadow:none">Brza referenca dok pišeš ili provjeravaš rad — pravila citiranja, tipografije i formata na jednom mjestu, plus pravila tvog fakulteta ispod.</p>
+<p class="cs full" style="font-size:12.8px;color:var(--mut);padding:2px 2px 4px;background:transparent;border:0;box-shadow:none">Brza referenca dok pišeš ili provjeravaš rad. Kartice ispod su opće akademske preporuke Katedre (vrijede za sve fakultete podjednako) — provjerena, fakultetu specifična pravila dolaze isključivo iz Lekta baze u kartici na dnu.</p>
 <div class="cs">
-  <h3><em>🏗️</em> Struktura rada — obavezni elementi</h3>
+  <h3><em>🏗️</em> Struktura rada — obavezni elementi ${CS_REC_BADGE}</h3>
   <ol>
     <li><b>Uvod:</b> kontekst i relevantnost → istraživačko pitanje → cilj rada → pregled strukture</li>
     <li><b>Razrada:</b> logička poglavlja s naslovima; teorija UVIJEK povezana s analizom (implikacije, ograničenja, kritički osvrt)</li>
@@ -1533,7 +1540,7 @@ $('cheatRoot').innerHTML = `
   </ol>
 </div>
 <div class="cs">
-  <h3><em>🧩</em> Anatomija svakog paragrafa</h3>
+  <h3><em>🧩</em> Anatomija svakog paragrafa ${CS_REC_BADGE}</h3>
   <ol>
     <li><b>Tematska rečenica</b> — o čemu je odlomak</li>
     <li><b>Objašnjenje koncepta</b> — što to znači / kako funkcionira</li>
@@ -1544,7 +1551,7 @@ $('cheatRoot').innerHTML = `
   <p style="font-size:12.5px;color:var(--mut);margin-top:8px">Jedan odlomak = jedna ideja. Bez bullet lista u tekstu rada.</p>
 </div>
 <div class="cs">
-  <h3><em>📌</em> Citiranje</h3>
+  <h3><em>📌</em> Citiranje ${CS_REC_BADGE}</h3>
   <div class="cite-ex"><b>(Lindblom, 1959, str. 81)</b><small>FPZG autor-godina — UVIJEK s točnom stranicom, odmah uz tvrdnju (ne na kraj paragrafa)</small></div>
   <div class="cite-ex"><b>[1] · [1, 3] · [19–22]</b><small>IEEE numerički (tehnički radovi) — numeracija redom prvog pojavljivanja, bez rupa</small></div>
   <ul>
@@ -1555,7 +1562,7 @@ $('cheatRoot').innerHTML = `
   </ul>
 </div>
 <div class="cs">
-  <h3><em>🚫</em> Zabranjene AI fraze</h3>
+  <h3><em>🚫</em> Zabranjene AI fraze ${CS_REC_BADGE}</h3>
   <div class="chips">
     <span class="chip bad">kroz povijest</span><span class="chip bad">od davnina</span>
     <span class="chip bad">u današnje vrijeme</span><span class="chip bad">od kada postoji čovječanstvo</span>
@@ -1564,7 +1571,7 @@ $('cheatRoot').innerHTML = `
   <p style="font-size:12.5px;color:var(--mut);margin-top:10px">Umjesto toga: konkretan kontekst s izvorom. Piši u studentsko-akademskom registru — formalno, treće lice, bez kolokvijalizama.</p>
 </div>
 <div class="cs">
-  <h3><em>✅</em> Dozvoljeni izvori</h3>
+  <h3><em>✅</em> Dozvoljeni izvori ${CS_REC_BADGE}</h3>
   <div class="chips">
     <span class="chip good">HRČAK</span><span class="chip good">Google Scholar</span><span class="chip good">JSTOR</span>
     <span class="chip good">akademske knjige</span><span class="chip good">EU institucije</span><span class="chip good">nacionalne vlade</span>
@@ -1572,7 +1579,7 @@ $('cheatRoot').innerHTML = `
   </div>
 </div>
 <div class="cs">
-  <h3><em>❌</em> Zabranjeni izvori</h3>
+  <h3><em>❌</em> Zabranjeni izvori ${CS_REC_BADGE}</h3>
   <div class="chips">
     <span class="chip bad">Wikipedia (nikad)</span><span class="chip bad">blogovi bez autora</span>
     <span class="chip bad">nerecenzirani materijali</span><span class="chip bad">novinski članci kao primarni izvor</span>
@@ -1580,7 +1587,7 @@ $('cheatRoot').innerHTML = `
   <p style="font-size:12.5px;color:var(--mut);margin-top:10px">Novinski članci smiju samo kao empirijska ilustracija — nikad kao teorijska potkrjepa.</p>
 </div>
 <div class="cs full">
-  <h3><em>✍️</em> Hrvatska tipografija — brza referenca</h3>
+  <h3><em>✍️</em> Hrvatska tipografija — brza referenca ${CS_REC_BADGE}</h3>
   <table>
     <tr><th>Element</th><th>Ispravno</th><th>Pogrešno</th></tr>
     <tr><td>Navodnici</td><td><b>„tekst”</b> (U+201E / U+201D)</td><td><s>“tekst”</s> (engleski) · <s>"tekst"</s> (ravni)</td></tr>
@@ -1595,7 +1602,7 @@ $('cheatRoot').innerHTML = `
   </table>
 </div>
 <div class="cs">
-  <h3><em>🔍</em> Audit pipeline A–G (mapa)</h3>
+  <h3><em>🔍</em> Audit pipeline A–G (mapa) ${CS_REC_BADGE}</h3>
   <ol>
     <li><b>A Integritet</b> — polja, tracked changes, komentari</li>
     <li><b>B Citati</b> — definirano = citirano, bez siročadi i rupa</li>
@@ -1608,7 +1615,7 @@ $('cheatRoot').innerHTML = `
   <p style="font-size:12.5px;color:var(--mut);margin-top:8px">Željezno pravilo: nakon SVAKE izmjene → citati + brojke + polja + validacija.</p>
 </div>
 <div class="cs">
-  <h3><em>⚙️</em> Word mehanika — prije predaje</h3>
+  <h3><em>⚙️</em> Word mehanika — prije predaje ${CS_REC_BADGE}</h3>
   <ul>
     <li>SADRŽAJ i POPISI = <b>TOC polja</b>, ne ručno tipkani</li>
     <li>Natpisi tablica/slika = <b>SEQ</b> auto-numeracija; spomeni u tekstu = <b>REF</b></li>
@@ -1620,7 +1627,7 @@ $('cheatRoot').innerHTML = `
 </div>
 <div class="cs full" id="fakCard">
   <h3><em>🏛️</em> Pravila fakulteta — izvor: Lekta</h3>
-  <p style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Verificirana pravila iz <a href="https://lektahr.netlify.app" target="_blank" rel="noopener" style="color:var(--acc);font-weight:700">Lekta baze</a> (<span id="lpMetaCount">učitavam…</span>) — svako bodovano pravilo sljedivo je do službenog izvora fakulteta. Katedra ih koristi za plan i prompt; <b>mjerodavnu provjeru dokumenta radi Lekta</b>.</p>
+  <p style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Pravila iz <a href="https://lektahr.netlify.app" target="_blank" rel="noopener" style="color:var(--acc);font-weight:700">Lekta baze</a> (<span id="lpMetaCount">učitavam…</span>) — kod <b>✅ potvrđenih</b> profila svako bodovano pravilo sljedivo je do službenog izvora fakulteta; kod <b>🟡 profila sa samo tehničkim provjerama</b> pokrivenost je uža — provjeri značku uz svoj fakultet ispod. Katedra ih koristi za plan i prompt; <b>mjerodavnu provjeru dokumenta radi Lekta</b>.</p>
   <select id="lpUnit" style="display:none" aria-hidden="true" tabindex="-1"></select>
   <div class="lp-cascade">
     <div class="lp-col" id="lpColU">
@@ -1984,7 +1991,7 @@ function chatMode(m, tiho){
 /* ---------- IZJAVA O KORIŠTENJU AI ---------- */
 function izjavaStart(){
   chat.step = 'izj_naslov'; setStep(1);
-  pushA('<b>📝 Izjava o korištenju AI</b> — hrvatski fakulteti (FPZG, FOI…) od 2026. traže ovu izjavu u radu. Složimo je u 3 klika.<br><br><b>Naslov rada?</b> Upiši dolje ↓ ili preskoči (ostat će mjesto za upis).');
+  pushA('<b>📝 Izjava o korištenju AI</b> — sve više hrvatskih fakulteta traži ovakvu izjavu uz rad (npr. FPZG, FOI), ali ovo <b>nije Lekta-verificirano pravilo tvog fakulteta</b> — obavezno provjeri kod mentora/fakulteta treba li i u kojem točno obliku. Složimo opći nacrt u 3 klika.<br><br><b>Naslov rada?</b> Upiši dolje ↓ ili preskoči (ostat će mjesto za upis).');
   pushChips([['⏭ Preskoči', () => { chat.izjNaslov=''; izjavaUses(); }, true]]);
   setComposer('Upiši naslov rada…'); $('chatInput').focus();
 }
@@ -2016,7 +2023,7 @@ function izjavaUses(){
 function izjavaMentor(){
   chat.step = 'izj_mentor'; setStep(4);
   pushU(chat.izjSel.size ? [...chat.izjSel].map(i => IZJ_USES[i]).join(' · ') : 'AI nije korišten');
-  pushA('<b>Je li mentor upoznat s korištenjem AI?</b> (FPZG za završne i diplomske traži konzultaciju s mentorom)');
+  pushA('<b>Je li mentor upoznat s korištenjem AI?</b> (neki fakulteti, npr. FPZG, traže konzultaciju s mentorom za završne/diplomske — provjeri vrijedi li to za tvoj slučaj)');
   pushChips([
     ['✅ Da, odobrio je', () => izjavaFinal('da')],
     ['📩 Još nisam pitao/la', () => izjavaFinal('ne')],
@@ -2052,7 +2059,7 @@ function izjavaFinal(mentor){
   } else {
     t += 'Alati umjetne inteligencije nisu korišteni u izradi ovog rada.\n\n';
   }
-  t += 'Procijenjena razina korištenja (skala 0–4): ' + IZJ_LVL[lvl] + '\n';
+  t += 'Procijenjena razina korištenja (skala 0–3): ' + IZJ_LVL[lvl] + '\n';
   t += 'Mentor: ' + mentorLine + '.\n\n';
   if(nonAllowed.length){
     t += 'NAPOMENA: ' + nonAllowed.join(', ') + ' možda ' + (nonAllowed.length > 1 ? 'nisu' : 'nije') +
@@ -2060,10 +2067,13 @@ function izjavaFinal(mentor){
   }
   t += 'Sav tekst rada moje je autorsko djelo za koje preuzimam punu odgovornost. Svi izvori i citati provjereni su u izvornoj literaturi. Sadržaj u čijoj je izradi sudjelovao AI alat pregledan je, uređen i potvrđen s moje strane. Transkripti razgovora s AI alatom pohranjeni su i mogu se dostaviti na zahtjev.\n\n';
   t += 'U ______________, dana ______________          Potpis: ______________';
-  const d = pushA('<b>✅ Izjava je spremna.</b> Kopiraj je u rad (obično iza izjave o akademskoj čestitosti) i <b>prilagodi točnom obrascu svog fakulteta</b> — FPZG i FOI imaju vlastite formate.');
+  const d = pushA('<b>✅ Nacrt izjave je spreman</b> — ovo je opći predložak, <b>nije fakultetski provjeren obrazac</b>. Kopiraj ga u rad (obično iza izjave o akademskoj čestitosti) i zamijeni točnim obrascem svog fakulteta ako ga propisuje (npr. FPZG i FOI imaju vlastite formate).');
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = t; bub.appendChild(out);
-  const note = document.createElement('div'); note.style.cssText = 'margin-top:9px;font-size:12.5px;color:var(--warn)';
+  const src = document.createElement('div'); src.style.cssText = 'margin-top:9px;font-size:12.5px;color:var(--mut)';
+  src.textContent = 'ℹ️ Ovo je opća Katedra preporuka — nije sljedivo do Lekta baze niti do službenog obrasca tvog fakulteta.';
+  bub.appendChild(src);
+  const note = document.createElement('div'); note.style.cssText = 'margin-top:6px;font-size:12.5px;color:var(--warn)';
   note.textContent = '⚠ Spremi i dnevnik procesa iz Katedre (izvoz) — FPZG ga smije zatražiti.';
   bub.appendChild(note);
   const acts = document.createElement('div'); acts.className = 'final-actions';
