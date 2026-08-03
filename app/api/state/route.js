@@ -6,7 +6,15 @@
 // - new clients may send projectId + workTypeCanonical
 // - server persists BOTH legacy and canonical fields during migration
 //
-// Raw document content never enters this route.
+// Audit 3 P0 §1: raw document content only enters this route when the
+// client explicitly declares fullSyncConsent=true (user opted in to full
+// cross-device sync in the UI, v. katedra-engine.js hasFullSyncConsent/
+// setFullSyncConsent). The flag is per-request, not a persisted DB column —
+// a new column would need a Lekta-repo migration first (CLAUDE.md
+// "Database authority rule"); this keeps the fail-closed default (sanitize)
+// working today without one. Default/absent/false always sanitizes,
+// regardless of what the client sends — server is the authority, not the
+// client's own filtering (v. sanitizeGen/sanitizeHist/sanitizeLog below).
 // ============================================================
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -223,7 +231,9 @@ export async function PUT(req) {
     patch.lekta_fixed_total = fixedTotal ?? 0
   }
 
-  const SANITIZERS = { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog }
+  // fail closed: any value other than the literal boolean true keeps sanitizing.
+  const fullSyncConsent = body?.fullSyncConsent === true
+  const SANITIZERS = fullSyncConsent ? {} : { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog }
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
     if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
     const sanitize = SANITIZERS[camel]

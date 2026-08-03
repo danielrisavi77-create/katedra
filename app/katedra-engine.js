@@ -741,19 +741,34 @@ function ensureManifest(){
 let katedraLoggedIn = null;       // null = još ne znamo; postavlja refreshAuthAndCredits()
 let katedraStateReconciled = false;
 let stateSyncTimer = null;
+// Eksplicitni opt-in za punu sinkronizaciju (Audit 3 P0 §1 privacy fix).
+// Zadano isključeno (fail closed) — bez ovoga gatherGenForServer/histForServer/
+// logForServer već filtriraju/skraćuju sve što se šalje. Kad korisnik svjesno
+// uključi puni sync (npr. za nastavak na drugom uređaju), šalje se puni sadržaj
+// I server ga prima BEZ dodatnog sanitiziranja (v. /api/state, isti flag u
+// tijelu zahtjeva odlučuje na obje strane — nema nove DB kolone/migracije,
+// pristanak je per-request, ne perzistiran server-side po CLAUDE.md
+// "Database authority rule": nova kolona bi prvo trebala Lekta migraciju).
+const FULL_SYNC_CONSENT_KEY = 'rp_full_sync_consent';
+function hasFullSyncConsent(){ return lsGet(FULL_SYNC_CONSENT_KEY) === '1'; }
+function setFullSyncConsent(on){ lsSet(FULL_SYNC_CONSENT_KEY, on ? '1' : '0'); syncServerNow(); }
 function gatherServerState(){
   // Čisto čitanje — NE smije zvati ensureManifest()/saveManifest() (beskonačna petlja
   // preko syncServerNow unutar saveManifest).
   const m = getManifest() || { projectId: 'k'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     lektaIssues:[], lektaScore:null, lektaCheckedAt:'', lektaFixedTotal:0 };
+  const consent = hasFullSyncConsent();
   return {
     guestProjectId: m.projectId,
     unitId: m.unitId || lsGet('rp_unit') || '', profileId: m.profileId || lsGet('rp_profile') || '', workType: state.tip,
     topic: m.topic || '', deadline: m.deadline || '', rulesetVersion: m.rulesetVersion || '',
     lektaScore: m.lektaScore, lektaCheckedAt: m.lektaCheckedAt || '',
     lektaIssues: m.lektaIssues || [], lektaFixedTotal: m.lektaFixedTotal || 0,
-    checks: state.checks, gen: gatherGenForServer(),
-    hist: histForServer(getHist()), log: logForServer(getLog()), logf: (() => { try{ return JSON.parse(lsGet('rp_logf')||'[]'); }catch(e){ return []; } })(),
+    checks: state.checks, gen: consent ? gatherGen() : gatherGenForServer(),
+    hist: consent ? getHist() : histForServer(getHist()),
+    log: consent ? getLog() : logForServer(getLog()),
+    logf: (() => { try{ return JSON.parse(lsGet('rp_logf')||'[]'); }catch(e){ return []; } })(),
+    fullSyncConsent: consent,
   };
 }
 function syncServerNow(){
@@ -2616,6 +2631,22 @@ function renderIndeksHead(){
   const k = $('ihRok'); if(k){ const rv = val('dl_rok'); k.textContent = rv ? new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') : 'nije postavljen'; }
   renderMentorTasks();
 }
+// Audit 3 P0 §6 ("KILL NUMERIC READINESS %"): "RAD: 45 %" tretira "laptop
+// spreman" i "mentor odobrio temu" kao isti broj — lažna preciznost.
+// PRODUCT_CONSTITUTION.md već traži da Katedrin process-signal i Lekta
+// compliance-score ostanu odvojeni, nikad spojeni u jedan "spremnost %".
+// Zamjena: faza + broj kritičnih blockera + broj otvorenih zadataka + Lekta
+// re-check zastavica — isti izvor istine kao linePos()/scanCriticalItems().
+function readinessSummary(){
+  const pos = linePos();
+  let totAll = 0, ckAll = 0;
+  PHASES.forEach(ph => {
+    visibleItems(ph).forEach(it => { totAll++; if(state.checks[ph.id+':'+it.t]) ckAll++; });
+  });
+  const mf = getManifest();
+  const lektaOpen = mf ? (mf.lektaIssues || []).filter(x => x.status !== 'VERIFIED_FIXED').length : 0;
+  return { phase: LIN_ST[pos], open: totAll - ckAll, crit: scanCriticalItems().length, lektaOpen };
+}
 function updatePaper(){
   if(!$('kpaper')) return;
   const tema = val('a_tema');
@@ -2626,7 +2657,12 @@ function updatePaper(){
   const tl = TIP_LABEL[state.tip];
   $('kpSub').textContent = tl.charAt(0) + tl.slice(1).toLowerCase() + ' · Zagreb, ' + new Date().getFullYear() + '.';
   $('kpFak').textContent = val('f_fakultet') || 'tvoj fakultet';
-  $('kpPct').textContent = 'RAD: ' + (window.__pct || 0) + ' %';
+  const rs = readinessSummary();
+  const rsBits = ['FAZA: ' + rs.phase];
+  if(rs.crit) rsBits.push(rs.crit + ' ' + (rs.crit === 1 ? 'kritičan blocker' : 'kritičnih blockera'));
+  else if(rs.open) rsBits.push(rs.open + ' ' + (rs.open === 1 ? 'otvoren zadatak' : 'otvorenih zadataka'));
+  if(rs.lektaOpen) rsBits.push('Lekta re-check potreban');
+  $('kpPct').textContent = rsBits.join(' · ');
   /* sadržaj: poglavlja iz raspodjele opsega; žive nakon PLAN faze, pune se s PISANJEM */
   const chaps = WC_SPLIT[state.tip];
   const pos = linePos();
@@ -2814,6 +2850,11 @@ $('wc_unit').addEventListener('change', () => { renderWC(); saveState(); });
 $('btnDnevnik').onclick = exportDnevnik;
 $('mentorAddBtn').onclick = () => { addMentorTask($('mentorInput').value); $('mentorInput').value = ''; };
 $('mentorInput').addEventListener('keydown', e => { if(e.key === 'Enter'){ addMentorTask(e.target.value); e.target.value = ''; } });
+const fullSyncEl = $('fullSyncConsent');
+if(fullSyncEl){
+  fullSyncEl.checked = hasFullSyncConsent();
+  fullSyncEl.onchange = () => setFullSyncConsent(fullSyncEl.checked);
+}
 $('bGo').onclick = goChat;
 $('sendBtn').onclick = chatSend;
 $('chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') chatSend(); });
