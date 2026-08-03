@@ -2407,7 +2407,11 @@ if(funBackEl) funBackEl.onclick = () => {
 // /katedra-pack.json; padne li fetch, kaskada ostane prazna i bez ovoga bi
 // korisnik zapeo na ekranu s kojeg nema izlaza.
 const fakNextEl = $('fakNext');
-if(fakNextEl) fakNextEl.onclick = () => setScreen('ploca');
+// Lijevak vodi u PISANJE, ne u checklistu. Dosad je ostavljao korisnika na
+// ploči, pa je morao sam pronaći tab Start — jedan korak čiste prepreke
+// između njega i onoga zbog čega je došao. Indeks je i dalje jedan klik
+// dalje, a traka sljedećeg koraka vidi se i s ovog ekrana.
+if(fakNextEl) fakNextEl.onclick = () => setScreen('chat');
 
 /* ---------- EKRAN 7: POVRATAK ----------
    Doček nakon pauze: jedna rečenica, jedan gumb, ništa se ne traži ručno.
