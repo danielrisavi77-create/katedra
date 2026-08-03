@@ -89,7 +89,7 @@ app/
   katedra-engine.js           cijeli vanilla-JS engine (wizard, chat, generator,
                               Lekta handoff/coach, server-sync stanja)
   katedra-body.js             statični HTML shell (JSON-escaped string)
-  katedra-scoped.css          dizajn sustav (papir/tinta), skoniran na .katedra-page
+  katedra-scoped.css          dizajn sustav (tokeni + 8 koža), skopiran na .katedra-page
   prijava/, registracija/,
   zaboravljena-lozinka/,
   reset-lozinke/              auth stranice
@@ -110,6 +110,14 @@ supabase/migrations/          katedra_credits, katedra_projects,
 public/katedra-pack.json     Lekta baza pravila (130 jedinica/395 profila) —
                               osvježi ručno kad Lekta objavi novu verziju
 ```
+
+**Izgled i profil studija.** `katedra-scoped.css` drži sve boje u tokenima;
+koža je `data-skin` na `#katedra-root` (8 komada, zadana `kreda`, mijenja se
+gumbom "Izgled" u zaglavlju). Izbor kože je **samo lokalan** (`rp_skin`) jer
+`/api/state` validira `{tip, checks, gen}` — prijenos na server ide uz sljedeću
+migraciju stanja. Izbor smjera (`rp_profile`) se, za razliku od toga, **sinkronizira**:
+`profileId` je već postojao u manifestu i shemi, samo ga se dosad nije moglo
+postaviti.
 
 Cijelo stanje čarobnjaka (checklist, generator polja, povijest promptova,
 dnevnik procesa, Lekta projekt manifest) živi u `katedra_projects` retku po
@@ -142,9 +150,13 @@ mijenja se kako gradimo, za razliku od charter-a samog:
 
 **Stvarni nedostaci (potvrđeno čitanjem koda):**
 
-- `lpInit()` lista SVE jedinice iz `katedra-pack.json`, bez filtera po
-  `status === 'verified'` — krši charter-ovu "tvrdu ogradu": "nudimo samo
-  fakultete s Lekta verified pravilima".
+- Kaskada fakultet → studij → smjer nudi SVE jedinice iz `katedra-pack.json`,
+  bez filtera po `status === 'verified'`. Charter traži "tvrdu ogradu" (samo
+  verified fakulteti), ali u kodu stoji suprotna, izričito obrazložena odluka
+  (`lpRenderUnits()`: šira lista, status vidljiv umjesto skrivanja). **Dvije
+  dokumentirane odluke koje si proturječe — treba odluka osnivača, ne tiho
+  rješenje.** Do tada: status (potvrđen / tehnički) piše na svakom retku,
+  i za sastavnicu i za pojedini profil.
 - Nema model-tier routinga (coach na jeftinom modelu, poglavlja na top
   modelu) — svaki AI poziv danas ide na isti default model.
 - Nema demo-cap za goste (charter: "demo pisanja do 1.500 riječi") —
