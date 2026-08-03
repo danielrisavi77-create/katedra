@@ -497,8 +497,12 @@ function exportDnevnik(){
 // Sve boje idu kroz CSS tokene (v. katedra-scoped.css → blok KOŽE), pa je koža
 // samo data-skin na #katedra-root. Zadana ("kreda") je već u page.jsx da nema
 // bljeska pri učitavanju — ovdje se primjenjuje samo korisnikov spremljeni izbor.
-// Izbor je namjerno lokalan: /api/state validira {tip, checks, gen} i dodavanje
-// polja bi mu razbilo PUT. Prijenos na server ide uz sljedeću migraciju stanja.
+// Izbor je namjerno lokalan, i to nije privremeno rješenje: izgled Katedre je
+// njezina stvar, a dijeljena Academic Suite shema nosi ono što oba proizvoda
+// stvarno trebaju — identitet, projekt, LektaResult, prava. UI postavka ondje
+// nema što tražiti. Uz to je katedra_projects redak po PROJEKTU (upsert po
+// user_id + guest_project_id), pa bi koža spremljena ondje značila drukčiji
+// izgled po radu i mijenjala bi se sama kad prebaciš projekt.
 const SKINS = [
   ['kreda',       'Ploča i kreda',   'predavaonica, kreda na tamnoj ploči', '#1e3a2f', '#e8c468'],
   ['papir',       'Papir i tinta',   'klasični izgled Katedre',             '#ece5d3', '#2c5fa8'],
