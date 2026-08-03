@@ -55,14 +55,34 @@ async function completeOnboarding(page) {
   for (let step = 0; step < 10; step += 1) {
     const visible = await overlay.isVisible().catch(() => false)
     if (!visible) return
+
+    // The shell may exist briefly before the vanilla engine populates it.
     const buttons = overlay.locator('button:visible')
-    const count = await buttons.count()
-    if (!count) throw new Error('Katedra onboarding is visible but exposes no actionable button')
+    const deadline = Date.now() + 5_000
+    let count = await buttons.count()
+    while (!count && Date.now() < deadline) {
+      await page.waitForTimeout(100)
+      count = await buttons.count()
+    }
+
+    if (!count) {
+      const debug = await overlay.evaluate(el => ({
+        html: el.outerHTML,
+        text: el.textContent,
+        className: el.className,
+        display: getComputedStyle(el).display,
+        visibility: getComputedStyle(el).visibility,
+        pointerEvents: getComputedStyle(el).pointerEvents,
+      })).catch(() => null)
+      throw new Error(`Katedra onboarding is visible but exposes no actionable button\n${JSON.stringify(debug)}`)
+    }
+
     await buttons.nth(count - 1).click()
     await page.waitForTimeout(100)
   }
   if (await overlay.isVisible().catch(() => false)) {
-    throw new Error('Katedra onboarding did not finish within 10 real user clicks')
+    const html = await overlay.evaluate(el => el.outerHTML).catch(() => '')
+    throw new Error(`Katedra onboarding did not finish within 10 real user clicks\n${html}`)
   }
 }
 
