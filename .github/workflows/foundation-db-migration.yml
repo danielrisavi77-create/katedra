@@ -1,4 +1,4 @@
-name: Foundation DB migration
+name: DB authority guard
 
 on:
   pull_request:
@@ -6,56 +6,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  postgres-migration-smoke:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'architecture/lekta-katedra-foundation-v0.1'
+  no-schema-authority:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      PGHOST: 127.0.0.1
-      PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: postgres
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Verify PostgreSQL client
-        run: psql --version
-
-      - name: Bootstrap Supabase database roles
+      - name: Assert Katedra does not define live DB schema
+        shell: bash
         run: |
-          psql -v ON_ERROR_STOP=1 <<'SQL'
-          do $$
-          begin
-            if not exists (select 1 from pg_roles where rolname = 'anon') then
-              create role anon nologin;
-            end if;
-            if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-              create role authenticated nologin;
-            end if;
-          end
-          $$;
-          SQL
-
-      - name: Apply shared foundation migration smoke
-        run: psql -v ON_ERROR_STOP=1 -f scripts/foundation-db-smoke.sql
-
-      - name: Apply ownership hardening migration smoke
-        run: psql -v ON_ERROR_STOP=1 -f scripts/foundation-db-hardening-smoke.sql
+          set -euo pipefail
+          if find supabase/migrations -type f -name '*.sql' -print0 2>/dev/null \
+            | xargs -0 -r grep -nEi '^[[:space:]]*(create|alter|drop)[[:space:]]+(table|policy|function|trigger|index)|^[[:space:]]*create[[:space:]]+or[[:space:]]+replace[[:space:]]+function'; then
+            echo 'Katedra must not own Supabase schema migrations. Put DB DDL in the Lekta repository.' >&2
+            exit 1
+          fi
+          echo 'PASS: Lekta repository remains the sole Supabase schema authority.'
