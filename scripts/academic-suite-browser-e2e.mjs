@@ -49,41 +49,23 @@ async function clickWithoutNavigation(page, locator) {
   await locator.click()
 }
 
-/** Follow the real first-run onboarding instead of force-clicking through it. */
+/**
+ * Katedra onboarding is a real CSS checkbox overlay: the visible action is a
+ * <label role="button" for="onbx">Kreni ➜</label>, not a native <button>.
+ */
 async function completeOnboarding(page) {
   const overlay = page.locator('#onb')
-  for (let step = 0; step < 10; step += 1) {
-    const visible = await overlay.isVisible().catch(() => false)
-    if (!visible) return
+  if (!(await overlay.isVisible().catch(() => false))) return
 
-    // The shell may exist briefly before the vanilla engine populates it.
-    const buttons = overlay.locator('button:visible')
-    const deadline = Date.now() + 5_000
-    let count = await buttons.count()
-    while (!count && Date.now() < deadline) {
-      await page.waitForTimeout(100)
-      count = await buttons.count()
-    }
+  const start = overlay.getByRole('button', { name: /Kreni/i })
+  await start.waitFor({ state: 'visible' })
+  await start.click()
 
-    if (!count) {
-      const debug = await overlay.evaluate(el => ({
-        html: el.outerHTML,
-        text: el.textContent,
-        className: el.className,
-        display: getComputedStyle(el).display,
-        visibility: getComputedStyle(el).visibility,
-        pointerEvents: getComputedStyle(el).pointerEvents,
-      })).catch(() => null)
-      throw new Error(`Katedra onboarding is visible but exposes no actionable button\n${JSON.stringify(debug)}`)
-    }
-
-    await buttons.nth(count - 1).click()
-    await page.waitForTimeout(100)
-  }
-  if (await overlay.isVisible().catch(() => false)) {
-    const html = await overlay.evaluate(el => el.outerHTML).catch(() => '')
-    throw new Error(`Katedra onboarding did not finish within 10 real user clicks\n${html}`)
-  }
+  await page.waitForFunction(() => {
+    const checkbox = document.querySelector('#onbx')
+    const overlay = document.querySelector('#onb')
+    return Boolean(checkbox?.checked) && overlay && getComputedStyle(overlay).pointerEvents === 'none'
+  })
 }
 
 async function startResolutionRound(page) {
