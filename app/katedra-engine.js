@@ -290,6 +290,7 @@ function refreshProgress(){
   if(typeof renderLine === 'function') renderLine();
   if(typeof renderIndeksHead === 'function') renderIndeksHead();
   if(typeof updatePaper === 'function') updatePaper();
+  if(typeof renderBoardHi === 'function') renderBoardHi();
   /* banner — spreman za pisanje? */
   const b = $('banner'), go = $('bGo');
   const preP = totPre ? ckPre/totPre : 0;
@@ -1472,6 +1473,24 @@ function goToNextStep(pos){
   if(!openPhases.has(ph.id)) togglePhase(ph.id);
   setTimeout(() => { const el = document.getElementById('ph-'+ph.id); if(el) el.scrollIntoView({behavior: smoothly(), block:'center'}); }, 60);
 }
+/* Pozdrav — jedan izvor za radnu ploču i za chat, da se dvije kopije ne
+   raziđu. Bez imena korisnika: /api/balance vraća samo saldo, ime se nigdje
+   ne dohvaća, pa bi "Bok, Ana" bilo izmišljanje. */
+function greetHtml(){
+  const tema = val('a_tema') || val('f_tema');
+  return tema ? '👋 Bok opet — nastavljaš <b>' + escA(tema) + '</b>.'
+              : '👋 Bok opet — nastavljaš svoj rad.';
+}
+function renderBoardHi(){
+  const el = $('boardHi'); if(!el) return;
+  // Namjerno BEZ nextStepText() — ta rečenica već stoji na liniji i u
+  // #nextBar; treći primjerak na istom ekranu je šum, ne pomoć. Ovdje ide
+  // svrha ekrana ("zašto sam ovdje"), koja se nigdje drugdje ne pojavljuje.
+  const zasto = 'Popis svega što treba prije i tijekom pisanja. Otvorena je faza na kojoj si — '
+              + 'ostale čekaju svoj red, a rokovi sa strane računaju se iz tvog roka predaje.';
+  el.innerHTML = '<h2>' + (hasRealProgress() ? greetHtml().replace(/^👋 /, '') : 'Krenimo od početka')
+               + '</h2><p>' + zasto + '</p>';
+}
 function chatStart(isInitial){
   $('chatLog').innerHTML = '';
   Object.assign(chat, {step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null, live:false, msgs:[], busy:false});
@@ -1480,8 +1499,7 @@ function chatStart(isInitial){
   setStep(0);
   if(isInitial && hasRealProgress()){
     const ns = nextStepText();
-    const tema = val('a_tema') || val('f_tema');
-    pushA((tema ? '👋 Bok opet — nastavljaš <b>'+escA(tema)+'</b>.' : '👋 Bok opet — nastavljaš svoj rad.') + '<br>' + ns.html);
+    pushA(greetHtml() + '<br>' + ns.html);
     pushChips([
       ['▶ Nastavi', () => goToNextStep(ns.pos)],
       ['📋 Prikaži izbornik', () => chatModeChips(), true]
@@ -2366,6 +2384,9 @@ function lkFinish(){
 window.addEventListener('hashchange', lkParseHash);
 
 loadState();
+// Mentorov stol: otvorena je faza na kojoj si, ne uvijek f0. Mora prije
+// renderPhases() jer on čita openPhases pri crtanju.
+(() => { const p = PHASES[linePos()]; if(p){ openPhases.clear(); openPhases.add(p.id); } })();
 document.querySelectorAll('#tipSeg button').forEach(x => x.classList.toggle('on', x.dataset.tip === state.tip));
 applyTipPlaceholders();
 renderPhases();
