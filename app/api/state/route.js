@@ -47,15 +47,15 @@ function rowToCamel(row) {
   }
 }
 
+// Untyped/text/JSON fields can be copied after ownership checks. Typed database
+// fields are normalized separately below so legacy UI empty strings never reach
+// Postgres date/timestamptz/integer columns.
 const WRITABLE_FIELDS = {
   unitId: 'unit_id',
   profileId: 'profile_id',
   topic: 'topic',
   rulesetVersion: 'ruleset_version',
-  lektaScore: 'lekta_score',
-  lektaCheckedAt: 'lekta_checked_at',
   lektaIssues: 'lekta_issues',
-  lektaFixedTotal: 'lekta_fixed_total',
   checks: 'checks',
   gen: 'gen',
   hist: 'hist',
@@ -83,6 +83,19 @@ function normalizeDeadline(value) {
   if (value == null || value === '') return null
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value
   return undefined
+}
+
+function normalizeTimestamp(value) {
+  if (value == null || value === '') return null
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return undefined
+  return value
+}
+
+function normalizeNullableInteger(value, min, max = Number.MAX_SAFE_INTEGER) {
+  if (value == null || value === '') return null
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < min || n > max) return undefined
+  return n
 }
 
 export async function GET() {
@@ -152,6 +165,31 @@ export async function PUT(req) {
       return Response.json({ error: 'Neispravan datum roka.' }, { status: 400 })
     }
     patch.deadline = deadline
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'lektaCheckedAt')) {
+    const checkedAt = normalizeTimestamp(body.lektaCheckedAt)
+    if (checkedAt === undefined) {
+      return Response.json({ error: 'Neispravno vrijeme Lekta provjere.' }, { status: 400 })
+    }
+    patch.lekta_checked_at = checkedAt
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'lektaScore')) {
+    const score = normalizeNullableInteger(body.lektaScore, 0, 100)
+    if (score === undefined) {
+      return Response.json({ error: 'Neispravan Lekta rezultat.' }, { status: 400 })
+    }
+    patch.lekta_score = score
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'lektaFixedTotal')) {
+    const fixedTotal = normalizeNullableInteger(body.lektaFixedTotal, 0)
+    if (fixedTotal === undefined) {
+      return Response.json({ error: 'Neispravan broj riješenih Lekta nalaza.' }, { status: 400 })
+    }
+    // Database column is NOT NULL; legacy empty/null UI state means zero fixes.
+    patch.lekta_fixed_total = fixedTotal ?? 0
   }
 
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
