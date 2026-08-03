@@ -329,7 +329,50 @@ function scrollToNow(){
   return true;
 }
 const TABS = ['chat','check','help','cheat','auto','gen'];
+
+/* ---------- LINEARNI TOK EKRANA ----------
+   Ekran je vanjski okvir, tab je unutarnja ploha radne ploče. setTab() i dalje
+   jedini dira .view/.on; setScreen() dira samo atribute na #katedra-root. */
+const SCREENS = ['tip','gdje','pitanja','fakultet','ploca','chat','povratak'];
+const SCREEN_CHROME = { tip:'funnel', gdje:'funnel', pitanja:'funnel',
+                        fakultet:'fak', ploca:'board', chat:'board', povratak:'funnel' };
+let curScreen = 'ploca';
+// Ekrani se dodaju po fazama; spremljeni rp_screen ne smije pokazivati na
+// ekran koji u ovom buildu još ne postoji.
+function screenAvailable(id){
+  if(id === 'ploca' || id === 'chat') return true;
+  if(id === 'fakultet') return !!$('fakCard');
+  return !!document.getElementById('scr-' + id);
+}
+function applyScreen(id){
+  curScreen = id;
+  __root.dataset.screen = id;
+  __root.dataset.chrome = SCREEN_CHROME[id];
+  lsSet('rp_screen', id);
+  const seen = lsGet('rp_screen_max');
+  if(SCREENS.indexOf(id) > SCREENS.indexOf(seen)) lsSet('rp_screen_max', id);
+  if(typeof renderBoardHi === 'function') renderBoardHi();
+}
+function setScreen(id, tab){
+  if(!SCREENS.includes(id) || !screenAvailable(id)) return;
+  applyScreen(id);                       // prvo atributi, pa tek onda setTab —
+                                         // scrollToNow() na skrivenom #view-check
+                                         // dobiva same nule i lažno javi "vidljivo"
+  if(id === 'chat') setTab('chat');
+  else if(id === 'fakultet') setTab('cheat');
+  else if(id === 'ploca') setTab(tab || lsGet('rp_tab') || 'check');
+  // .linija je do maloprije mogla biti skrivena; renderLine() mjeri offsetWidth
+  // pa bi bez ovoga tračnica ostala široka 0 i tramvaj bi ispao izvan okvira.
+  if(typeof renderLine === 'function') renderLine();
+}
 function setTab(v){
+  // Bez ovoga bi view dobio .on, a chrome ga skrio — tiha prazna stranica.
+  // Guard stoji OVDJE, a ne na pozivnim mjestima, jer setTab zovu i inline
+  // onclick atributi koje generira renderPhases().
+  const want = v === 'chat' ? 'chat'
+             : (v === 'cheat' && curScreen === 'fakultet') ? 'fakultet'
+             : 'ploca';
+  if(curScreen !== want){ setScreen(want, v); return; }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id==='view-'+v));
   lsSet('rp_tab', v);   // aktivni tab preživi reload; prije se uvijek vraćalo na chat
@@ -2402,11 +2445,11 @@ updatePaper();
 lkParseHash();
 refreshAuthAndCredits();
 handlePaymentReturn();
-// Vrati zadnji otvoreni tab. Prije se svaki reload vraćao na chat, pa si
-// nakon osvježavanja gubio mjesto na kojem si radio.
+// Vrati zadnji ekran (i s njim tab). Prije se svaki reload vraćao na chat, pa
+// si nakon osvježavanja gubio mjesto na kojem si radio.
 (() => {
-  const t = lsGet('rp_tab');
-  if(t && TABS.includes(t) && t !== 'chat') setTab(t);
+  const s = lsGet('rp_screen');
+  setScreen(s && SCREENS.includes(s) && screenAvailable(s) ? s : 'ploca');
 })();
 
 /* ---------- PWA / INSTALACIJA / VERZIJA ---------- */
