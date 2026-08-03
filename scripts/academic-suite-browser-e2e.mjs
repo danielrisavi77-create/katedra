@@ -31,7 +31,6 @@ async function manifest(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem('rp_manifest') || 'null'))
 }
 
-/** Poll in the Node test process so Katedra's CSP can keep blocking unsafe-eval. */
 async function waitManifest(page, predicate, label, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs
   let last = null
@@ -48,6 +47,23 @@ async function clickWithoutNavigation(page, locator) {
     document.addEventListener('click', event => event.preventDefault(), { once: true })
   })
   await locator.click()
+}
+
+/** Follow the real first-run onboarding instead of force-clicking through it. */
+async function completeOnboarding(page) {
+  const overlay = page.locator('#onb')
+  for (let step = 0; step < 10; step += 1) {
+    const visible = await overlay.isVisible().catch(() => false)
+    if (!visible) return
+    const buttons = overlay.locator('button:visible')
+    const count = await buttons.count()
+    if (!count) throw new Error('Katedra onboarding is visible but exposes no actionable button')
+    await buttons.nth(count - 1).click()
+    await page.waitForTimeout(100)
+  }
+  if (await overlay.isVisible().catch(() => false)) {
+    throw new Error('Katedra onboarding did not finish within 10 real user clicks')
+  }
 }
 
 async function startResolutionRound(page) {
@@ -72,6 +88,7 @@ try {
   )
   const projectId = initial.projectId
   assert.ok(projectId)
+  await completeOnboarding(page)
 
   // B. Real Lekta PR preview accepts Katedra routing metadata and isolates it
   // to Katedra-origin navigation in this tab.
