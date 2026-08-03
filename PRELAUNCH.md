@@ -5,21 +5,22 @@ Stanje na 2026-08-04.
 
 ## 0. Blokira sve ostalo
 
-- [ ] **Riješi GitHub Actions billing.** `gh pr checks 13` pada s "recent account
-  payments have failed or your spending limit needs to be increased" —
-  GitHub → Billing & plans. Dok se ne riješi, CI ne može potvrditi nijedan PR
-  u ovom repou (ne samo #13).
+- [x] **Riješi GitHub Actions billing.** ~~`gh pr checks 13` pada s "recent
+  account payments have failed..."~~ — riješeno 2026-08-04, CI ponovno radi
+  (rerun na PR #13 prošao čisto).
 
-## 1. Otvoreni PR-ovi i redoslijed spajanja
+## 1. PR-ovi
 
-Redoslijed je bitan zbog FK ovisnosti — kolone iz reda 2 pucaju bez reda 1.
+**Spojeno u Katedra `master` (2026-08-04):**
 
-| # | Repo | Grana | Što | Ovisnost |
-|---|---|---|---|---|
-| 1 | Lekta | `claude/add-withdrawal-requests-table` | [PR #29](https://github.com/danielrisavi77-create/Lekta/pull/29) — `withdrawal_requests` tablica | — |
-| 2 | Katedra | `claude/consumer-withdrawal-right` | [PR #14](https://github.com/danielrisavi77-create/katedra/pull/14) — `/racun` gumb + `/api/withdrawal` | čeka Lekta #29 (inače 500 na insertu) |
-| 3 | Katedra | `claude/fix-entitlement-schema-mismatch` | [PR #13](https://github.com/danielrisavi77-create/katedra/pull/13) — popravak entitlements insert-a (KRITIČNO — bez ovoga svaka prava kupnja puca) | čeka billing (0.) |
-| 4 | Lekta | `claude/add-katedra-pass-products` | [PR #31](https://github.com/danielrisavi77-create/Lekta/pull/31) — `katedra_pass_*` retci u products katalogu | — (samostalan, nije hitan) |
+- [x] [PR #13](https://github.com/danielrisavi77-create/katedra/pull/13) — popravak entitlements insert-a (KRITIČNO)
+- [x] [PR #14](https://github.com/danielrisavi77-create/katedra/pull/14) — `/racun` gumb + `/api/withdrawal`
+- [x] [PR #15](https://github.com/danielrisavi77-create/katedra/pull/15) — ovaj dokument
+
+**Još otvoreno, čeka pregled na Lekta strani** (Katedra strana ih ne može sama spojiti):
+
+- [ ] [Lekta PR #29](https://github.com/danielrisavi77-create/Lekta/pull/29) — `withdrawal_requests` tablica. Dok ovo ne sleti, `/api/withdrawal` vraća 500 na insertu — PR #14 je kod-gotov, ali funkcionalno neispravan bez ovoga.
+- [ ] [Lekta PR #31](https://github.com/danielrisavi77-create/Lekta/pull/31) — `katedra_pass_*` retci u products katalogu (samostalan, nije hitan).
 
 Nakon što #31 sleti: treba **zaseban follow-up Katedra PR** koji mijenja
 `product_id: null` → `'katedra_pass_*'` u `app/api/webhook/route.js`. Namjerno
