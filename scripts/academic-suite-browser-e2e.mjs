@@ -58,15 +58,12 @@ async function clickWithoutNavigation(page, locator) {
   await locator.click()
 }
 
-/** Katedra onboarding is a CSS checkbox overlay closed by the real Kreni control. */
 async function completeOnboarding(page) {
   const overlay = page.locator('#onb')
   if (!(await overlay.isVisible().catch(() => false))) return
-
   const start = overlay.getByRole('button', { name: /Kreni/i })
   await start.waitFor({ state: 'visible' })
   await start.click()
-
   await page.waitForFunction(() => {
     const checkbox = document.querySelector('#onbx')
     const overlay = document.querySelector('#onb')
@@ -87,54 +84,34 @@ const browserErrors = []
 page.on('pageerror', error => browserErrors.push(`Katedra: ${String(error)}`))
 
 try {
-  // A. Real Katedra guest identity exists before auth.
   await page.goto(`${KATEDRA_URL}/`, { waitUntil: 'domcontentloaded' })
-  const initial = await waitManifest(
-    page,
-    m => typeof m.projectId === 'string' && m.projectId.length > 10,
-    'guest projectId',
-  )
+  const initial = await waitManifest(page, m => typeof m.projectId === 'string' && m.projectId.length > 10, 'guest projectId')
   const projectId = initial.projectId
   assert.ok(projectId)
   await completeOnboarding(page)
 
-  // B. Real Lekta PR preview accepts Katedra routing metadata and isolates it
-  // to Katedra-origin navigation in this tab.
   const lektaPage = await context.newPage()
   lektaPage.on('pageerror', error => browserErrors.push(`Lekta routing: ${String(error)}`))
   const previewEntry = `${LEKTA_PREVIEW_URL}/?project=${encodeURIComponent(projectId)}&unit=fpzg&work=diplomski`
   await lektaPage.goto(previewEntry, { waitUntil: 'domcontentloaded' })
-  await lektaPage.waitForFunction(
-    expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected,
-    projectId,
-  )
+  await lektaPage.waitForFunction(expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected, projectId)
 
   const workTypeSelect = lektaPage.locator('#workType')
   if (await workTypeSelect.count()) {
     await lektaPage.waitForFunction(() => document.querySelector('#workType')?.value === 'graduate')
     assert.equal(await workTypeSelect.inputValue(), 'graduate')
   }
-
   const unitSelect = lektaPage.locator('#unitSelect')
   if (await unitSelect.count()) {
     await lektaPage.waitForFunction(() => document.querySelector('#unitSelect')?.value === 'fpzg')
     assert.equal(await unitSelect.inputValue(), 'fpzg')
   }
-
   await lektaPage.goto(`${LEKTA_PREVIEW_URL}/`, { waitUntil: 'domcontentloaded' })
   await lektaPage.waitForFunction(() => sessionStorage.getItem('lekta.katedra-project.v0.1') === null)
   await lektaPage.close()
 
-  // C-H. Deterministic lifecycle browser proof. The synthetic stable finding is
-  // intentionally minimal so both reconciliation outcomes are unambiguous.
-  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-1', [stableMarginIssue]))}`, {
-    waitUntil: 'domcontentloaded',
-  })
-  let state = await waitManifest(
-    page,
-    m => m.lektaIssues?.length === 1 && m.lektaIssues[0].id === 'rule:e2e.margins.001',
-    'first OPEN issue',
-  )
+  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-1', [stableMarginIssue]))}`, { waitUntil: 'domcontentloaded' })
+  let state = await waitManifest(page, m => m.lektaIssues?.length === 1 && m.lektaIssues[0].id === 'rule:e2e.margins.001', 'first OPEN issue')
   assert.equal(state.lektaIssues[0].status, 'OPEN')
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.checkId, 'margins')
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.ruleId, 'e2e.margins.001')
@@ -154,14 +131,8 @@ try {
   state = await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'RECHECK_REQUIRED', 'RECHECK_REQUIRED')
   assert.equal(state.lektaIssues[0].status, 'RECHECK_REQUIRED')
 
-  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-2', [stableMarginIssue]))}`, {
-    waitUntil: 'domcontentloaded',
-  })
-  state = await waitManifest(
-    page,
-    m => m.lektaIssues?.length === 1 && m.lektaIssues[0].status === 'OPEN',
-    'persistent finding reopened',
-  )
+  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-2', [stableMarginIssue]))}`, { waitUntil: 'domcontentloaded' })
+  state = await waitManifest(page, m => m.lektaIssues?.length === 1 && m.lektaIssues[0].status === 'OPEN', 'persistent finding reopened')
   assert.equal(state.lektaIssues[0].id, 'rule:e2e.margins.001')
   assert.equal(state.lektaResolutionHistory?.length || 0, 0)
 
@@ -174,14 +145,8 @@ try {
   await clickWithoutNavigation(page, recheckAgain)
   await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'RECHECK_REQUIRED', 'second RECHECK_REQUIRED')
 
-  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-3', []))}`, {
-    waitUntil: 'domcontentloaded',
-  })
-  state = await waitManifest(
-    page,
-    m => m.lektaIssues?.length === 0 && m.lektaResolutionHistory?.length >= 1,
-    'VERIFIED_FIXED history',
-  )
+  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-3', []))}`, { waitUntil: 'domcontentloaded' })
+  state = await waitManifest(page, m => m.lektaIssues?.length === 0 && m.lektaResolutionHistory?.length >= 1, 'VERIFIED_FIXED history')
   const verification = state.lektaResolutionHistory.at(-1)
   assert.equal(verification.issueId, 'rule:e2e.margins.001')
   assert.equal(verification.checkId, 'margins')
@@ -190,19 +155,22 @@ try {
   assert.equal(verification.analysisId, 'e2e-analysis-3')
   assert.ok((state.lektaFixedTotal || 0) >= 1)
 
-  // I. Real DOCX proof: upload an actual Word package to the deployed Lekta PR
-  // preview, run its real local analyzer, inspect the CTA's real shared result,
-  // then deliver that exact fragment into the running Katedra browser.
+  // Real DOCX through the actual deployed Lekta preview and its real local analyzer.
   const realLekta = await context.newPage()
   realLekta.on('pageerror', error => browserErrors.push(`Lekta DOCX: ${String(error)}`))
   await realLekta.goto(previewEntry, { waitUntil: 'domcontentloaded' })
-  await realLekta.waitForFunction(
-    expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected,
-    projectId,
-  )
-
+  await realLekta.waitForFunction(expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected, projectId)
   await realLekta.locator('#fileInput').setInputFiles(E2E_DOCX_PATH)
+
+  // `setFile()` deliberately advances the wizard to Profile (step 2). Follow
+  // the same real user control that confirms the profile and opens step 3.
+  const toAnalyzeStep = realLekta.locator('#stepToAnalyze')
+  await toAnalyzeStep.waitFor({ state: 'visible', timeout: 20_000 })
+  await toAnalyzeStep.click()
+  await realLekta.waitForFunction(() => document.querySelector('#wizardView')?.dataset.step === '3')
+
   const analyze = realLekta.locator('#analyzeBtn')
+  await analyze.waitFor({ state: 'visible', timeout: 20_000 })
   await realLekta.waitForFunction(() => {
     const button = document.querySelector('#analyzeBtn')
     return button && !button.disabled
@@ -233,12 +201,7 @@ try {
   await realLekta.close()
   await page.goto(`${KATEDRA_URL}/${actualHash}`, { waitUntil: 'domcontentloaded' })
   const firstActualIssue = actualResult.issues[0]
-  state = await waitManifest(
-    page,
-    m => m.lektaIssues?.some(issue => issue.id === firstActualIssue.issueKey),
-    'real DOCX LektaResult ingested by Katedra',
-    20_000,
-  )
+  state = await waitManifest(page, m => m.lektaIssues?.some(issue => issue.id === firstActualIssue.issueKey), 'real DOCX LektaResult ingested by Katedra', 20_000)
   assert.equal(state.lektaIdentityIndex?.[firstActualIssue.issueKey]?.checkId, firstActualIssue.checkId)
   assert.equal(state.projectId, projectId)
 
