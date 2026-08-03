@@ -282,7 +282,7 @@ function refreshProgress(){
     PHASES.forEach(ph => {
       const items = visibleItems(ph); if(!items.length) return;
       const full = items.every(it => state.checks[ph.id+':'+it.t]);
-      if(full && !logged.has(ph.id)){ logged.add(ph.id); rpLog('Dovršena '+ph.tit, {aiGenerated:false, stage:'process'}); dirty = true; }
+      if(full && !logged.has(ph.id)){ logged.add(ph.id); rpLog('Dovršena '+ph.tit, {kind:'milestone', phaseId: ph.id, aiGenerated:false, stage:'process'}); dirty = true; }
     });
     if(dirty) lsSet('rp_logf', JSON.stringify([...logged]));
   }catch(e){}
@@ -480,14 +480,30 @@ function getHist(){ try{ return JSON.parse(lsGet('rp_hist') || '[]'); }catch(e){
 function pushHist(entry){ const h = getHist(); h.unshift(entry); lsSet('rp_hist', JSON.stringify(h.slice(0,10))); syncServerNow(); }
 function getLog(){ try{ return JSON.parse(lsGet('rp_log') || '[]'); }catch(e){ return []; } }
 // AI ledger (lokalni proxy za contracts.ts AIUsageLedgerEntry — v. napomena ondje).
-// meta je opcionalan: {aiGenerated, stage, tool, model}. Stariji zapisi (bez meta)
-// ostaju čitljivi — renderiraju se bez dodatnih stupaca, ne bacaju grešku.
+// meta je opcionalan i nosi DVA nezavisna sloja podataka koja mogu koegzistirati
+// na istom zapisu: {kind} = strojno čitljiva taksonomija DOGAĐAJA (v.
+// LOG_KIND_LABELS — milestone/ai_declaration/prompt_generated/session_started/
+// ai_response/lekta_check/lekta_fix_round, + specifična polja po vrsti poput
+// phaseId/level/mode/files/lekta_result/done/skip/open), i {aiGenerated, stage,
+// tool, model, reviewed} = AI-provenance signal (je li ZAPIS AI sadržaj, koji
+// model, je li student stvarno pregledao) — potonje ima smisla prvenstveno na
+// kind:'ai_response' zapisima. Stariji zapisi (bez meta) ostaju čitljivi —
+// renderiraju se bez dodatnih stupaca, ne bacaju grešku.
 function rpLog(txt, meta){
   const l = getLog();
   l.push(Object.assign({t: Date.now(), txt}, meta));
   lsSet('rp_log', JSON.stringify(l.slice(-200)));
   syncServerNow();
 }
+const LOG_KIND_LABELS = {
+  milestone: 'Faza',
+  ai_declaration: 'Izjava o AI',
+  prompt_generated: 'Prompt',
+  session_started: 'Početak pisanja',
+  ai_response: 'AI odgovor',
+  lekta_check: 'Lekta provjera',
+  lekta_fix_round: 'Krug ispravaka',
+};
 // "Pregledano" nije checkbox nego stvaran signal: student je ili kopirao AI
 // odgovor, ili nastavio razgovor (poslao sljedeću poruku) — oboje znači da je
 // prethodni odgovor stvarno vidio prije nego je krenuo dalje.
@@ -505,9 +521,9 @@ function exportDnevnik(){
   md += 'Student: ______________________\n\n';
   md += 'Rad: ' + (val('a_tema') || val('f_tema') || '______________________') + '\n\n';
   md += 'Izvezeno: ' + fmt(Date.now()) + ' (Katedra)\n\n';
-  md += '## Kronologija (automatski bilježeno u alatu)\n\n| Datum i vrijeme | Izvor | Događaj |\n|---|---|---|\n';
-  md += (l.length ? l.map(e => '| ' + fmt(e.t) + ' | ' + src(e) + ' | ' + String(e.txt).replace(/\|/g,'/') + ' |').join('\n') : '| — | — | (još nema zabilježenih događaja) |');
-  md += '\n\n## Napomena\n\n"🤖 AI" redovi su AI ledger — bilježe da je tekst nastao u Katedrinom chatu (uz model koji je odgovorio) i je li ga student pregledao prije nastavka. "🎓 Katedra/proces" su koraci koje je napravio student (checklist, izjava, Lekta provjera) — ne AI sadržaj. Potpuni dokaz procesa izrade čine i: sačuvane verzije dokumenta i komunikacija s mentorom.\n';
+  md += '## Kronologija (automatski bilježeno u alatu)\n\n| Datum i vrijeme | Vrsta | Izvor | Događaj |\n|---|---|---|---|\n';
+  md += (l.length ? l.map(e => '| ' + fmt(e.t) + ' | ' + (LOG_KIND_LABELS[e.kind] || '—') + ' | ' + src(e) + ' | ' + String(e.txt).replace(/\|/g,'/') + ' |').join('\n') : '| — | — | — | (još nema zabilježenih događaja) |');
+  md += '\n\n## Napomena\n\n"Vrsta" je kategorija događaja (v. legenda gore). "🤖 AI" u stupcu Izvor je AI ledger — bilježi da je tekst nastao u Katedrinom chatu (uz model koji je odgovorio) i je li ga student pregledao prije nastavka. "🎓 Katedra/proces" su koraci koje je napravio student (checklist, izjava, Lekta provjera) — ne AI sadržaj. Potpuni dokaz procesa izrade čine i: sačuvane verzije dokumenta i komunikacija s mentorom.\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'}));
   a.download = 'dnevnik-procesa.md';
@@ -1869,7 +1885,7 @@ function izjavaFinal(mentor){
   const re = document.createElement('button'); re.className = 'fa s'; re.textContent = '🔁 Ispočetka'; re.onclick = chatStart;
   acts.append(cp, re); bub.appendChild(acts); chatScroll();
   pushHist({t: Date.now(), mode:'izjava', tip: state.tip, label: 'Izjava o AI — ' + (chat.izjNaslov || 'bez naslova').slice(0,50), prompt: t});
-  rpLog('Generirana izjava o korištenju AI (razina ' + lvl + ')', {aiGenerated:false, stage:'izjava'});
+  rpLog('Generirana izjava o korištenju AI (razina ' + lvl + ')', {kind:'ai_declaration', level: lvl, aiGenerated:false, stage:'izjava'});
 }
 function chatTipPick(t, tiho){
   setTip(t);
@@ -2065,7 +2081,7 @@ function chatFinal(){
     : (val('f_radfile') || MODE_LBL[chat.mode])).slice(0,60);
   pushHist({t: Date.now(), mode: chat.mode, tip: state.tip, label: histLabel, prompt});
   ensureManifest();
-  rpLog('Generiran prompt: ' + histLabel + ' (' + (MODE_LBL[chat.mode]||chat.mode) + ')', {aiGenerated:false, stage: chat.mode, tool:'prompt-copy'});
+  rpLog('Generiran prompt: ' + histLabel + ' (' + (MODE_LBL[chat.mode]||chat.mode) + ')', {kind:'prompt_generated', mode: chat.mode, aiGenerated:false, stage: chat.mode, tool:'prompt-copy'});
   // F3: prvi stvarno generiran prompt otključava napredne tabove — jednosmjerno,
   // nikad se ne vraća natrag u jednostavni mod ako korisnik sam to kasnije uključi.
   if(!isAdv()){ lsSet('rp_adv', '1'); applyAdv(); }
@@ -2109,6 +2125,10 @@ function fileB64(f){
 }
 async function liveBegin(promptText){
   chat.live = true; chat.step = 'live'; chat.msgs = []; chatBusy(false); chatClockMount();
+  // Materijal ove sesije pisanja — najbliže što danas imamo "verziji dokumenta"
+  // u ledgeru bez punog diff-a; imena priloga su barem provjerljiv trag.
+  rpLog('Pisanje u aplikaciji pokrenuto' + (chat.files.length ? ' uz ' + chat.files.length + ' prilog' + (chat.files.length===1?'':'a') : ''),
+    {kind:'session_started', files: chat.files.map(f => f.name), aiGenerated:false, stage:'live'});
   const blocks = [], skipped = [];
   for(const cf of chat.files){
     const f = cf.file;
@@ -2178,7 +2198,7 @@ async function liveStream(){
     cp.onclick = () => { copyText(full, cp, []); markLastAiEntryReviewed(); };
     bub.appendChild(cp);
     rpLog('AI odgovor u aplikaciji (' + (full.length > 60 ? full.slice(0,60) + '…' : full).replace(/\n/g,' ') + ')',
-      {aiGenerated:true, tool:'katedra-chat', stage: chat.mode, model: usedModel, reviewed:false});
+      {kind:'ai_response', aiGenerated:true, tool:'katedra-chat', stage: chat.mode, model: usedModel, reviewed:false});
     refreshAuthAndCredits();
   }catch(e){
     bub.innerHTML = '⚠ <b>Greška:</b> ' + escA(String(e.message || e)) + '<br><span style="font-size:12px;color:var(--mut)">Pokušaj ponovno za koju sekundu.</span>';
@@ -2591,7 +2611,8 @@ function lkStart(raw){
   if(fixed.length) h += '<br>✅ <b>' + fixed.length + '</b> iz prošlog kruga <b>potvrđeno riješeno</b> (Lekta re-check).';
   h += '<br><span style="font-size:12px;color:var(--mut)">Usklađenost dokumenta mjeri isključivo Lekta — ja pomažem razumjeti i riješiti nalaze, jedan po jedan. Rad ostaje kod tebe: ovamo su stigli samo ID-jevi nalaza, ni jedna rečenica.</span>';
   pushA(h);
-  rpLog('Lekta handoff: ' + res.issues.length + ' nalaza' + (res.score != null ? ', score ' + res.score + '/100' : '') + (fixed.length ? ', ' + fixed.length + ' potvrđeno riješeno' : ''), {aiGenerated:false, stage:'lekta-preflight'});
+  rpLog('Lekta handoff: ' + res.issues.length + ' nalaza' + (res.score != null ? ', score ' + res.score + '/100' : '') + (fixed.length ? ', ' + fixed.length + ' potvrđeno riješeno' : ''),
+    {kind:'lekta_check', lekta_result: {score: res.score ?? null, issueCount: res.issues.length, findingIds: res.issues.map(i => i.id)}, aiGenerated:false, stage:'lekta-preflight'});
   if(!res.issues.length){
     pushA('🎉 <b>Nula otvorenih nalaza — dokument je po pravilima tvog fakulteta čist.</b> Idemo na sadržaj? 🧠 Recenzija ili 🎤 obrana.');
     chatModeChips(); return;
@@ -2661,7 +2682,7 @@ function lkFinish(){
   const acts = document.createElement('div'); acts.className = 'final-actions';
   const a = document.createElement('a'); a.className = 'fa p'; a.href = lektaLink(); a.target = '_blank'; a.rel = 'noopener'; a.textContent = '🔁 Ponovi Lekta Check ↗';
   acts.appendChild(a); bub.appendChild(acts); chatScroll();
-  rpLog('Lekta krug ispravaka: ' + done + ' označeno riješeno, ' + skip + ' preskočeno, ' + open + ' otvoreno', {aiGenerated:false, stage:'lekta-preflight'});
+  rpLog('Lekta krug ispravaka: ' + done + ' označeno riješeno, ' + skip + ' preskočeno, ' + open + ' otvoreno', {kind:'lekta_fix_round', done, skip, open, aiGenerated:false, stage:'lekta-preflight'});
   renderLine();
   chatModeChips();
 }
