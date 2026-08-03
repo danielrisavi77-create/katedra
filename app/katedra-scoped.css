@@ -235,6 +235,23 @@
   .katedra-page .dl-row b{color:var(--txt);font-weight:700}
   .katedra-page .dl-row .date{font-weight:800;color:var(--acc2);white-space:nowrap}
   .katedra-page .dl-row.past .date{color:var(--bad)}
+  .katedra-page .mentor-add{display:flex;gap:8px;flex-basis:100%}
+  .katedra-page .mentor-add input{flex:1;min-width:0}
+  .katedra-page .mentor-add button{border:1px solid var(--line2);background:var(--bg2);color:var(--txt);
+    font-weight:700;font-size:12.5px;padding:8px 12px;border-radius:9px;cursor:pointer;font-family:inherit;
+    white-space:nowrap;transition:.15s}
+  .katedra-page .mentor-add button:hover{border-color:var(--acc);color:var(--acc)}
+  .katedra-page .mentor-list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .katedra-page .mentor-empty{font-size:12.5px;color:var(--mut2);font-style:italic;margin-top:8px}
+  .katedra-page .mentor-item{display:flex;align-items:flex-start;gap:9px;padding:2px 0}
+  .katedra-page .mentor-item.done .cb{background:var(--grad);border-color:transparent}
+  .katedra-page .mentor-item.done .cb svg{opacity:1;transform:scale(1)}
+  .katedra-page .mentor-item.done .mentor-txt{color:var(--mut2);text-decoration:line-through}
+  .katedra-page .mentor-txt{flex:1;font-size:13px;color:var(--txt);cursor:pointer;padding-top:2px}
+  .katedra-page .mentor-del{border:0;background:transparent;color:var(--mut2);font-size:13px;cursor:pointer;
+    padding:2px 6px;line-height:1;flex-shrink:0}
+  .katedra-page .mentor-del:hover{color:var(--bad)}
+  .katedra-page .scan-mentor{font-size:12.5px;color:var(--mut);margin-top:8px}
 
   /* ---------- CHAT ---------- */
   .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:auto;min-height:210px;max-height:min(78vh,900px);overflow:hidden}

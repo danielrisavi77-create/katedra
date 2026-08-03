@@ -163,7 +163,7 @@ const PHASES = [
 ];
 
 /* ---------- STATE ---------- */
-const state = { tip:'z', checks:{}, mode:'write' };
+const state = { tip:'z', checks:{}, mode:'write', mentorTasks:[] };
 const TIP_LABEL = {s:'SEMINARSKI RAD', z:'ZAVRŠNI RAD', d:'DIPLOMSKI RAD'};
 const TIP_MOD = {s:'SEMINAR MODE', z:'DIPLOMSKI MODE (završni rad — manji opseg)', d:'DIPLOMSKI MODE'};
 const TIP_OPSEG = {s:'npr. 1.500–3.000 riječi', z:'npr. 25–35 stranica', d:'npr. 15.000–30.000 riječi'};
@@ -457,7 +457,9 @@ function gatherGen(){
   return gen;
 }
 function saveState(){
-  lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen()}));
+  // mentorTasks NE ide u gatherServerState()/syncServerDebounced(): PRODUCT_CONSTITUTION.md
+  // izričito zabranjuje "mentor comments" u shared backendu — ostaju samo ovdje, lokalno.
+  lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen(), mentorTasks: state.mentorTasks}));
   syncServerDebounced();
 }
 function loadState(){
@@ -466,6 +468,7 @@ function loadState(){
     const d = JSON.parse(raw);
     if(d.tip) state.tip = d.tip;
     if(d.checks) state.checks = d.checks;
+    if(Array.isArray(d.mentorTasks)) state.mentorTasks = d.mentorTasks;
     if(d.gen){
       GEN_IDS.forEach(id => { if($(id) && d.gen[id] !== undefined) $(id).value = d.gen[id]; });
       ['f_brutal','a_gradja','u_skills','a_learn'].forEach(k => { if($(k)) $(k).checked = !!d.gen[k]; });
@@ -1000,7 +1003,41 @@ function renderScanSummary(){
       (hasRisks ? 'Najkritičnije još otvoreno' : '✅ Nema otvorenih kritičnih stavki — dobro stojiš') +
     '</div>' +
     (hasRisks ? '<ul class="scan-risks">' + risks.slice(0,3).map(t => '<li>' + escA(t) + '</li>').join('') + '</ul>' : '') +
-    (risks.length > 3 ? '<p class="scan-more">+ još ' + (risks.length - 3) + ' kritičnih stavki niže u Indeksu</p>' : '');
+    (risks.length > 3 ? '<p class="scan-more">+ još ' + (risks.length - 3) + ' kritičnih stavki niže u Indeksu</p>' : '') +
+    (mentorOpenCount() ? '<p class="scan-mentor">🗣️ ' + mentorOpenCount() + ' ' + (mentorOpenCount()===1?'otvoren komentar mentora':'otvorena komentara mentora') + ' — v. Mentorovi komentari niže</p>' : '');
+}
+
+/* ---------- MENTOROVI KOMENTARI (lokalno, v. contracts.ts MentorTaskSyncCandidate) ----------
+   Namjerno bez sync-a na server: PRODUCT_CONSTITUTION.md zabranjuje "mentor comments"
+   u shared backendu, pa ovo ostaje u rp_state (localStorage), kao i checks/gen. */
+function mentorOpenCount(){ return state.mentorTasks.filter(t => !t.done).length; }
+function addMentorTask(text){
+  const t = (text || '').trim(); if(!t) return;
+  state.mentorTasks.push({ id: 'm'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), text: t, done:false });
+  saveState(); renderMentorTasks(); renderScanSummary();
+}
+function toggleMentorTask(id){
+  const t = state.mentorTasks.find(x => x.id === id); if(!t) return;
+  t.done = !t.done;
+  saveState(); renderMentorTasks(); renderScanSummary();
+}
+function deleteMentorTask(id){
+  state.mentorTasks = state.mentorTasks.filter(x => x.id !== id);
+  saveState(); renderMentorTasks(); renderScanSummary();
+}
+function renderMentorTasks(){
+  const host = $('mentorList'); if(!host) return;
+  if(!state.mentorTasks.length){
+    host.innerHTML = '<p class="mentor-empty">Još nema zabilježenih komentara.</p>';
+    return;
+  }
+  host.innerHTML = state.mentorTasks.map(t =>
+    '<div class="mentor-item' + (t.done ? ' done' : '') + '" data-id="' + escA(t.id) + '">' +
+      '<div class="cb" onclick="toggleMentorTask(\'' + t.id + '\')"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7.5 5.5 11 12 3.5" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+      '<span class="mentor-txt" onclick="toggleMentorTask(\'' + t.id + '\')">' + escA(t.text) + '</span>' +
+      '<button type="button" class="mentor-del" onclick="deleteMentorTask(\'' + t.id + '\')" title="Ukloni">✕</button>' +
+    '</div>'
+  ).join('');
 }
 function renderLine(){
   const host = $('linSts'); if(!host) return;
@@ -2266,7 +2303,7 @@ function handlePaymentReturn(){
 // Dio HTML-a se ubacuje kao string (dangerouslySetInnerHTML) s inline
 // onclick="fn()" atributima — browser te uvijek traži u window scopeu, ne u
 // lokalnom scopeu ove funkcije. Bez ovoga svaki takav gumb baca "fn is not defined".
-Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt });
+Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt, toggleMentorTask, deleteMentorTask });
 document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => {
   // Brava koja pokazuje put unutra. Mrtav klik na zaključan tab je
   // najfrustrantniji mogući ishod — korisnik ne zna ni zašto ni što dalje.
@@ -2305,6 +2342,8 @@ $('dl_rok').addEventListener('input', () => { renderDeadlines(); renderLine(); r
 $('wc_total').addEventListener('input', () => { renderWC(); saveState(); });
 $('wc_unit').addEventListener('change', () => { renderWC(); saveState(); });
 $('btnDnevnik').onclick = exportDnevnik;
+$('mentorAddBtn').onclick = () => { addMentorTask($('mentorInput').value); $('mentorInput').value = ''; };
+$('mentorInput').addEventListener('keydown', e => { if(e.key === 'Enter'){ addMentorTask(e.target.value); e.target.value = ''; } });
 $('bGo').onclick = goChat;
 $('sendBtn').onclick = chatSend;
 $('chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') chatSend(); });
@@ -2618,6 +2657,7 @@ chatStart(true);
 buildLine();
 renderLine();
 renderIndeksHead();
+renderMentorTasks();
 updatePaper();
 lkParseHash();
 refreshAuthAndCredits();

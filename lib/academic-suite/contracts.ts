@@ -337,6 +337,31 @@ export interface AIUsageLedgerEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Mentor feedback loop — LOCAL-ONLY today (Faza 3 MVP)
+// ---------------------------------------------------------------------------
+// Mentor comments are typed by the student in Katedra's UI and tracked as
+// discrete tasks (app/katedra-engine.js: state.mentorTasks), persisted only in
+// localStorage. They deliberately do NOT flow through gatherServerState()/
+// /api/state: PRODUCT_CONSTITUTION.md's privacy rule explicitly bans "mentor
+// comments" from the shared backend, alongside raw .docx and document body
+// text.
+//
+// This interface is NOT an active contract — no table backs it, and nothing
+// reads or writes it today. It exists only as a placeholder for a future,
+// separate founder decision: IF cross-device sync of mentor tasks is ever
+// approved, only a sanitized record (status/phase/timestamp — never the
+// verbatim comment) could be considered, and the authoritative migration
+// would still have to be designed cross-product and land in the Lekta repo
+// first (CLAUDE.md database authority rule), not as Katedra-side DDL.
+export interface MentorTaskSyncCandidate {
+  taskId: string;
+  projectId: string;
+  stage?: ProjectStage;
+  status: 'open' | 'done';
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Shared analytics semantics
 // ---------------------------------------------------------------------------
 
