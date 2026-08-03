@@ -131,6 +131,10 @@ export async function POST(req) {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache',
       'x-katedra-balance-before': String(balance),
+      // Klijent nikad ne šalje model (v. MODELS default gore) — ovo mu javlja
+      // koji je STVARNO odgovorio, za lokalni AI ledger (rpLog), umjesto da
+      // klijent pogađa/pretpostavlja vrijednost koju server odluči promijeniti.
+      'x-katedra-model': model,
     },
   })
 }

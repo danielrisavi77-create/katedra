@@ -321,6 +321,20 @@ export interface KatedraProjectState {
   updatedAt: string;
 }
 
+// Faza 4 MVP: this shape is NOT yet backed by any Supabase table — no code
+// writes AIUsageLedgerEntry records anywhere. The current local proxy is
+// app/katedra-engine.js's rp_log entries (rpLog(txt, {aiGenerated, tool,
+// stage, model, reviewed}), rendered in the exported "Dnevnik procesa").
+// That proxy is intentionally simpler than this interface: no entryId/userId/
+// projectId/aiContribution/userContribution/userApproved, and it lives only
+// in localStorage — the same privacy posture as PRODUCT_CONSTITUTION.md's
+// mentor-comments rule (see MentorTaskSyncCandidate above). Per-call
+// model/token usage IS already recorded server-side today, but as billing
+// data (katedra_usage via the katedra_consume RPC, keyed to auth.users.id),
+// not as this Katedra-stage-aware ledger shape. Promoting the local proxy to
+// a real cross-device AIUsageLedgerEntry table keyed to academic_projects.id
+// would need the same Lekta-repo migration process as MentorTaskSyncCandidate
+// — it is not implied by this interface existing.
 export interface AIUsageLedgerEntry {
   entryId: string;
   projectId: string;
