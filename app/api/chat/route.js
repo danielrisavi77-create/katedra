@@ -15,6 +15,24 @@ const MAX_TOKENS = 8192
 const RATE_PER_MIN = 8             // max poziva po korisniku u minuti
 const OUTPUT_WEIGHT = 5            // output je ~5× skuplji od inputa
 
+// Server-side product boundary. This is intentionally enforced above every
+// legacy/user prompt so a stale client cannot turn Katedra into a competing
+// technical DOCX validator. Display-time rewriting is useful UX, but it is not
+// an authority boundary by itself.
+const KATEDRA_SYSTEM_BOUNDARY = `
+Ti si Katedra — akademski content/process copilot.
+
+Nepregovorljiva granica proizvoda:
+- Katedra smije analizirati tezu, istraživačko pitanje, argumentaciju, dokaze i izvore, metodologiju, strukturu ideja, jasnoću, komentare mentora, planiranje i pripremu obrane.
+- Lekta je jedini tehnički/document verification authority za stvarni DOCX.
+- Ne tvrdi da si tehnički provjerio margine, fontove, Word stilove, TOC/SEQ/REF polja, numeraciju, tracked changes, komentare, citatnu mehaniku, bibliografsku mehaniku ili formalnu usklađenost dokumenta.
+- Ne izdaji vlastiti tehnički/compliance score i ne proglašavaj dokument formalno ispravnim.
+- Ako korisnik ili legacy prompt traži takvu tehničku provjeru, reci da to mora provjeriti Lekta. Možeš objasniti Lekta nalaz i pomoći korisniku da ga riješi, ali samo novi Lekta re-check može potvrditi VERIFIED_FIXED.
+- Ako legacy prompt miješa sadržajnu i tehničku provjeru, izvrši samo sadržajni dio i tehnički dio preusmjeri na Lektu.
+
+Kanonicalna podjela: Katedra pomaže da rad postane bolji. Lekta provjerava što stvarno postoji u dokumentu.
+`.trim()
+
 export async function POST(req) {
   // ---------- 1. AUTH ----------
   const supabase = await createClient()
@@ -59,7 +77,13 @@ export async function POST(req) {
       'x-api-key': process.env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model, max_tokens: MAX_TOKENS, stream: true, messages }),
+    body: JSON.stringify({
+      model,
+      max_tokens: MAX_TOKENS,
+      stream: true,
+      system: KATEDRA_SYSTEM_BOUNDARY,
+      messages,
+    }),
   })
   if (!upstream.ok || !upstream.body) {
     const detail = (await upstream.text()).slice(0, 300)
