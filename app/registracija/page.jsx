@@ -8,6 +8,7 @@ import '../katedra-scoped.css'
 export default function RegistracijaPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [agree, setAgree] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -16,6 +17,7 @@ export default function RegistracijaPage() {
     e.preventDefault()
     setError('')
     if (password.length < 8) { setError('Lozinka mora imati barem 8 znakova.'); return }
+    if (!agree) { setError('Za registraciju moraš prihvatiti Uvjete korištenja i Politiku privatnosti.'); return }
     setLoading(true)
     try {
       const supabase = createClient()
@@ -71,8 +73,17 @@ export default function RegistracijaPage() {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" minLength={8} />
             <div className="hint">Barem 8 znakova.</div>
           </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: 'var(--mut)', marginBottom: 14, cursor: 'pointer' }}>
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, flex: 'none' }} />
+            <span>
+              Slažem se s{' '}
+              <Link href="/uvjeti" target="_blank" style={{ color: 'var(--acc)' }}>Uvjetima korištenja</Link>{' '}
+              i{' '}
+              <Link href="/privatnost" target="_blank" style={{ color: 'var(--acc)' }}>Politikom privatnosti</Link>.
+            </span>
+          </label>
           {error && <p style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
-          <button type="submit" className="copy-btn" disabled={loading}>
+          <button type="submit" className="copy-btn" disabled={loading || !agree}>
             {loading ? 'Stvaram račun…' : 'Registriraj se'}
           </button>
         </form>

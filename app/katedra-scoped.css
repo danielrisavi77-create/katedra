@@ -230,6 +230,22 @@
   .katedra-page .dl-head input,.katedra-page .dl-head select{background:var(--bg2);border:1px solid var(--line2);border-radius:9px;color:var(--txt);padding:8px 11px;font-family:inherit;font-size:13.5px;color-scheme:var(--scheme);outline:none}
   .katedra-page .dl-head input:focus,.katedra-page .dl-head select:focus{border-color:var(--acc)}
   .katedra-page .dl-out{font-size:12.8px;color:var(--mut);margin-top:9px}
+  /* Mentor komentari — mala dodaj-red + lista, isti vizualni rječnik kao
+     ostali .dl-panel alati u bočnoj traci. */
+  .katedra-page .mc-add{display:flex;gap:8px;width:100%;flex-basis:100%}
+  .katedra-page .mc-add input{flex:1 1 auto;min-width:0}
+  .katedra-page .mc-add button{flex:0 0 auto;border:0;border-radius:9px;background:var(--grad);
+    color:var(--on-acc);font-weight:800;font-size:12.5px;font-family:inherit;padding:8px 13px;cursor:pointer}
+  .katedra-page .mc-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;
+    border-bottom:1px solid var(--line2)}
+  .katedra-page .mc-item:last-child{border-bottom:0}
+  .katedra-page .mc-item input[type="checkbox"]{margin-top:3px;flex:0 0 auto}
+  .katedra-page .mc-item span{flex:1 1 auto;line-height:1.4}
+  .katedra-page .mc-item.done span{color:var(--mut2);text-decoration:line-through}
+  .katedra-page .mc-item button{flex:0 0 auto;border:0;background:transparent;color:var(--mut2);
+    cursor:pointer;font-size:13px;padding:2px 5px}
+  .katedra-page .mc-item button:hover{color:var(--bad)}
+  .katedra-page .mc-empty{font-size:12px;color:var(--mut2);font-style:italic}
   .katedra-page .dl-row{display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13px}
   .katedra-page .dl-row:last-child{border:0}
   .katedra-page .dl-row b{color:var(--txt);font-weight:700}
@@ -296,6 +312,13 @@
   .katedra-page .onb-choice.ghost{background:transparent;border-color:transparent}
   .katedra-page .onb-choice.ghost:hover{background:var(--card2);border-color:var(--line2)}
   .katedra-page .onb-note{font-size:11.5px;color:var(--mut2);margin-top:12px}
+  /* Sporedni ulaz u Completion Scan — mora izgledati manje važno od glavnih
+     onb-choice gumba (koje ovaj student vjerojatno traži), ali i dalje kao
+     tipka koju je vrijedno kliknuti. */
+  .katedra-page .onb-scan-link{display:block;box-sizing:border-box;width:100%;background:transparent;
+    border:1px dashed var(--line2);color:var(--mut);font-size:12.5px;font-weight:700;font-family:inherit;
+    cursor:pointer;margin-top:12px;padding:11px 14px;border-radius:12px;transition:.15s}
+  .katedra-page .onb-scan-link:hover{border-color:var(--acc);color:var(--txt);border-style:solid}
 
   /* ---------- STEP BAR ---------- */
   /* Traka koraka više ne sjedi na vrhu .chat-wrap nego u chromeu, pa joj
@@ -810,10 +833,21 @@
   .katedra-page .ret-lbl{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut2)}
   .katedra-page .ret-one b{font-size:13.5px;font-weight:600;line-height:1.5;color:var(--txt)}
   .katedra-page .ret-one .onb-go{width:auto;min-width:170px}
+  /* Completion Scan rezultat — ista kartica-u-kartici logika kao .att-card,
+     samo bez okvira jer već sjedi unutar .onb-card. */
+  .katedra-page #scanResult{text-align:left;background:var(--bg2);border:1px solid var(--line2);
+    border-radius:14px;padding:14px 16px;margin-top:16px}
+  .katedra-page .scan-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    font-size:13.5px;flex-wrap:wrap}
+  .katedra-page .scan-head span{font-size:11.5px;color:var(--mut2);font-weight:600}
+  .katedra-page .scan-risks{margin:6px 0 0;padding-left:18px;font-size:12.8px;color:var(--mut)}
+  .katedra-page .scan-risks li{margin-bottom:4px}
+  .katedra-page .scan-more{font-size:11.5px;color:var(--mut2);margin-top:6px}
   .katedra-page[data-screen="tip"] #scr-tip,
   .katedra-page[data-screen="gdje"] #scr-gdje,
   .katedra-page[data-screen="pitanja"] #scr-pitanja,
-  .katedra-page[data-screen="povratak"] #scr-povratak{display:block}
+  .katedra-page[data-screen="povratak"] #scr-povratak,
+  .katedra-page[data-screen="scan"] #scr-scan{display:block}
   /* Prijelaz ekrana i viewova je jedina animacija koju korisnik vidi na svaku
      navigaciju — postojeći reduced-motion blokovi pokrivaju samo pojedine
      elemente (glow, puls, nagib faza), ne i ovo. */

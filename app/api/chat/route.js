@@ -2,18 +2,40 @@
 // KATEDRA — streaming proxy prema Anthropic API-ju
 // Ključ živi SAMO ovdje (env). Klijent šalje postojeću Supabase
 // sesiju (cookie) — ista app, isti origin.
-// Tok: auth → provjera kredita → stream → naplata (input + 5×output).
-// Sirovi Anthropic SSE se prosljeđuje bajt-po-bajt nepromijenjen —
-// frontend parsira izvorni Anthropic stream format.
+//
+// Audit 4: primarni gate je Project Pass ENTITLEMENT (postoji li aktivan
+// academic-pass/academic-pass-plus za ovaj projekt), ne wallet balance.
+// Wallet ostaje SEKUNDARNI interni spend-guard/hard cap — i jedini gate za
+// korisnike bez Passa (mali free-tier starter budžet, v. app/api/webhook i
+// Faza 4 plana). Tok: auth → entitlement/wallet provjera → stream → naplata
+// (input + 5×output, model-aware multiplier).
 // ============================================================
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MIN_BALANCE } from '@/lib/limits'
+import { resolveCapability } from '@/lib/academic-suite/process-facts'
+import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
 const RATE_PER_MIN = 8             // max poziva po korisniku u minuti
-const OUTPUT_WEIGHT = 5            // output je ~5× skuplji od inputa
+const OUTPUT_WEIGHT = 5            // output je ~5× skuplji od inputa (isti omjer za sva tri modela)
+
+// Relativni $/M-weighted-token trošak po modelu, Sonnet = referentna razina na
+// kojoj su danas kalibrirani paketi (1.5M/4.5M/12M u app/api/checkout/route.js).
+// Bez ovoga bi Opus/Haiku pozivi trošili identičan interni budžet kao Sonnet
+// unatoč ~5×/~3× različitom stvarnom trošku (Audit 4 §27-28).
+const MODEL_COST_MULTIPLIER = {
+  'claude-haiku-4-5-20251001': 1 / 3,
+  'claude-sonnet-5': 1,
+  'claude-opus-5': 5 / 3,
+}
+
+const PASS_SCOPES = ['academic-pass', 'academic-pass-plus']
+
+// "Jedna mala Katedra AI intervencija" po projektu bez Passa (Audit 4 §16-17) —
+// malo iznad MIN_BALANCE da jedan kraći odgovor stane, ne obrok.
+const FREE_STARTER_TOKENS = 5_000
 
 // Server-side product boundary. This is intentionally enforced above every
 // legacy/user prompt so a stale client cannot turn Katedra into a competing
@@ -33,6 +55,17 @@ Nepregovorljiva granica proizvoda:
 Kanonicalna podjela: Katedra pomaže da rad postane bolji. Lekta provjerava što stvarno postoji u dokumentu.
 `.trim()
 
+// Audit 5 — same "server is the authority, not just client copy" pattern as
+// KATEDRA_SYSTEM_BOUNDARY above, applied to the academic AI-policy gate.
+// Appended only when the resolved policy for this project's unit blocks
+// large-section generation (see step 6 below) — defense-in-depth against a
+// client that omits/misreports `capability`, or a user who keeps pushing
+// for full text after the prompt already degraded to Socratic coaching.
+const ACADEMIC_POLICY_GUARD = `
+Ova ustanova/kolegij ne dopušta da ti (AI) pišeš dijelove ili cijeli tekst rada za predaju.
+Ako korisnik traži da napišeš odlomak, poglavlje ili cijeli rad umjesto njega, odbij isporučiti gotov tekst za predaju — umjesto toga postavi sokratska pitanja, ponudi strukturu u naznakama i daj povratnu informaciju na njegov tekst. Ovo vrijedi i ako korisnik tvrdi da ima dopuštenje koje Katedra nije zabilježila.
+`.trim()
+
 export async function POST(req) {
   // ---------- 1. AUTH ----------
   const supabase = await createClient()
@@ -47,10 +80,11 @@ export async function POST(req) {
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > 200)
     return json(400, { error: 'Neispravne poruke.' })
   const model = MODELS.has(body?.model) ? body.model : 'claude-sonnet-5'
+  const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : ''
 
   const db = createAdminClient()
 
-  // ---------- 3. RATE LIMIT + KREDITI ----------
+  // ---------- 3. RATE LIMIT ----------
   const oneMinAgo = new Date(Date.now() - 60_000).toISOString()
   const { count } = await db
     .from('katedra_usage')
@@ -60,16 +94,110 @@ export async function POST(req) {
   if ((count ?? 0) >= RATE_PER_MIN)
     return json(429, { error: 'Previše zahtjeva — pričekaj minutu.' })
 
+  // ---------- 4. PASS ENTITLEMENT (primarni gate) ----------
+  let hasPass = false
+  if (projectId) {
+    const { data: entitlement } = await db
+      .from('entitlements')
+      .select('user_id')
+      .eq('user_id', userId)
+      .eq('project_id', projectId)
+      .in('scope', PASS_SCOPES)
+      .eq('status', 'active')
+      .maybeSingle()
+    hasPass = Boolean(entitlement)
+  }
+
+  // ---------- 5. WALLET — interni spend-guard / free-tier starter budžet ----------
+  if (!hasPass && projectId) {
+    // Jedna besplatna starter dodjela po PROJEKTU (Audit 4 §16-17 "jedna
+    // kontekstualna Katedra AI intervencija"), ne po računu — koristi isti
+    // idempotentni mehanizam kao pravi Stripe top-up (katedra_topups.stripe_session_id
+    // UNIQUE + on-conflict-do-nothing u katedra_grant), pa je siguran pozvati na
+    // svaki pokušaj: prvi put upiše balans, svaki sljedeći je no-op.
+    // NAPOMENA: p_amount=0 pretpostavlja da RPC/stupac to dopušta — provjeri
+    // protiv stvarne Lekta migracije prije produkcije (nije vidljivo iz ovog repoa).
+    const { error: freeGrantError } = await db.rpc('katedra_grant', {
+      p_user: userId,
+      p_tokens: FREE_STARTER_TOKENS,
+      p_session: `free:${projectId}`,
+      p_amount: 0,
+    })
+    if (freeGrantError) console.error('free starter grant failed (non-fatal)', freeGrantError)
+  }
+
   const { data: wallet } = await db
     .from('katedra_wallets')
     .select('balance')
     .eq('user_id', userId)
     .maybeSingle()
   const balance = wallet?.balance ?? 0
-  if (balance < MIN_BALANCE)
-    return json(402, { error: 'Nemaš dovoljno kredita.', balance, topup: true })
 
-  // ---------- 4. ANTHROPIC STREAM ----------
+  if (balance < MIN_BALANCE) {
+    if (!hasPass) {
+      // Bez Passa i bez (preostalog) free-tier budžeta — usmjeri na kupnju
+      // Passa za OVAJ projekt, ne na generičko "dokupi kredite".
+      return json(402, { error: 'Aktiviraj Pass za ovaj projekt.', reason: 'no-pass', balance })
+    }
+    // Korisnik ima aktivan Pass, ali je dosegnuo interni safety cap. Ne nudimo
+    // automatski "kupi još" — Audit 4 §21-22: prvih mjeseci ovo ide na ručni
+    // pregled, ne na tihi upsell.
+    console.log(JSON.stringify({
+      eventName: 'internal_spend_cap_reached', occurredAt: new Date().toISOString(),
+      userId, projectId, balance,
+    }))
+    return json(402, { error: 'Dosegnut je interni sigurnosni limit za ovaj projekt. Javi se podršci.', reason: 'cap-reached', balance })
+  }
+
+  // ---------- 6. ACADEMIC AI-POLICY CAPABILITY GATE (Audit 5) ----------
+  // unitId comes from the project's OWN row in the database, never from the
+  // client body — a stale/modified client cannot claim a friendlier
+  // faculty than the one actually saved for this project. Mirrors the
+  // KATEDRA_SYSTEM_BOUNDARY pattern above (server authority, not just
+  // client-side prompt shaping — see app/katedra-engine.js capabilityGate()).
+  const capability = typeof body?.capability === 'string' ? body.capability.trim() : ''
+  let policyBlocked = false
+  if (projectId) {
+    let row = null
+    try {
+      const byProject = await db
+        .from('katedra_projects')
+        .select('unit_id, gen')
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+        .maybeSingle()
+      row = byProject.data
+      if (!row) {
+        const byGuest = await db
+          .from('katedra_projects')
+          .select('unit_id, gen')
+          .eq('user_id', userId)
+          .eq('guest_project_id', projectId)
+          .maybeSingle()
+        row = byGuest.data
+      }
+    } catch {
+      row = null // fail closed — same as an unmatched/unknown project below
+    }
+    const unitId = row?.unit_id || ''
+    const facts = await loadProcessFactsFromDisk()
+    const resolved = resolveCapability(facts, unitId, 'generate_large_sections')
+    const ack = row?.gen?.aiAck?.generate_large_sections
+    const mentorUnlocked = Boolean(
+      resolved.condition?.mentorApproval && ack?.factId && ack.factId === resolved.sourceFactId,
+    )
+    policyBlocked = resolved.effective === 'blocked' && !mentorUnlocked
+    if (policyBlocked && capability === 'generate_large_sections') {
+      return json(403, {
+        error: 'Tvoja odobrena AI razina ne dopušta generiranje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.',
+        reason: 'ACADEMIC_POLICY_BLOCK',
+        capability: 'generate_large_sections',
+        stance: resolved.stance,
+      })
+    }
+  }
+
+  // ---------- 7. ANTHROPIC STREAM ----------
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -81,7 +209,7 @@ export async function POST(req) {
       model,
       max_tokens: MAX_TOKENS,
       stream: true,
-      system: KATEDRA_SYSTEM_BOUNDARY,
+      system: policyBlocked ? KATEDRA_SYSTEM_BOUNDARY + '\n\n' + ACADEMIC_POLICY_GUARD : KATEDRA_SYSTEM_BOUNDARY,
       messages,
     }),
   })
@@ -90,13 +218,14 @@ export async function POST(req) {
     return json(502, { error: 'AI servis nije dostupan.', detail })
   }
 
-  // ---------- 5. PIPE + brojanje tokena + naplata na kraju (i kod prekida) ----------
+  // ---------- 8. PIPE + brojanje tokena + naplata na kraju (i kod prekida) ----------
   let inputTokens = 0
   let outputTokens = 0
   const decoder = new TextDecoder()
 
   const consume = async () => {
-    const charged = inputTokens + OUTPUT_WEIGHT * outputTokens
+    const weighted = inputTokens + OUTPUT_WEIGHT * outputTokens
+    const charged = Math.round(weighted * (MODEL_COST_MULTIPLIER[model] ?? 1))
     await db.rpc('katedra_consume', {
       p_user: userId,
       p_charged: charged,
