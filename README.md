@@ -2,14 +2,14 @@
 
 AI kopilot za seminarske, završne i diplomske radove na hrvatskom: procesni wizard, prompt generator, streaming chat s Claudeom, akademski workflow i integracija s [Lektom](https://lektahr.netlify.app), determinističkim provjeriteljem formalne usklađenosti rada.
 
-Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0.1 dijele jedan Academic Suite backend. Postojeći Katedra Supabase projekt je odabran kao zajednički identity/data backbone za oba proizvoda.
+Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0.1 dijele jedan Academic Suite backend. **Postojeći Lekta Supabase projekt (`zrrjttizjyfcxmcpgzml`) je canonical identity/data backend za oba proizvoda.** Katedra nema zaseban Supabase authority niti zasebnu migration history.
 
 - Katedra: vodi proces, planiranje, pisanje, semantičku recenziju i pripremu obrane.
 - Lekta: čita stvarni `.docx`, provjerava verificirana pravila i jedina smije deterministički potvrditi da je nalaz riješen.
-- Shared Supabase: isti account, isti akademski projekt i zajednički entitlementi.
+- Lekta Supabase: isti account, isti akademski projekt, postojeći Lekta commerce i Katedra-owned workflow/AI-credit tablice.
 - Raw `.docx` i tekst rada ne ulaze u shared backend.
 
-Za nepregovorljive produktne granice vidi `PRODUCT_CONSTITUTION.md`. Za shared bazu vidi `docs/architecture/SHARED_SUPABASE_SCHEMA.md`.
+Za nepregovorljive produktne granice vidi `PRODUCT_CONSTITUTION.md`. Database authority i migracije žive u `danielrisavi77-create/Lekta/supabase/`.
 
 ## Arhitektura
 
@@ -21,18 +21,23 @@ Korisnik ──JWT──► /api/chat ──► provjera kredita ──► Anthr
                   ◄───────────────────┘
                   na kraju: katedra_consume(input + 5×output)
 
-Uplata: /api/checkout → Stripe Checkout → /api/webhook → katedra_grant
-Lekta:  project/unit/work → Lekta → #lekta=<sanitized result> → Katedra coach
+Uplata Katedra AI kredita: /api/checkout → Stripe → /api/webhook → katedra_grant
+Lekta: project/unit/work → Lekta → #lekta=<sanitized result> → Katedra coach
 ```
 
-### Shared Supabase
+### Lekta Supabase = Shared Academic Suite backend
 
 ```text
-auth.users
+auth.users                         EXISTING LEKTA AUTH
     └── academic_projects          SHARED CORE
           ├── katedra_project_state KATEDRA-OWNED
-          ├── lekta_checks          LEKTA-OWNED
-          └── entitlements          SHARED COMMERCE
+          └── lekta_checks          LEKTA-OWNED
+
+products                           EXISTING LEKTA CATALOG
+entitlements                       EXISTING LEKTA COMMERCE, project-aware
+    └── document_slots             EXISTING LEKTA DOCUMENT BINDING
+
+katedra_wallets/topups/usage       KATEDRA AI-COMPUTE ACCOUNTING
 ```
 
 Canonicalni identiteti:
@@ -40,7 +45,9 @@ Canonicalni identiteti:
 - korisnik: `auth.users.id`
 - akademski rad/projekt: `academic_projects.id` (UUID)
 
-`katedra_projects` i dalje postoji u foundation v0.1, ali više nije dugoročni canonical shared model. Trenutačni `/api/state` nastavlja pisati u postojeću tablicu radi sigurnog rollouta, a DB trigger mirrorira podatke u `academic_projects` i `katedra_project_state`.
+Postojeći Lekta `entitlements`, `products` i `document_slots` ostaju authority za kupnje/Pass. Academic Suite foundation ih **proširuje**, ne zamjenjuje drugim entitlement sustavom.
+
+`katedra_projects` postoji samo kao foundation-v0.1 compatibility write-path jer postojeći `/api/state` još koristi taj shape. DB trigger u Lekta Supabaseu mirrorira ga u `academic_projects` + `katedra_project_state`.
 
 ```text
 Katedra /api/state
@@ -50,7 +57,7 @@ katedra_projects                temporary compatibility write-path
 academic_projects + katedra_project_state
 ```
 
-Nakon stabilnog produkcijskog observation perioda `/api/state` se može prebaciti na izravne shared-table writeove, a compatibility tablica kasnije umiroviti zasebnom migracijom.
+Nakon stabilnog produkcijskog observation perioda `/api/state` se može prebaciti na izravne shared-table writeove, a compatibility tablica kasnije umiroviti zasebnom **Lekta** migracijom.
 
 ### Privacy boundary
 
@@ -89,9 +96,15 @@ check:<checkId>
 
 ### 1. Supabase
 
-Za Katedra ↔ Lekta koristi se **jedan Supabase projekt**. Ne stvaraj drugi Supabase samo za Lektu.
+Katedra mora koristiti **postojeći Lekta Supabase**, ne novi projekt.
 
-Kopiraj u `.env.local`:
+Project ref:
+
+```text
+zrrjttizjyfcxmcpgzml
+```
+
+Katedra deploy env mora sadržavati vrijednosti tog projekta:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL
@@ -99,27 +112,33 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` mora ostati isključivo server-side.
+`SUPABASE_SERVICE_ROLE_KEY` mora ostati isključivo server-side. Za novi frontend setup preferiraj Supabase publishable key gdje Katedrin trenutni client API to dopušta; legacy anon key ostaje kompatibilan dok ga aplikacija još očekuje.
 
-### 2. Migracije
+### 2. Database migrations
 
-Za potpuno novi projekt primijeni redom:
+**Katedra repo ne smije sadržavati production DDL kao authority.**
+
+Authoritative migrations su u Lekta repou. Academic Suite foundation trenutno čine:
 
 ```text
-supabase/migrations/20260802000000_katedra_credits.sql
-supabase/migrations/20260803000000_katedra_projects.sql
-supabase/migrations/20260804000000_katedra_project_state.sql
-supabase/migrations/20260805000000_academic_suite_foundation.sql
-supabase/migrations/20260805010000_academic_suite_foundation_hardening.sql
+Lekta/supabase/migrations/0035_academic_suite_foundation.sql
+Lekta/supabase/migrations/0036_academic_suite_rls_hardening.sql
 ```
 
-Za postojeću produkcijsku Katedra bazu prije dvije Academic Suite migracije obavezno prođi preflight/postcheck iz:
+`0035`:
 
-`docs/architecture/ACADEMIC_SUITE_RELEASE_CHECKLIST.md`
+- stvara `academic_projects`, `katedra_project_state`, `lekta_checks`;
+- dodaje Katedra wallet/topup/usage tablice u isti Lekta Supabase;
+- dodaje Katedra compatibility `katedra_projects` write-path;
+- proširuje postojeće Lekta `entitlements` i `document_slots` s `academic_project_id`;
+- zadržava postojeći Lekta `products`/Thesis Pass model;
+- dodaje ownership i privacy granice.
 
-Nemoj ručno mijenjati produkcijski SQL pri pasteanju. Ako migraciju treba promijeniti, promijeni committed file i ponovno pusti CI.
+`0036` sužava postojeće privatne commerce RLS policyje na `authenticated` korisnike.
 
-### 3. Stripe
+Za schema promjenu otvori migration u Lekta repou; nemoj dodavati konkurentsku migraciju ovdje.
+
+### 3. Stripe / Katedra AI krediti
 
 Postavi:
 
@@ -136,7 +155,7 @@ https://<tvoja-domena>/api/webhook
 
 Event: `checkout.session.completed`.
 
-Katedrin postojeći wallet (`katedra_wallets`, `katedra_topups`, `katedra_usage`) ostaje AI compute-cost accounting. Cross-product pristupna prava koriste zasebni shared `entitlements` model.
+Katedrin wallet (`katedra_wallets`, `katedra_topups`, `katedra_usage`) ostaje AI compute-cost accounting. On nije authority za Lekta/Academic Pass prava.
 
 ### 4. Anthropic
 
@@ -169,7 +188,7 @@ npm run dev
 
 Default lokalno: `http://localhost:3000`.
 
-Bez pravih Supabase env vrijednosti statične stranice se mogu renderirati, ali auth/kredit/chat funkcionalnosti neće raditi normalno.
+Bez pravih Lekta Supabase env vrijednosti statične stranice se mogu renderirati, ali auth/kredit/chat funkcionalnosti neće raditi normalno.
 
 ## Struktura
 
@@ -203,17 +222,12 @@ docs/architecture/
   ADR_001_SHARED_IDENTITY.md
   LEKTA_KATEDRA_CROSS_REPO_COMPATIBILITY.md
 
-supabase/migrations/
-  20260802000000_katedra_credits.sql
-  20260803000000_katedra_projects.sql
-  20260804000000_katedra_project_state.sql
-  20260805000000_academic_suite_foundation.sql
-  20260805010000_academic_suite_foundation_hardening.sql
+supabase/
+  README.md                    pointer to Lekta schema authority
+  migrations/                 no-op history markers only; no production DDL authority
 
 scripts/
   academic-suite-browser-e2e.mjs
-  foundation-db-smoke.sql
-  foundation-db-hardening-smoke.sql
 
 public/
   katedra-pack.json
@@ -228,35 +242,37 @@ Gost radi preko `localStorage` i dobiva UUID `projectId` prije registracije. Log
 
 ### Prijavljeni korisnik — compatibility faza v0.1
 
-Aplikacijski `/api/state` još koristi `katedra_projects` radi kompatibilnosti sa starim engineom. Shared migration automatski mirrorira zapis u:
+Aplikacijski `/api/state` još koristi `katedra_projects` radi kompatibilnosti sa starim engineom. Lekta Supabase foundation automatski mirrorira zapis u:
 
 - `academic_projects` — canonical project metadata;
 - `katedra_project_state` — Katedra-owned process state.
 
-Za stare `k...` projekte canonical shared UUID postaje već postojeći `katedra_projects.id`; stari `k...` ostaje `legacy_client_project_id`.
+Za stare `k...` projekte canonical shared UUID postaje DB UUID compatibility retka; stari `k...` ostaje samo legacy alias.
 
 Za nove UUID-first projekte isti UUID se čuva kao `academic_projects.id`.
 
 ## Shared commerce
 
-`entitlements` je zajednički cross-product authority za stvari poput:
+Katedra ne uvodi drugi entitlement model.
 
-- `lekta-check`
-- `lekta-fix`
-- `katedra-pro`
-- `academic-pass`
-- `academic-pass-plus`
+Existing Lekta authority ostaje:
 
-Foundation v0.1 uvodi schema/ownership pravila, ali puni Diplomski Pass checkout/UX još nije implementiran.
+```text
+products → entitlements → document_slots
+```
 
-Katedrin token wallet i shared entitlementi imaju različite svrhe:
+Aktivni Lekta katalog već uključuje `pass_zavrsni`, `pass_diplomski` i `pass_semestralni`. Foundation dodaje opcionalni `academic_project_id` na `entitlements` i `document_slots` tako da se postojeća kupnja/Pass može vezati na isti projekt koji Katedra koristi.
 
-- wallet = koliko AI compute troška korisnik može potrošiti;
-- entitlement = koje capabilityje/proizvode korisnik ima pravo koristiti.
+Katedrin token wallet i Lekta entitlementi imaju različite svrhe:
+
+- wallet = koliko AI compute troška korisnik može potrošiti u Katedri;
+- entitlement = postojeće Lekta purchase/slot/Pass pravo, sada project-aware.
+
+Puni cross-product Pass UX/routing još nije implementiran; foundation samo uklanja potrebu za drugim commerce backendom.
 
 ## Shared account i SSO
 
-Jedan Supabase znači jedan underlying account (`auth.users.id`) za Katedru i Lektu.
+Jedan Lekta Supabase znači jedan underlying account (`auth.users.id`) za Katedru i Lektu.
 
 To **ne znači automatski seamless session** između dvije različite root domene. Ako su aplikacije na `katedra.hr` i `lekta.hr`, kasnije je potreban centralni auth/session-exchange flow za iskustvo “prijavljen sam u jednoj pa sam odmah prijavljen i u drugoj”.
 
@@ -270,23 +286,15 @@ Katedra ne smije održavati konkurentsku fakultetsku rules bazu.
 
 ## CI / release gates
 
-Foundation branch ima tri važna Katedra gatea:
+Katedra branch ima tri relevantna gatea:
 
 1. **Foundation check** — TypeScript + lint + Next production build.
-2. **Foundation DB migration** — PostgreSQL 16, stvarna primjena legacy + shared + hardening migracija i invarianti.
+2. **DB authority guard** — Katedra ne smije ponovno uvesti production DDL; schema authority je Lekta repo.
 3. **Academic Suite browser E2E** — production Katedra build + stvarni deployed Lekta PR preview + stvarni `.docx` file chooser/analyzer + sanitized handoff natrag.
 
-DB smoke između ostalog provjerava:
+**DB migration smoke sada živi u Lekta CI-ju**, zajedno s migration authorityjem.
 
-- backfill legacy projekata;
-- UUID/legacy identitet;
-- mirror trigger;
-- RLS;
-- privacy invariant;
-- zabranu cross-user project takeovera;
-- zabranu entitlementa na tuđi projekt.
-
-Produkcijske migracije se i dalje primjenjuju eksplicitno/ručno ili kroz već povezani Supabase CLI; CI ih testira na PostgreSQLu, ali ne dira produkcijsku bazu.
+Produkcijske migracije primjenjuju se na Lekta Supabase iz Lekta migration historyja.
 
 ## Trenutačno namjerno odgođeno
 
@@ -294,7 +302,7 @@ Produkcijske migracije se i dalje primjenjuju eksplicitno/ručno ili kroz već p
 - prebacivanje `/api/state` direktno na shared tablice;
 - retirement `katedra_projects` compatibility tablice;
 - full cross-device rich Lekta resolution history;
-- runtime Academic/Diplomski Pass purchase UX;
+- runtime cross-product Thesis/Diplomski Pass UX;
 - Lekta cloud persistence u `lekta_checks`;
 - model-tier routing;
 - aktivni deadline reminders;
@@ -309,4 +317,4 @@ Produkcijske migracije se i dalje primjenjuju eksplicitno/ručno ili kroz već p
 - Procesni score i Lekta compliance score ostaju dva odvojena signala.
 - Raw dokument ne ulazi u shared Supabase foundation.
 
-Za detaljni charter vidi `VIZIJA.md`, a za release korake `docs/architecture/ACADEMIC_SUITE_RELEASE_CHECKLIST.md`.
+Za detaljni charter vidi `VIZIJA.md`. Database release authority i migration history su u Lekta repou.
