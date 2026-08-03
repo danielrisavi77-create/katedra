@@ -1,30 +1,12 @@
 # Product Constitution — Katedra × Lekta
 
-Katedra i Lekta su dva odvojena proizvoda unutar jednog akademskog workflowa.
-Ne grade se kao dvije aplikacije s hrpom featurea — svaki engine radi samo ono
-u čemu je najbolji. Ovaj dokument definira gdje je ta granica, prije nego što
-je ijedno od dvoje pokuša prijeći.
-
-**Roditeljski dokument: `VIZIJA.md`** (charter v1, 2. 8. 2026) — puna poslovna
-vizija (identitet, north star, brend, korisnik, scope, monetizacija, rast).
-Ovaj dokument (`PRODUCT_CONSTITUTION.md`) je uži i timeless: granica
-odgovornosti Katedra ↔ Lekta i zajednički sistemski temelji koji tu granicu
-čine provedivom.
+Katedra i Lekta su dva odvojena proizvoda unutar jednog akademskog workflowa. Svaki engine radi samo ono u čemu je najbolji; zajednički backend služi kontinuitetu korisnika/projekta, ne brisanju produktnih granica.
 
 ## Dvije nepregovorljive granice
 
-**Katedra nikada ne proglašava dokument formalno usklađenim.**
-Katedra ne otvara `.docx`, ne broji Word polja, ne provjerava marže ni citatnu
-mehaniku deterministički. Kad Katedra spomene format, citate ili strukturu
-dokumenta, to je preporuka ili podsjetnik — nikad tvrdnja "ovo je usklađeno".
-Jedina rečenica koju Katedra smije reći o formalnoj usklađenosti je: "to
-provjeri Lekta".
+**Katedra nikada ne proglašava dokument formalno usklađenim.** Katedra ne otvara `.docx`, ne broji Word polja i ne certificira marže, citate ni submission compliance. Kad spominje format/citate, to je coaching, ne verifikacija.
 
-**Lekta nikada ne piše argumentaciju ni sadržaj rada.**
-Lekta ne predlaže tezu, ne piše rečenice, ne ocjenjuje kvalitetu argumenta.
-Lekta mjeri ono što stroj može izmjeriti (format, citatna mehanika, struktura
-dokumenta, Word polja) — deterministički, po verificiranim pravilima
-fakulteta. Sadržajnu kvalitetu rada ocjenjuje Katedra (uz mentora).
+**Lekta nikada ne piše akademsku argumentaciju ni sadržaj rada.** Lekta deterministički mjeri dokument prema verificiranim pravilima; Katedra vodi proces, razmišljanje, semantičku recenziju i obranu.
 
 ## Podjela odgovornosti
 
@@ -34,108 +16,104 @@ fakulteta. Sadržajnu kvalitetu rada ocjenjuje Katedra (uz mentora).
 | | pomaže planirati | čita stvarni `.docx` |
 | | radi s literaturom | uspoređuje dokument s pravilima |
 | | AI copilot | deterministic checker |
-| | semantički review (teza, argumentacija) | tehnički audit (format, citati) |
+| | semantički review | tehnički audit |
 | | mentor feedback | faculty compliance |
 | | priprema obrane | submission preflight |
-| | AI usage ledger | AutoFix |
+| | AI usage ledger | AutoFix / re-check verification |
 
-## Signal integritet — "dva signala, nikad jedan"
+## Signal integritet
 
-Katedra prikazuje **proces izrade** (checklist %, koliko je faza dovršeno).
-Lekta prikazuje **tehničku usklađenost** (score/100, po pravilima fakulteta).
-Ova dva broja se **nikad ne zbrajaju niti prikazuju kao jedan "spremnost %"**.
+Katedra process score/progress i Lekta compliance score ostaju dva odvojena signala. Nikad ih ne spajamo u jedan “spremnost %”.
 
-## Issue lifecycle — samo Lekta smije reći "riješeno"
+## Issue lifecycle
 
 Canonical lifecycle:
 
 `OPEN -> USER_CHANGED -> RECHECK_REQUIRED -> VERIFIED_FIXED`
 
-Katedra smije evidentirati korisnikovu promjenu i zatražiti re-check. Samo novi
-Lekta check može potvrditi da je isti stabilni nalaz nestao. Ako se nalaz vrati,
-ponovno je `OPEN`. Legacy finding ID-jevi se tijekom migracije ne smiju
-automatski proglasiti riješenima.
+Katedra može evidentirati da je student nešto promijenio. Samo novi Lekta check može potvrditi da je isti stabilni nalaz nestao. Ako se vrati, ponovno je `OPEN`. Legacy finding ID-jevi se ne auto-verificiraju.
 
-## Privatnost — dokument nikad ne ulazi u shared backend
+## Privatnost
 
-Rad (`.docx`) ostaje na studentovom uređaju u local-first Lekta workflowu.
-Između proizvoda i u shared Supabase smiju putovati samo strukturirani
-metapodaci potrebni za workflow: project ID, ruleset/profile reference, score i
-sanitizirani issue ID-jevi/metapodaci.
+Raw `.docx` ostaje u local-first Lekta workflowu.
 
-Shared foundation ne smije spremati:
+Shared backend ne smije spremati:
 
 - raw `.docx`;
-- tekst rada;
+- document body text;
 - free-form document-derived `detail` / `location`;
-- mentorove bilješke;
+- mentor comments;
 - source passages.
 
-## Zajednički izvor akademskih pravila
+Smiju se spremati samo strukturirani workflow metapodaci: account/project ID, ruleset/profile reference, score i sanitizirani finding metadata.
 
-Katedra ne smije održavati vlastitu konkurentsku bazu fakultetskih normativnih
-pravila. Pravila dolaze iz Lekte / Academic Corea (`katedra-pack` ili njegov
-budući verzionirani API/package export). Lekta je source of truth za verificirane
-normativne rule entryje; Katedra ih koristi samo kao coach projection.
+## Akademska pravila
 
-## Jedan account i jedan Supabase — odluka zaključana
+Lekta Academic Core je jedini normative source of truth. Katedra koristi read-only coach projection (`katedra-pack` ili budući versioned export/API) i ne održava paralelnu fakultetsku rule bazu.
 
-Katedra i Lekta ostaju dvije zasebne aplikacije/domene, ali dijele **jedan
-korisnički račun i jedan Supabase project backend**.
+## Jedan account i jedan backend
 
-Katedrin postojeći Supabase projekt postaje **Academic Suite identity/data
-backbone**. Lekta ne smije uvoditi zaseban paralelni Supabase Auth/user store.
+**Existing Lekta Supabase project (`zrrjttizjyfcxmcpgzml`) je canonical Academic Suite backend.**
+
+Katedra nema zaseban Supabase authority niti zasebnu production migration history.
 
 Canonical identiteti:
 
-- korisnik: `auth.users.id`;
-- akademski projekt: `academic_projects.id` (UUID).
-
-Shared schema ownership:
+- `auth.users.id` = account;
+- `academic_projects.id` = akademski rad/projekt.
 
 ```text
-auth.users
-    └── academic_projects          SHARED CORE
-          ├── katedra_project_state KATEDRA-OWNED
-          ├── lekta_checks          LEKTA-OWNED
-          └── entitlements          SHARED COMMERCE
+LEKTA SUPABASE
+│
+├── auth.users
+├── academic_projects
+│   ├── katedra_project_state
+│   └── lekta_checks
+│
+├── products
+├── entitlements
+│   └── document_slots
+│
+└── katedra_wallets / katedra_topups / katedra_usage
 ```
 
-Katedrini `katedra_wallets` / token credits ostaju zaseban AI cost-accounting
-mehanizam; oni nisu autoritet za ecosystem access prava.
+Database migrations za shared Core i Katedra-owned tablice žive samo u Lekta repou.
 
-### Trenutačno stanje implementacije
+## Commerce
 
-- shared Supabase schema migration je napisana;
-- PostgreSQL 16 migration smoke je dio CI-ja;
-- legacy `katedra_projects` ostaje privremeni compatibility write-path;
-- DB trigger zrcali Katedra writeove u `academic_projects` i
-  `katedra_project_state`;
-- `lekta_checks` i `entitlements` postoje u shared foundation modelu;
-- produkcijski Supabase još nije migriran dok se eksplicitno ne prođu release
-  preflight/postcheck koraci.
+Academic Suite **ne stvara drugi entitlement sustav**.
 
-Dakle odluka više nije "buduća". **Infrastrukturni model je zaključan sada;
-produkcijska primjena migracije je release korak.**
+Existing Lekta authority ostaje:
 
-### Cross-domain SSO je odvojeni problem
+`products -> entitlements -> document_slots`
 
-Shared Supabase Auth znači isti `user_id`, ali ne znači automatski da dvije
-različite root domene dijele browser cookie/session. Seamless
-`katedra.hr -> lekta.hr` SSO kasnije zahtijeva centralni auth/session exchange
-ili drugi eksplicitni cross-domain flow. To ne mijenja odluku o jednom accountu.
+Foundation ga proširuje s vezom na `academic_projects.id`, tako da postojeći Lekta Pass/slot može biti vezan uz isti projekt koji Katedra koristi.
 
-## Entitlements
+Katedra wallet je zaseban AI compute-cost accounting i nije access-right authority.
 
-Cross-product proizvodi poput `academic-pass` / `academic-pass-plus` žive u
-shared `entitlements` tablici i mogu biti vezani uz korisnika i/ili jedan
-`academic_projects.id`.
+## Katedra persistence compatibility
 
-Time ista kupnja može otključati Katedra i Lekta capabilityje bez paralelnih
-baza kupnji ili međusobnog "dokazivanja" kupnje između aplikacija.
+Foundation v0.1 privremeno zadržava `katedra_projects` jer postojeći `/api/state` očekuje taj shape. DB trigger u Lekta Supabaseu zrcali ga u `academic_projects + katedra_project_state`.
+
+To je migracijski most, ne trajni shared model. Nakon observation windowa `/api/state` se prebacuje direktno na Shared Core, a compatibility tablica se umirovljuje kroz Lekta migration history.
+
+## Cross-domain SSO
+
+Jedan Supabase Auth znači isti account, ali ne automatski isti browser cookie na `katedra.hr` i `lekta.hr`. Seamless SSO/session exchange dolazi kasnije i ne mijenja identity decision.
+
+## Database authority rule
+
+Ako Katedri treba nova tablica/kolona/RLS funkcija:
+
+1. promjena se dizajnira cross-product;
+2. production DDL ide u Lekta `supabase/migrations/`;
+3. Katedra repo ažurira contracts/runtime consumer code;
+4. Katedra ne uvodi competing migration copy.
 
 ## Brand
 
-Katedra: *"Od teme do obrane."* Lekta: *"Provjeri prije predaje."* Obje
-stranice smiju diskretno spomenuti da su dio istog akademskog workflow
-sustava. Nema trećeg javnog branda dok se ne dokaže da je potreban.
+Katedra: *“Od teme do obrane.”*
+
+Lekta: *“Provjeri prije predaje.”*
+
+Obje ostaju zasebni proizvodi; shared backend je infrastruktura, ne treći javni brand.
