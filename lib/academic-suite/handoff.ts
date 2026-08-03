@@ -1,13 +1,6 @@
 import type { LektaResult } from './contracts'
 import { prepareManifestForIncomingLektaResult } from './reconciliation'
 
-const BOOTSTRAP_DIAGNOSTIC_SLOT = 'katedra.lekta-bootstrap.v0.1'
-
-function diagnostic(stage: string, detail?: string): void {
-  if (typeof sessionStorage === 'undefined') return
-  try { sessionStorage.setItem(BOOTSTRAP_DIAGNOSTIC_SLOT, JSON.stringify({ stage, detail: detail || '' })) } catch {}
-}
-
 function base64ToBytes(value: string): Uint8Array {
   const binary = atob(value)
   return Uint8Array.from(binary, ch => ch.charCodeAt(0))
@@ -90,28 +83,13 @@ export function sharedLektaResultToLegacyPayload(result: LektaResult) {
 export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
   if (typeof window === 'undefined') return false
   const hash = window.location.hash || ''
-  if (!hash.startsWith('#lekta=')) {
-    diagnostic('no-lekta-hash', hash.slice(0, 40))
-    return false
-  }
+  if (!hash.startsWith('#lekta=')) return false
 
-  diagnostic('hash-detected', hash.slice(0, 32))
   try {
     const decoded = decodeUtf8Base64(hash.slice('#lekta='.length))
-    diagnostic('decoded', String((decoded as any)?.schemaVersion || 'no-schema'))
-    if (!isSharedLektaResult(decoded)) {
-      diagnostic('legacy-or-invalid', JSON.stringify({
-        schemaVersion: (decoded as any)?.schemaVersion,
-        analysisId: typeof (decoded as any)?.analysisId,
-        rulesetId: typeof (decoded as any)?.rulesetId,
-        score: typeof (decoded as any)?.score,
-        issues: Array.isArray((decoded as any)?.issues),
-      }))
-      return false
-    }
+    if (!isSharedLektaResult(decoded)) return false
 
     prepareManifestForIncomingLektaResult(decoded)
-    diagnostic('reconciled', decoded.analysisId)
 
     const legacy = sharedLektaResultToLegacyPayload(decoded)
     const normalizedHash = `#lekta=${encodeUtf8Base64(legacy)}`
@@ -120,10 +98,8 @@ export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
       '',
       `${window.location.pathname}${window.location.search}${normalizedHash}`,
     )
-    diagnostic('normalized', decoded.analysisId)
     return true
-  } catch (error) {
-    diagnostic('error', error instanceof Error ? error.message : String(error))
+  } catch {
     return false
   }
 }
