@@ -77,6 +77,40 @@ async function startResolutionRound(page) {
   await start.click()
 }
 
+async function lektaWizardSnapshot(page) {
+  return page.evaluate(() => {
+    const wizard = document.querySelector('#wizardView')
+    const form = document.querySelector('.lek-col-form')
+    const fileInput = document.querySelector('#fileInput')
+    const selectedName = document.querySelector('#selectedName')
+    const selectedFile = document.querySelector('#selectedFile')
+    const dropzone = document.querySelector('#dropzone')
+    const dropError = document.querySelector('#dropError')
+    const next = document.querySelector('#stepToAnalyze')
+    const analyze = document.querySelector('#analyzeBtn')
+    const detectBadge = document.querySelector('#detectBadge')
+    const profileNote = document.querySelector('#profileNote')
+    return {
+      wizardStep: wizard?.dataset?.step || null,
+      formClass: form?.className || null,
+      fileCount: fileInput?.files?.length || 0,
+      selectedName: selectedName?.textContent || null,
+      selectedFileDisplay: selectedFile ? getComputedStyle(selectedFile).display : null,
+      dropzoneClass: dropzone?.className || null,
+      dropError: dropError?.textContent?.trim() || null,
+      dropErrorDisplay: dropError ? getComputedStyle(dropError).display : null,
+      nextDisplay: next ? getComputedStyle(next).display : null,
+      nextVisibility: next ? getComputedStyle(next).visibility : null,
+      analyzeDisplay: analyze ? getComputedStyle(analyze).display : null,
+      analyzeDisabled: analyze?.disabled ?? null,
+      detectBadge: detectBadge?.textContent?.trim() || null,
+      profileNote: profileNote?.textContent?.trim().slice(0, 300) || null,
+      unit: document.querySelector('#unitSelect')?.value || null,
+      workType: document.querySelector('#workType')?.value || null,
+    }
+  })
+}
+
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 const page = await context.newPage()
@@ -161,16 +195,27 @@ try {
   await realLekta.goto(previewEntry, { waitUntil: 'domcontentloaded' })
   await realLekta.waitForFunction(expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected, projectId)
 
-  // Use Lekta's actual paper-cover upload CTA. This is important because the
-  // application deliberately keeps the analyzer form hidden until that real
-  // user action marks the form as engaged.
   const fileChooserPromise = realLekta.waitForEvent('filechooser')
   await realLekta.locator('#paperCoverBtn').click()
   const fileChooser = await fileChooserPromise
   await fileChooser.setFiles(E2E_DOCX_PATH)
 
-  // `setFile()` advances the wizard to Profile (step 2). Follow the real
-  // profile-confirmation control before the analyze button becomes visible.
+  // Wait for either a valid transition into the profile wizard or an explicit
+  // intake error. If neither happens, emit the full runtime snapshot rather
+  // than hiding the cause behind a generic Playwright visibility timeout.
+  await realLekta.waitForFunction(() => {
+    const wizard = document.querySelector('#wizardView')
+    const error = document.querySelector('#dropError')
+    return wizard?.dataset?.step === '2' || Boolean(error?.textContent?.trim())
+  }, null, { timeout: 20_000 }).catch(() => {})
+
+  const uploadSnapshot = await lektaWizardSnapshot(realLekta)
+  console.log('LEKTA_REAL_DOCX_UPLOAD_STATE', JSON.stringify(uploadSnapshot))
+  assert.equal(uploadSnapshot.fileCount, 1, `Lekta file chooser did not retain DOCX: ${JSON.stringify(uploadSnapshot)}`)
+  assert.equal(uploadSnapshot.wizardStep, '2', `Lekta did not advance to profile step: ${JSON.stringify(uploadSnapshot)}`)
+  assert.ok(String(uploadSnapshot.formClass || '').includes('lek-engaged'), `Lekta analyzer form was not engaged: ${JSON.stringify(uploadSnapshot)}`)
+  assert.equal(uploadSnapshot.dropError, null, `Lekta intake rejected E2E DOCX: ${JSON.stringify(uploadSnapshot)}`)
+
   const toAnalyzeStep = realLekta.locator('#stepToAnalyze')
   await toAnalyzeStep.waitFor({ state: 'visible', timeout: 20_000 })
   await toAnalyzeStep.click()
