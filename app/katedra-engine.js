@@ -2686,17 +2686,30 @@ function showPaywall(){
     '<h2>Vodi ovaj rad do kraja</h2>' +
     '<p class="onb-sub">Pass otključava Katedra plan, AI pomoć, mentor feedback i Lekta provjere za ovaj rad — do predaje.</p>' +
     '<div class="onb-steps" id="paywallPkgs"></div>' +
-    '<button class="onb-go" id="paywallClose" style="background:var(--card2);color:var(--txt);box-shadow:none;margin-top:6px">Zatvori</button>' +
+    '<label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-size:11.5px;color:var(--mut);margin-top:12px;cursor:pointer">' +
+      '<input type="checkbox" id="paywallConsent" style="margin-top:2px;flex:none">' +
+      '<span>Slažem se s <a href="/uvjeti" target="_blank" rel="noopener" style="color:var(--acc)">Uvjetima korištenja</a> i ' +
+      '<a href="/privatnost" target="_blank" rel="noopener" style="color:var(--acc)">Politikom privatnosti</a> te izričito zahtijevam da usluga počne odmah nakon plaćanja — razumijem da time gubim pravo na odustajanje čim iskoristim Pass za ovaj rad.</span>' +
+    '</label>' +
+    '<button class="onb-go" id="paywallClose" style="background:var(--card2);color:var(--txt);box-shadow:none;margin-top:10px">Zatvori</button>' +
     '</div>';
   // Mora ostati unutar #katedra-root — CSS je skopiran na .katedra-page, pa
   // document.body.appendChild ovdje ne bi pokupio nijedan .onb/.onb-card stil.
   __root.appendChild(ov);
   const host = ov.querySelector('#paywallPkgs');
+  const consent = ov.querySelector('#paywallConsent');
   const row = document.createElement('button');
   row.className = 'onb-go'; row.style.marginBottom = '8px';
+  row.disabled = true; row.style.opacity = '.5'; row.style.cursor = 'not-allowed';
   row.textContent = 'Aktiviraj ' + name + ' — ' + price;
-  row.onclick = () => startCheckout(pkgKey);
+  // Bez potvrđenog konsenta kupnja se ne smije pokrenuti — v. app/uvjeti §5
+  // (usluga počinje odmah = gubitak zakonskog prava na odustajanje).
+  row.onclick = () => { if(consent.checked) startCheckout(pkgKey); };
   host.appendChild(row);
+  consent.onchange = () => {
+    const on = consent.checked;
+    row.disabled = !on; row.style.opacity = on ? '1' : '.5'; row.style.cursor = on ? 'pointer' : 'not-allowed';
+  };
   ov.querySelector('#paywallClose').onclick = () => ov.remove();
 }
 async function startCheckout(pkgKey){
