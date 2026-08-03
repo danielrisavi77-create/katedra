@@ -111,7 +111,19 @@ Active Lekta issues and `lektaFixedTotal` continue through Katedra's existing ma
 
 The richer `lektaIdentityIndex` and `lektaResolutionHistory` introduced for reconciliation are currently local manifest metadata. Cross-device persistence of the full resolution history is intentionally deferred; do not claim that capability yet.
 
-## 10. Deployment order
+## 10. Validation checkpoint
+
+Lekta stable-identity code passed all repository gates on its final code checkpoint:
+
+- Foundation check;
+- standard TypeScript + Vitest + Vite build check;
+- full conformance matrix;
+- DOCX smoke;
+- security audit.
+
+Katedra reconciliation code passed TypeScript, ESLint and Next.js production build. The latest Katedra commit after that validation only updates this architecture document.
+
+## 11. Deployment order
 
 Before these paired branches can be promoted:
 
@@ -124,7 +136,7 @@ Before these paired branches can be promoted:
 7. test resolution case: finding disappears and is recorded as `VERIFIED_FIXED`;
 8. only then promote the paired PRs together.
 
-## 11. Still intentionally deferred
+## 12. Still intentionally deferred
 
 Do not yet:
 
