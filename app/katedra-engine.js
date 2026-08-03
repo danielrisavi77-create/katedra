@@ -36,7 +36,7 @@ const PHASES = [
   ]},
 
 { id:'f1', grp:'pre', ico:'📚', tit:'FAZA 1 — Građa i izvori',
-  sub:'Sve što Claude treba vidjeti, skupi PRIJE prvog prompta',
+  sub:'Sve što Katedra treba vidjeti, skupi PRIJE pisanja',
   intro:'Pravilo iz audita: <b>izvor istine &gt; dojam</b>. Svaka brojka i tvrdnja u radu mora postojati u građi — zato građa ide prva.',
   items:[
    {t:'SVA izvorna građa na jednom mjestu', crit:1, types:'zd',
@@ -52,7 +52,7 @@ const PHASES = [
    {t:'Skenirani / loši PDF-ovi provjereni', types:'zd',
     d:'Ako PDF ima oštećen tekstualni sloj (sken, loš font), brojke se moraju potvrđivati vizualno po stranicama — označi takve datoteke u promptu.'},
    {t:'Istraživačko pitanje formulirano u JEDNOJ rečenici', crit:1, types:'szd',
-    d:'Zaključak rada mora biti <b>direktan odgovor</b> na ovo pitanje. Ako ga ne znaš napisati — u redu, generator ima opciju da Claude prvo predloži 3 varijante.'},
+    d:'Zaključak rada mora biti <b>direktan odgovor</b> na ovo pitanje. Ako ga ne znaš napisati — u redu, generator ima opciju da prvo dobiješ 3 varijante.'},
    {t:'Radni outline poglavlja skiciran', types:'szd',
     d:'2–4 poglavlja razrade (seminarski); diplomski + metodološki odjeljak. Idealno: pošalji mentoru na kratku potvrdu <b>prije pisanja</b> — 5 minuta njegova čitanja štedi tjedne tvoga prepravljanja.'}
   ]},
@@ -64,9 +64,9 @@ const PHASES = [
    {t:'Novi zaseban chat / projekt otvoren samo za ovaj rad', types:'szd',
     d:'Bez miješanja tema — kontekst rada mora ostati čist kroz sve iteracije.'},
    {t:'Sva građa i literatura priložene u chat', crit:1, types:'szd',
-    d:'PDF-ovi, DOCX, upute fakulteta. Claude ne smije pisati „napamet" — piše iz priložene građe.'},
+    d:'PDF-ovi, DOCX, upute fakulteta. Ne smije se pisati „napamet" — piše se iz priložene građe.'},
    {t:'Prompt složen kroz Autopilot ili Generator — bez rupa', crit:1, types:'szd', jump:1,
-    d:'<b>Autopilot</b>: zadaješ samo temu, Claude vodi sve (defaulti ugrađeni). <b>Generator</b>: puna kontrola nad svakim parametrom. U oba slučaja — nijedno polje se ne zaboravlja.'},
+    d:'<b>Autopilot</b>: zadaješ samo temu, Katedra vodi sve (defaulti ugrađeni). <b>Generator</b>: puna kontrola nad svakim parametrom. U oba slučaja — nijedno polje se ne zaboravlja.'},
    {t:'U promptu: prva isporuka = PLAN I PROGRAM, ne tekst rada', crit:1, types:'szd',
     d:'<b>Nikad „napiši cijeli rad odjednom”.</b> Prvi korak svakog rada je Plan i program (sekcije 0–11: formalna pravila fakulteta, teza, budžet stranica, program pisanja, verificirana literatura, hodogram…). Ugrađeno u Autopilot i Generator prompte — v. Pravila → Plan i program.'},
    {t:'Anti-halucinacija pravilo u promptu', crit:1, types:'szd',
@@ -87,7 +87,7 @@ const PHASES = [
     d:'Provjeri u svakom paragrafu: tematska rečenica → objašnjenje → primjer → referenca → mini zaključak/prijelaz.'},
    {t:'Svaki citat uz tvrdnju, s TOČNOM stranicom', crit:1, types:'szd',
     d:'(Lindblom, 1959, <b>str. 81</b>) — ne samo (Lindblom, 1959). Citat ide odmah uz tvrdnju, ne na kraj paragrafa. Bez „ibid." u tekstu.'},
-   {t:'Svaki izvor koji Claude navede PROVJEREN da postoji', crit:1, types:'szd',
+   {t:'Svaki navedeni izvor PROVJEREN da postoji', crit:1, types:'szd',
     d:'Google Scholar / HRČAK / DOI provjera — <b>AI zna halucinirati izvore</b>. 2 minute provjere po izvoru &lt; pad rada zbog izmišljene reference.'},
    {t:'Teorija povezana s analizom', types:'szd',
     d:'Nijedno poglavlje ne smije samo prepričavati teoriju — uvijek: implikacije, ograničenja, kritički osvrt, veza s tvojim slučajem.'},
@@ -177,16 +177,23 @@ function renderPhases(){
   const pre = $('phasesPre'), post = $('phasesPost');
   pre.innerHTML = '<div class="sec-lbl"><span>Prije pisanja</span><b class="req">OBAVEZNO 100 %</b><i></i></div>';
   post.innerHTML = '<div class="sec-lbl"><span>Pisanje → predaja</span><b class="after">NAKON ZELENOG SVJETLA</b><i></i></div>';
+  // F6: prva neoznačena stavka u TRENUTNOJ fazi (linePos()) dobiva suptilan
+  // pulse — jedina vizualno naglašena stavka, ne cijeli popis.
+  const curPh = PHASES[linePos()];
+  const curPhaseId = curPh ? curPh.id : null;
   PHASES.forEach(ph => {
     const items = visibleItems(ph);
     const div = document.createElement('div');
     div.className = 'phase' + (openPhases.has(ph.id) ? ' open' : '');
     div.id = 'ph-' + ph.id;
     let ih = '';
+    let nextMarked = false;
     items.forEach((it,idx) => {
       const key = ph.id + ':' + it.t;
       const ck = state.checks[key] ? ' ck' : '';
-      ih += `<div class="item${ck}" data-key="${escA(key)}">
+      const isNext = !ck && !nextMarked && ph.id === curPhaseId;
+      if(isNext) nextMarked = true;
+      ih += `<div class="item${ck}${isNext ? ' next' : ''}" data-key="${escA(key)}">
         <div class="cb" onclick="toggleCheck(this)"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7.5 5.5 11 12 3.5" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="it-main">
           <span class="it-txt" onclick="toggleCheck(this)">${it.t}${it.crit?'<span class="badges"><span class="bdg crit">kritično</span></span>':''}</span><br>
@@ -243,7 +250,12 @@ function toggleCheck(el){
 
 function refreshProgress(){
   let totAll = 0, ckAll = 0, totPre = 0, ckPre = 0;
-  PHASES.forEach(ph => {
+  // Mentorov stol: faza na kojoj si je povučena prema naprijed, dovršene su
+  // odgurnute i blago nakrivljene, buduće prigušene. Klase se postavljaju ovdje
+  // (a ne u renderPhases) jer se stanje mijenja na svaku kvačicu, bez ponovnog
+  // crtanja cijelog popisa.
+  const curIdx = linePos();
+  PHASES.forEach((ph, idx) => {
     const items = visibleItems(ph);
     let ck = 0;
     items.forEach(it => { if(state.checks[ph.id+':'+it.t]) ck++; });
@@ -253,7 +265,14 @@ function refreshProgress(){
     const full = ck===items.length && items.length>0;
     if(cnt){ cnt.textContent = ck + '/' + items.length; cnt.classList.toggle('full', full); }
     if(bar){ bar.style.width = (items.length ? ck/items.length*100 : 0) + '%'; }
-    if(card){ card.classList.toggle('done', full); }
+    if(card){
+      card.classList.toggle('done', full);
+      card.classList.toggle('now', idx === curIdx && !full);
+      card.classList.toggle('ahead', idx > curIdx && !full);
+      // Isprekidani krug je mjesto na koje žig tek treba sletjeti. Dok u fazi
+      // nema nijedne kvačice djeluje kao artefakt, pa se pojavi tek s prvom.
+      card.classList.toggle('started', ck > 0);
+    }
     const stp = $('stp-'+ph.id); if(stp){ stp.classList.toggle('on', full); }
   });
   /* dnevnik: zabilježi svaku novo-dovršenu fazu (jednom) */
@@ -274,9 +293,18 @@ function refreshProgress(){
   if(typeof renderLine === 'function') renderLine();
   if(typeof renderIndeksHead === 'function') renderIndeksHead();
   if(typeof updatePaper === 'function') updatePaper();
-  /* banner — spreman za pisanje? */
-  const b = $('banner'), go = $('bGo');
+  if(typeof renderBoardHi === 'function') renderBoardHi();
+  /* Semafor na tabovima: nedostupno je vidljivo, ali zaključano. Uvjet je
+     pravilo same aplikacije — faze 0–2 na 100 % prije prvog prompta. */
   const preP = totPre ? ckPre/totPre : 0;
+  LOCKED_TABS.forEach(v => {
+    const t = document.querySelector('#tabs button[data-view="' + v + '"]');
+    if(t) t.classList.toggle('locked', preP < 1);
+  });
+  /* banner — spreman za pisanje? (skriven CSS-om, v. .katedra-page #banner;
+     tekst se i dalje računa jer refreshProgress nema guardove i pisanje u
+     njega je najjeftiniji način da se ne dira 19 redaka na svaku kvačicu) */
+  const b = $('banner'), go = $('bGo');
   b.className = 'banner';
   if(preP >= 1){
     b.classList.add('yes'); $('bIco').textContent = '🟢';
@@ -298,11 +326,100 @@ function refreshProgress(){
 
 function escA(s){ return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 /* ---------- TABS ---------- */
+function smoothly(){ return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'; }
+// #nextBar se lijepi ispod #tabs. Fiksni top u CSS-u bio je 52px, a traka
+// tabova je visoka 63 — pa je traka pri skrolanju klizila 11px ispod njih.
+// Mjeri se jer se tabovi na uskom ekranu prelome u dva reda.
+function syncStickyOffsets(){
+  const t = $('tabs'), n = $('nextBar');
+  if(!t || !n) return;
+  const h = Math.round(t.getBoundingClientRect().height);
+  if(h > 0) n.style.top = h + 'px';
+}
+// Dovedi pogled na fazu na kojoj si. Ako je već pred tobom, ne miči stranicu —
+// skrol koji se dogodi bez potrebe djeluje kao da je nešto puklo.
+function scrollToNow(){
+  const el = document.querySelector('#view-check .phase.now');
+  if(!el) return false;
+  const r = el.getBoundingClientRect(), vh = window.innerHeight || 0;
+  // Otvorena faza zna biti viša od prozora, pa "cijela stane" nije dobar uvjet —
+  // dovoljno je da ti je pred očima: počinje u gornjoj polovici ili je seže preko nje.
+  if(r.top >= 0 ? r.top <= vh * 0.5 : r.bottom >= vh * 0.5) return true;
+  el.scrollIntoView({ behavior: smoothly(), block: 'center' });
+  return true;
+}
+const TABS = ['chat','check','help','cheat','auto','gen'];
+
+/* ---------- LINEARNI TOK EKRANA ----------
+   Ekran je vanjski okvir, tab je unutarnja ploha radne ploče. setTab() i dalje
+   jedini dira .view/.on; setScreen() dira samo atribute na #katedra-root. */
+// Tabovi koje semafor zaključava. 'cheat' namjerno izostaje — to su pravila
+// koja je korisnik već vidio pri odabiru profila, pa bi zaključavanje unatrag
+// djelovalo kao kvar, a ne kao vođenje.
+const LOCKED_TABS = ['auto','gen'];
+const SCREENS = ['tip','gdje','pitanja','fakultet','ploca','chat','povratak'];
+const SCREEN_CHROME = { tip:'funnel', gdje:'funnel', pitanja:'funnel',
+                        fakultet:'fak', ploca:'board', chat:'board', povratak:'funnel' };
+let curScreen = 'ploca';
+// Ekrani se dodaju po fazama; spremljeni rp_screen ne smije pokazivati na
+// ekran koji u ovom buildu još ne postoji.
+function screenAvailable(id){
+  if(id === 'ploca' || id === 'chat') return true;
+  if(id === 'fakultet') return !!$('fakCard');
+  return !!document.getElementById('scr-' + id);
+}
+function applyScreen(id){
+  curScreen = id;
+  __root.dataset.screen = id;
+  __root.dataset.chrome = SCREEN_CHROME[id];
+  lsSet('rp_screen', id);
+  const seen = lsGet('rp_screen_max');
+  if(SCREENS.indexOf(id) > SCREENS.indexOf(seen)) lsSet('rp_screen_max', id);
+  if(typeof renderBoardHi === 'function') renderBoardHi();
+}
+// Gdje docekati korisnika koji se vraca. Kad su pripremne faze 0–2 gotove,
+// checklist je odrađen i sljedeći je potez pisanje — Indeks bi tada bio popis
+// koji si već ispunio. Izričit izbor nekog drugog taba se poštuje.
+function landingScreen(){
+  const t = lsGet('rp_tab');
+  if(t && t !== 'check') return 'ploca';
+  try{ if(nextStepText().ready) return 'chat'; }catch(e){}
+  return 'ploca';
+}
+function setScreen(id, tab){
+  if(!SCREENS.includes(id) || !screenAvailable(id)) return;
+  applyScreen(id);                       // prvo atributi, pa tek onda setTab —
+                                         // scrollToNow() na skrivenom #view-check
+                                         // dobiva same nule i lažno javi "vidljivo"
+  if(id === 'chat') setTab('chat');
+  else if(id === 'fakultet') setTab('cheat');
+  else if(id === 'ploca') setTab(tab || lsGet('rp_tab') || 'check');
+  // .linija je do maloprije mogla biti skrivena; renderLine() mjeri offsetWidth
+  // pa bi bez ovoga tračnica ostala široka 0 i tramvaj bi ispao izvan okvira.
+  if(typeof renderLine === 'function') renderLine();
+  syncStickyOffsets();   // traka tabova mijenja visinu kad se ekran promijeni
+}
 function setTab(v){
+  // Bez ovoga bi view dobio .on, a chrome ga skrio — tiha prazna stranica.
+  // Guard stoji OVDJE, a ne na pozivnim mjestima, jer setTab zovu i inline
+  // onclick atributi koje generira renderPhases().
+  const want = v === 'chat' ? 'chat'
+             : (v === 'cheat' && curScreen === 'fakultet') ? 'fakultet'
+             : 'ploca';
+  if(curScreen !== want){ setScreen(want, v); return; }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id==='view-'+v));
-  if(v === 'check' && typeof renderIndeksHead === 'function') renderIndeksHead();
-  window.scrollTo({top:0, behavior:'smooth'});
+  // Pamti se samo izbor NAPRAVLJEN na ploci. Ekran 4 interno zove
+  // setTab('cheat'); da se i to pamtilo, nakon lijevka bi te docekao
+  // cheatsheet umjesto tvog rada.
+  if(curScreen === 'ploca') lsSet('rp_tab', v);
+  if(v === 'check'){
+    if(typeof renderIndeksHead === 'function') renderIndeksHead();
+    // Ulazak u Indeks vodi točno na mjesto gdje treba djelovati. Dok napretka
+    // nema, vrh (zaglavlje + vozni red) je prava orijentacija, pa ostaje vrh.
+    if(hasRealProgress() && scrollToNow()) return;
+  }
+  window.scrollTo({top:0, behavior: smoothly()});
 }
 function goGen(){ setTab('gen'); }
 function goAuto(){ setTab('auto'); }
@@ -321,6 +438,11 @@ function useSkills(){ const e = $('u_skills'); return !!(e && e.checked); }
 
 /* ---------- KONFIG (promijeni pri hostanju) ---------- */
 const RP_VER = '10.3';
+// Ime dobavljaca se u sucelju NE spominje. Ostaje samo ovdje, u izjavi o
+// koristenju AI alata koju student predaje fakultetu — ondje je nenavodenje
+// alata neposteno prema mentoru, a i fakulteti ga sve cesce izricito traze.
+// Promjena dobavljaca = izmjena ove jedne linije.
+const AI_PROVIDER = 'Claude (Anthropic)';
 const RP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://katedra.hr'; // VIZIJA.md: domena je katedra.hr
 const EMAIL_URL = '';                            /* ← Tally/Google Form URL; prazno = mailto fallback */
 const RP_TAG = '\n\n—\nGenerirano s Katedra · ' + RP_URL.replace('https://','');
@@ -363,12 +485,81 @@ function exportDnevnik(){
   md += 'Izvezeno: ' + fmt(Date.now()) + ' (Katedra)\n\n';
   md += '## Kronologija (automatski bilježeno u alatu)\n\n| Datum i vrijeme | Događaj |\n|---|---|\n';
   md += (l.length ? l.map(e => '| ' + fmt(e.t) + ' | ' + String(e.txt).replace(/\|/g,'/') + ' |').join('\n') : '| — | (još nema zabilježenih događaja) |');
-  md += '\n\n## Napomena\n\nPotpuni dokaz procesa izrade čine i: transkripti razgovora s AI alatom (izvoz iz Claude chata), sačuvane verzije dokumenta i komunikacija s mentorom. U Claudeu možeš zatražiti i detaljan dnevnik iz samog razgovora (Katedra → 🧩 Brzi prompti → Dnevnik procesa).\n';
+  md += '\n\n## Napomena\n\nPotpuni dokaz procesa izrade čine i: transkripti razgovora (izvoz dnevnika iz Katedre), sačuvane verzije dokumenta i komunikacija s mentorom.\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'}));
   a.download = 'dnevnik-procesa.md';
   a.click(); URL.revokeObjectURL(a.href);
   toast('🗂️ Dnevnik procesa spremljen (.md)');
+}
+
+/* ---------- KOŽE (izgled aplikacije) ---------- */
+// Sve boje idu kroz CSS tokene (v. katedra-scoped.css → blok KOŽE), pa je koža
+// samo data-skin na #katedra-root. Zadana ("kreda") je već u page.jsx da nema
+// bljeska pri učitavanju — ovdje se primjenjuje samo korisnikov spremljeni izbor.
+// Izbor je namjerno lokalan: /api/state validira {tip, checks, gen} i dodavanje
+// polja bi mu razbilo PUT. Prijenos na server ide uz sljedeću migraciju stanja.
+const SKINS = [
+  ['kreda',       'Ploča i kreda',   'predavaonica, kreda na tamnoj ploči', '#1e3a2f', '#e8c468'],
+  ['papir',       'Papir i tinta',   'klasični izgled Katedre',             '#ece5d3', '#2c5fa8'],
+  ['filatelija',  'Filatelija',      'poštanski žigovi za dovršene faze',   '#e7dcbf', '#a13327'],
+  ['katalog',     'Katalog kartica', 'knjižnični katalog, smeđa tinta',     '#f9f7ee', '#5b4a2f'],
+  ['ploca',       'Oglasna ploča',   'pluto ploča s pribadačama',           '#a97a44', '#c73b3b'],
+  ['razglednica', 'Razglednica',     'putopisni ton, plava tinta',          '#eee5d2', '#3d6b8a'],
+  ['karta',       'Karta potrage',   'kartografski nacrt puta',             '#e6dbbc', '#8a3b2f'],
+  ['novine',      'Novine',          'naslovnica, oštri bridovi',           '#f2f0e8', '#7a1f1f']
+];
+const SKIN_DEFAULT = 'kreda';
+function getSkin(){
+  const s = lsGet('rp_skin');
+  return SKINS.some(k => k[0] === s) ? s : SKIN_DEFAULT;
+}
+function applySkin(id){
+  // "papir" je bazna paleta iz CSS-a — nema vlastiti blok, pa se atribut skida
+  if(id === 'papir') __root.removeAttribute('data-skin');
+  else __root.setAttribute('data-skin', id);
+  __root.querySelectorAll('.skin-item').forEach(el => el.classList.toggle('on', el.dataset.skin === id));
+}
+function setSkin(id){
+  lsSet('rp_skin', id);
+  applySkin(id);
+  const s = SKINS.find(k => k[0] === id);
+  toast('🎨 Izgled: ' + (s ? s[1] : id));
+}
+function buildSkinPicker(){
+  const header = __root.querySelector('header');
+  if(!header || header.querySelector('.skin-wrap')) return;
+  const cur = getSkin();
+  const wrap = document.createElement('div');
+  wrap.className = 'skin-wrap';
+  wrap.innerHTML =
+    '<button class="skin-open" type="button" aria-expanded="false" aria-haspopup="true">' +
+      '<span class="sw"></span><span class="lbl">Izgled</span></button>' +
+    '<div class="skin-menu" role="menu"><h5>Izgled aplikacije</h5>' +
+      SKINS.map(([id, nm, desc, c1, c2]) =>
+        '<button type="button" role="menuitem" class="skin-item' + (id === cur ? ' on' : '') + '" data-skin="' + id + '">' +
+          '<span class="chip"><i style="background:' + c1 + '"></i><i style="background:' + c2 + '"></i></span>' +
+          '<span class="nm">' + nm + '<small>' + desc + '</small></span>' +
+          '<span class="tick">✓</span>' +
+        '</button>').join('') +
+      '<div class="skin-note">Mijenja samo izgled — rad, plan i pravila ostaju isti.</div>' +
+    '</div>';
+  const auth = header.querySelector('#katedraAuth');
+  if(auth) header.insertBefore(wrap, auth); else header.appendChild(wrap);
+
+  const btn = wrap.querySelector('.skin-open');
+  const menu = wrap.querySelector('.skin-menu');
+  const close = () => { menu.classList.remove('on'); btn.setAttribute('aria-expanded', 'false'); };
+  btn.onclick = e => {
+    e.stopPropagation();
+    const open = menu.classList.toggle('on');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  wrap.querySelectorAll('.skin-item').forEach(it => {
+    it.onclick = e => { e.stopPropagation(); setSkin(it.dataset.skin); close(); };
+  });
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') close(); });
 }
 
 /* ---------- LEKTA RULES — source of truth: katedra-pack (dohvaća se s /katedra-pack.json) ---------- */
@@ -411,6 +602,7 @@ function ensureManifest(){
   if(!m) m = { v:1, projectId: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
                createdAt: Date.now(), lektaIssues: [], lektaScore: null, lektaCheckedAt: '', lektaFixedTotal: 0 };
   m.unitId = lsGet('rp_unit') || m.unitId || '';
+  m.profileId = lsGet('rp_profile') || m.profileId || '';
   m.workType = state.tip;
   const t = val('a_tema') || val('f_tema'); if(t) m.topic = t;
   const r = val('dl_rok'); if(r) m.deadline = r;
@@ -428,7 +620,7 @@ function gatherServerState(){
     lektaIssues:[], lektaScore:null, lektaCheckedAt:'', lektaFixedTotal:0 };
   return {
     guestProjectId: m.projectId,
-    unitId: m.unitId || lsGet('rp_unit') || '', profileId: m.profileId || '', workType: state.tip,
+    unitId: m.unitId || lsGet('rp_unit') || '', profileId: m.profileId || lsGet('rp_profile') || '', workType: state.tip,
     topic: m.topic || '', deadline: m.deadline || '', rulesetVersion: m.rulesetVersion || '',
     lektaScore: m.lektaScore, lektaCheckedAt: m.lektaCheckedAt || '',
     lektaIssues: m.lektaIssues || [], lektaFixedTotal: m.lektaFixedTotal || 0,
@@ -461,6 +653,7 @@ function applyServerState(d){
   if(d.log) lsSet('rp_log', JSON.stringify(d.log));
   if(d.logf) lsSet('rp_logf', JSON.stringify(d.logf));
   if(d.unitId){ lsSet('rp_unit', d.unitId); const lpSel = $('lpUnit'); if(lpSel) lpSel.value = d.unitId; }
+  if(d.profileId){ lsSet('rp_profile', d.profileId); lpLevel = null; }   // razina se izvede iz profila
   const m = {
     v:1, projectId: d.guestProjectId || ('k'+Date.now().toString(36)),
     createdAt: Date.now(),
@@ -488,16 +681,73 @@ async function reconcileServerState(){
   const localHasWork = Object.keys(state.checks||{}).some(k => state.checks[k]) || !!val('a_tema') || !!val('f_tema');
   if(localHasWork) return;
   applyServerState(data);
-  document.querySelectorAll('#tipSeg button').forEach(b => b.classList.toggle('on', b.dataset.tip === state.tip));
+  document.querySelectorAll('[data-tip]').forEach(b => b.classList.toggle('on', b.dataset.tip === state.tip));
   applyTipPlaceholders(); renderPhases(); applyMode(); buildAuto(); renderDeadlines(); renderWC();
-  renderLine(); renderIndeksHead(); updatePaper(); lpRender();
+  renderLine(); renderIndeksHead(); updatePaper(); lpRenderCascade();
 }
 
 function lpUnitObj(){ if(!LEKTA_PACK) return null; const s = $('lpUnit'); return LEKTA_PACK.units.find(x => x.id === (s ? s.value : '')) || null; }
+
+/* Razine studija — profil se svrstava po prvom workType-u koji se poklopi.
+   'diplomski' je jedan zalutali zapis u packu, 'project'/'article' idu uz seminar. */
+const LP_LEVELS = [
+  ['final',      'Prijediplomski',      ['final']],
+  ['graduate',   'Diplomski',           ['graduate', 'diplomski']],
+  ['specialist', 'Specijalistički',     ['specialist']],
+  ['doctoral',   'Doktorski',           ['doctoral']],
+  ['seminar',    'Seminarski i ostalo', ['seminar', 'project', 'article']]
+];
+function lpLevelOf(p){
+  const wt = p.workTypes || [];
+  const hit = LP_LEVELS.find(l => l[2].some(w => wt.includes(w)));
+  return hit ? hit[0] : 'seminar';
+}
+function lpUnitProfiles(unitId){
+  const u = LEKTA_PACK && LEKTA_PACK.units.find(x => x.id === unitId);
+  return ((u && u.profiles) || []).map(i => LP_BY_ID[i]).filter(Boolean);
+}
+
+/* Naziv smjera se izvodi iz p.label jer pack nema zasebno polje. Dva formata:
+   "FPZG · Politologija · diplomski rad" i "Filozofski fakultet (Odsjek za
+   psihologiju), diplomski rad". Skida se sastavnica s početka i naziv tipa rada
+   s kraja; ako ne ostane ništa, fakultet nema podjelu po smjeru. Provjereno na
+   svih 395 profila iz packa. */
+const LP_DEACC = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().trim();
+const LP_TYPE_RE = /^((zavr[sš]ni|diplomski|doktorski|specijalisti[cč]ki|stru[cč]ni|sveu[cč]ili[sš]ni|poslijediplomski)\s+)*(zavr[sš]ni|diplomski|doktorski|specijalisti[cč]ki)\s+(rad|thesis)$|^disertacija$|^master'?s thesis$/i;
+function lpSmjerName(u, p){
+  let s = String(p.label || '');
+  if(s.includes('·')){
+    const parts = s.split('·').map(x => x.trim()).filter(Boolean);
+    parts.shift();                                    // prvi dio je sastavnica
+    s = parts.filter(x => !LP_TYPE_RE.test(LP_DEACC(x).replace(/\s+/g, ' '))).join(' · ');
+  } else {
+    const ci = s.lastIndexOf(',');
+    let head = ci > 0 ? s.slice(0, ci).trim() : s;
+    const tail = ci > 0 ? s.slice(ci + 1).trim() : '';
+    for(const n of [u.name, u.inst].filter(Boolean)){
+      if(LP_DEACC(head).startsWith(LP_DEACC(n))){ head = head.slice(n.length).trim(); break; }
+    }
+    head = head.replace(/^[([\-–—,\s]+/, '').replace(/[)\]\s]+$/, '').trim();
+    const mv = tail.match(/\(([^)]+)\)\s*$/);
+    s = [head, mv ? mv[1].trim() : ''].filter(Boolean).join(' · ');
+  }
+  return s.replace(/\s{2,}/g, ' ').trim() || 'svi smjerovi';
+}
+
+function lpChosen(){ const id = lsGet('rp_profile'); return (id && LP_BY_ID[id]) || null; }
+function lpSetChosen(id){
+  lsSet('rp_profile', id || '');
+  const m = getManifest();
+  if(m){ m.profileId = id || ''; saveManifest(m); }
+}
 function lpProfileFor(unitId){
   if(!LEKTA_PACK) return null;
-  const u = LEKTA_PACK.units.find(x => x.id === unitId);
-  const profs = ((u && u.profiles) || []).map(i => LP_BY_ID[i]).filter(Boolean);
+  // Izričit izbor smjera ima prednost. Bez njega se pogađalo po tipu rada, pa je
+  // fakultet s više smjerova (FPZG: Politologija, Novinarstvo, Nac. sigurnost)
+  // dobivao pravila prvog profila u nizu — moguće krivog.
+  const chosen = lpChosen();
+  if(chosen && chosen.unitId === unitId) return chosen;
+  const profs = lpUnitProfiles(unitId);
   return profs.find(p => (p.workTypes || []).includes(LP_WT[state.tip])) || profs[0] || null;
 }
 async function lpInit(){
@@ -510,22 +760,115 @@ async function lpInit(){
   }
   pack.units.slice().sort((a,b) => a.name.localeCompare(b.name, 'hr')).forEach(u => {
     const o = document.createElement('option'); o.value = u.id;
-    // VIZIJA.md: šira lista (sve fakultete), ali jasno označeno verified vs
-    // partial — ne skrivamo 120 partial jedinica, ne pretvaramo se da su verified.
-    const hasVerified = (u.profiles || []).some(pid => LP_BY_ID[pid] && LP_BY_ID[pid].status === 'verified');
-    o.textContent = (hasVerified ? '✅ ' : '🟡 ') + u.name + (u.inst ? ' — ' + u.inst : '');
+    o.textContent = u.name + (u.inst ? ' — ' + u.inst : '');
     sel.appendChild(o);
   });
   sel.value = lsGet('rp_unit') || 'fpzg';
   if(!sel.value) sel.selectedIndex = 0;
-  sel.onchange = () => { lsSet('rp_unit', sel.value); lpRender(); };
+  sel.onchange = () => { lsSet('rp_unit', sel.value); lpRenderCascade(); };
   const metaEl = $('lpMetaCount');
-  if(metaEl) metaEl.textContent = pack.meta.counts.profiles + ' profila / ' + pack.meta.counts.units + ' fakulteta · generirano ' + pack.meta.generatedAt;
+  const metaTxt = pack.meta.counts.profiles + ' profila / ' + pack.meta.counts.units + ' fakulteta · generirano ' + pack.meta.generatedAt;
+  if(metaEl) metaEl.textContent = metaTxt;
+  // isti podatak i u zaglavlju ekrana 4, gdje je uvodni odlomak skriven
+  const fakMetaEl = $('fakMeta'); if(fakMetaEl) fakMetaEl.textContent = 'Lekta baza: ' + metaTxt;
+  const search = $('lpSearch');
+  if(search) search.oninput = () => lpRenderUnits(search.value);
+  lpRenderCascade();
+}
+
+/* ---------- KASKADA: fakultet → studij → smjer ---------- */
+let lpLevel = null;
+function lpRow(txt, sub, status, sel, onPick){
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'lp-row' + (sel ? ' on' : '');
+  let h = '<span class="lp-nm">' + escA(txt) + (sub ? '<small>' + escA(sub) + '</small>' : '') + '</span>';
+  if(status) h += '<span class="lp-st ' + (status === 'verified' ? 'v' : 'p') + '">'
+                + (status === 'verified' ? 'potvrđen' : 'tehnički') + '</span>';
+  b.innerHTML = h; b.onclick = onPick;
+  return b;
+}
+function lpRenderUnits(filter){
+  const host = $('lpUnits'); if(!host || !LEKTA_PACK) return;
+  const q = LP_DEACC(filter || '');
+  const cur = $('lpUnit') ? $('lpUnit').value : '';
+  const units = LEKTA_PACK.units.slice().sort((a,b) => a.name.localeCompare(b.name, 'hr'))
+    .filter(u => !q || LP_DEACC(u.name).includes(q) || LP_DEACC(u.inst).includes(q) || LP_DEACC(u.id).includes(q));
+  host.innerHTML = '';
+  if(!units.length){ host.innerHTML = '<p class="lp-empty">Nema fakulteta za „' + escA(filter) + '”.</p>'; return; }
+  units.forEach(u => {
+    // VIZIJA.md: nudimo sve sastavnice, ali status je vidljiv na svakom retku —
+    // ne skrivamo profile koji imaju samo tehničke provjere.
+    const verified = (u.profiles || []).some(pid => LP_BY_ID[pid] && LP_BY_ID[pid].status === 'verified');
+    host.appendChild(lpRow(u.name, u.inst || '', verified ? 'verified' : 'partial', u.id === cur, () => {
+      const sel = $('lpUnit'); if(sel) sel.value = u.id;
+      lsSet('rp_unit', u.id);
+      lpSetChosen('');            // smjer s prethodnog fakulteta više ne vrijedi
+      lpLevel = null;
+      lpRenderCascade();
+      if(getManifest()) ensureManifest();
+    }));
+  });
+  const selRow = host.querySelector('.lp-row.on');
+  if(selRow) selRow.scrollIntoView({ block: 'nearest' });
+}
+function lpRenderLevels(){
+  const host = $('lpLevels'); if(!host) return;
+  const u = lpUnitObj();
+  host.innerHTML = '';
+  if(!u){ host.innerHTML = '<p class="lp-empty">Prvo odaberi fakultet.</p>'; return; }
+  const profs = lpUnitProfiles(u.id);
+  const have = LP_LEVELS.filter(l => profs.some(p => lpLevelOf(p) === l[0]));
+  if(!have.length){ host.innerHTML = '<p class="lp-empty">Za ovaj fakultet pack nema profile.</p>'; return; }
+  // Predodabir: razina koja odgovara odabranom tipu rada, inače prva dostupna.
+  if(!have.some(l => l[0] === lpLevel)){
+    const wt = LP_WT[state.tip];
+    const byTip = have.find(l => l[2].includes(wt));
+    lpLevel = (byTip || have[0])[0];
+  }
+  have.forEach(l => {
+    const n = profs.filter(p => lpLevelOf(p) === l[0]).length;
+    host.appendChild(lpRow(l[1], n === 1 ? '1 profil' : n + ' profila', '', l[0] === lpLevel, () => {
+      lpLevel = l[0]; lpSetChosen(''); lpRenderCascade();
+    }));
+  });
+}
+function lpRenderProfiles(){
+  const host = $('lpProfs'); if(!host) return;
+  const u = lpUnitObj();
+  host.innerHTML = '';
+  if(!u || !lpLevel){ host.innerHTML = '<p class="lp-empty">Zatim razinu studija.</p>'; return; }
+  const profs = lpUnitProfiles(u.id).filter(p => lpLevelOf(p) === lpLevel);
+  if(!profs.length){ host.innerHTML = '<p class="lp-empty">Nema profila za ovu razinu.</p>'; return; }
+  // Jedini profil znači da fakultet nema podjelu — odaberi ga sam, bez suvišnog klika.
+  if(profs.length === 1 && !lpChosen()) lpSetChosen(profs[0].id);
+  const cur = lpChosen();
+  profs.forEach(p => {
+    host.appendChild(lpRow(lpSmjerName(u, p), '', p.status, !!cur && cur.id === p.id, () => {
+      lpSetChosen(p.id); lpRenderCascade();
+      if(getManifest()) ensureManifest();
+    }));
+  });
+}
+function lpRenderCascade(){
+  if(!$('lpUnits')) { lpRender(); return; }
+  lpRenderUnits($('lpSearch') ? $('lpSearch').value : '');
+  lpRenderLevels();
+  lpRenderProfiles();
+  ['lpColU','lpColL','lpColP'].forEach((id, i) => {
+    const el = $(id); if(!el) return;
+    el.classList.toggle('ready', i === 0 ? !!lpUnitObj() : i === 1 ? !!lpLevel : !!lpChosen());
+  });
   lpRender();
 }
 function lpRender(){
   const box = $('lpCard'); if(!box || !$('lpUnit')) return;
-  const u = lpUnitObj(); if(!u){ box.innerHTML = ''; return; }
+  // Prazno stanje mora objasniti samo sebe — prije je kartica ostajala nijemo
+  // prazna (npr. ako spremljeni fakultet više ne postoji u novom packu).
+  const u = lpUnitObj();
+  if(!u){
+    box.innerHTML = '<div class="empty-note">Odaberi fakultet u prvom stupcu — ovdje će stajati pravila tvog studija: opseg, font, prored i citatni stil.</div>';
+    return;
+  }
   const p = lpProfileFor(u.id);
   const lekta = '<a class="att-btn" style="text-decoration:none" href="'+LEKTA_URL+'/?unit='+encodeURIComponent(u.id)+'" target="_blank" rel="noopener">✅ Provjeri u Lekti ↗</a>';
   if(!p){
@@ -542,7 +885,8 @@ function lpRender(){
   if(p.wordMin && p.wordMax) fm.push(p.wordMin.toLocaleString('hr-HR')+'–'+p.wordMax.toLocaleString('hr-HR')+' riječi');
   if(p.pageMin && p.pageMax) fm.push(p.pageMin+'–'+p.pageMax+' str.');
   if(p.minReferences) fm.push('min. '+p.minReferences+' izvora');
-  if(p.citation) fm.push('citiranje: '+p.citation);
+  // LP_CIT ima čitljiv naziv; bez njega bi ovdje pisao sirovi ključ ("fpzg").
+  if(p.citation) fm.push('citiranje: ' + (LP_CIT[p.citation] || p.citation).split(/\s*[—(]/)[0].trim());
   if(fm.length) h += '<div style="font-size:12px;color:var(--mut2);margin-top:6px">'+escA(fm.join(' · '))+'</div>';
   if(p.manualChecks) h += '<div style="font-size:11.5px;color:var(--mut);margin-top:7px"><b style="color:var(--ink)">Ručne provjere:</b> '+escA(p.manualChecks.slice(0,3).join(' '))+'</div>';
   if(p.sources) h += '<div style="font-size:11px;margin-top:7px">'+p.sources.slice(0,3).map(s => '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(s.t)+'</a>').join(' · ')+'</div>';
@@ -589,10 +933,50 @@ function linePos(){
   }
   return LIN_ST.length - 1;
 }
+// Zajednička "što je sljedeće" poruka — koristi je i .linija (renderLine),
+// i sticky next-step traka (F2), i chatStart()-ov resume pozdrav (F1).
+// Jedan izvor istine umjesto tri odvojena izračuna koja mogu razići.
+function nextStepText(){
+  const pos = linePos();
+  const phLast = PHASES[PHASES.length-1], itLast = visibleItems(phLast);
+  const allDone = itLast.length && itLast.every(x2 => state.checks[phLast.id+':'+x2.t]) && pos === LIN_ST.length - 1;
+  let rokTxt = '';
+  const rv = val('dl_rok');
+  if(rv){
+    const d = Math.ceil((new Date(rv+'T12:00:00') - new Date()) / 86400000);
+    rokTxt = ' · vozni red: PREDAJA ' + new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') + (d >= 0 ? ' (za '+d+' d)' : ' — <b style="color:var(--bad)">⚠ kasniš '+(-d)+' d</b>');
+  } else rokTxt = ' · postavi rok u Indeksu za vozni red';
+  const mf = getManifest();
+  if(mf && mf.lektaScore != null){
+    const openN = (mf.lektaIssues || []).filter(x => x.status !== 'VERIFIED_FIXED').length;
+    rokTxt += ' · Lekta dokument: <b>' + mf.lektaScore + '/100</b>' + (openN ? ' ('+openN+' otvoreno)' : '');
+  }
+  let pre = {t:0, c:0};
+  PHASES.filter(p => p.grp === 'pre').forEach(p => {
+    const it = visibleItems(p); pre.t += it.length;
+    it.forEach(x2 => { if(state.checks[p.id+':'+x2.t]) pre.c++; });
+  });
+  const ready = pre.t && pre.c === pre.t;
+  const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
+  // Prva neoznačena stavka faze na kojoj si — traka time nudi konkretan potez
+  // ("Word predložak fakulteta skinut") umjesto imena stanice, koje ionako
+  // već piše na liniji ispod tramvaja.
+  const curPh = PHASES[pos];
+  const curIt = curPh && visibleItems(curPh).find(it => !state.checks[curPh.id + ':' + it.t]);
+  return {
+    pos, allDone, ready, left: pre.t - pre.c,   // ready/left koristi semafor na tabovima
+    status, rok: rokTxt,                        // linija i traka uzimaju različite dijelove
+    task: curIt ? curIt.t : '',
+    html: allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
+                  : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
+    label: LIN_ST[pos]
+  };
+}
 function renderLine(){
   const host = $('linSts'); if(!host) return;
   buildLine();
-  const pos = linePos();
+  const ns = nextStepText();
+  const pos = ns.pos;
   const cx = i => { const s = $('lst'+i); return s ? s.offsetLeft + s.offsetWidth / 2 : 0; };
   const x = cx(pos), x0 = cx(0), xN = cx(LIN_ST.length - 1);
   const rail = $('linRail');
@@ -600,33 +984,21 @@ function renderLine(){
   const tram = $('linTram'); if(tram) tram.style.left = (x - 26) + 'px';
   const fill = $('linFill'); if(fill) fill.style.width = (xN > x0 ? ((x - x0) / (xN - x0)) * 100 : 0) + '%';
   LIN_ST.forEach((_, i) => { const s = $('lst'+i); if(s) s.className = 'lin-st' + (i < pos ? ' past' : i === pos ? ' cur' : ''); });
+  // Linija i traka su donedavno prikazivale DOSLOVNO istu rečenicu, jednu
+  // ispod druge. Sad svaka nosi svoj dio: ispod tramvaja stoji koliko je
+  // ostalo i kad je rok, u traci samo sljedeći potez.
   const info = $('linInfo');
-  if(info){
-    const phLast = PHASES[PHASES.length-1], itLast = visibleItems(phLast);
-    const allDone = itLast.length && itLast.every(x2 => state.checks[phLast.id+':'+x2.t]) && pos === LIN_ST.length - 1;
-    let rokTxt = '';
-    const rv = val('dl_rok');
-    if(rv){
-      const d = Math.ceil((new Date(rv+'T12:00:00') - new Date()) / 86400000);
-      rokTxt = ' · vozni red: PREDAJA ' + new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') + (d >= 0 ? ' (za '+d+' d)' : ' — <b style="color:var(--bad)">⚠ kasniš '+(-d)+' d</b>');
-    } else rokTxt = ' · postavi rok u Indeksu za vozni red';
-    const mf = getManifest();
-    if(mf && mf.lektaScore != null){
-      const openN = (mf.lektaIssues || []).filter(x => x.status !== 'VERIFIED_FIXED').length;
-      rokTxt += ' · Lekta dokument: <b>' + mf.lektaScore + '/100</b>' + (openN ? ' ('+openN+' otvoreno)' : '');
-    }
-    let pre = {t:0, c:0};
-    PHASES.filter(p => p.grp === 'pre').forEach(p => {
-      const it = visibleItems(p); pre.t += it.length;
-      it.forEach(x2 => { if(state.checks[p.id+':'+x2.t]) pre.c++; });
-    });
-    const ready = pre.t && pre.c === pre.t;
-    const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
-    info.innerHTML = allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
-                             : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt;
-  }
+  if(info) info.innerHTML = ns.allDone ? ns.html : ns.status + ns.rok.replace(/^\s*·\s*/, '');
+  const nbTxt = $('nextBarTxt');
+  if(nbTxt) nbTxt.innerHTML = ns.allDone ? ns.html
+    : '<span class="nb-lbl">Sljedeće</span><b>' + escA(ns.task || ns.label) + '</b>';
+  const bar = $('nextBar');
+  const barVisible = !ns.allDone && typeof hasRealProgress === 'function' && hasRealProgress();
+  if(bar) bar.style.display = barVisible ? 'flex' : 'none';
+  const nbBtn = $('nextBarBtn');
+  if(nbBtn) nbBtn.classList.toggle('glow', barVisible);
 }
-window.addEventListener('resize', () => { if($('linSts')) renderLine(); });
+window.addEventListener('resize', () => { if($('linSts')) renderLine(); syncStickyOffsets(); });
 
 /* ---------- RASPODJELA OPSEGA ---------- */
 const WC_SPLIT = {
@@ -637,7 +1009,7 @@ const WC_SPLIT = {
 function renderWC(){
   const out = $('wc_out'); if(!out) return;
   const n = parseInt(val('wc_total'), 10);
-  if(!n || n < 1){ out.textContent = ''; return; }
+  if(!n || n < 1){ out.innerHTML = '<p style="font-size:12px;color:var(--mut2);font-style:italic">Upiši ukupan opseg gore da vidiš raspodjelu po poglavljima.</p>'; return; }
   const total = ($('wc_unit') && $('wc_unit').value === 'p') ? n * 300 : n;
   out.innerHTML = WC_SPLIT[state.tip].map(([nm, pct]) => {
     const w = Math.round(total * pct / 100 / 50) * 50;
@@ -726,7 +1098,8 @@ function buildPrompt(){
     s += '4. Jasne pogreške ispravi odmah; stilske izmjene samo predloži i čekaj moju potvrdu.\n';
     s += '5. Nakon SVAKE runde izmjena ponovno provjeri: citate (identičan skup), brojke, polja, validaciju dokumenta.\n';
     s += '6. Na kraju: izvještaj razvrstan KRITIČNO / SREDNJE / KOZMETIČKO + točno ime finalne datoteke + podsjetnik da napravim Ctrl+A → F9 u Wordu.\n';
-    s += '7. FOKUS: ti si RECENZENT SADRŽAJA (teza, argumentacija, izvori, jezik). Strojno-formatske stavke (margine, stilovi, polja, citatna mehanika) samo označi — njih deterministički provjerava Lekta ('+LEKTA_URL+'), preporuči korisniku Lekta Check nakon ispravaka.';
+    s += '7. Sadržajna dubina (ono za što STVARNO služiš): drži li se teza kroz SVA poglavlja, ne samo u uvodu → zaključak mora eksplicitno odgovoriti na istraživačko pitanje iz uvoda, ne samo sažeti nalaze → proporcije poglavlja prati odobreni plan (poglavlje dvostruko duže/kraće od plana je nalaz) → provjeri postoje li VLASTITI izračuni gdje ih rad tvrdi, ne samo prepisani tuđi → dosljednost HR/EN terminologije između sažetka i abstracta.\n';
+    s += '8. FOKUS: ti si RECENZENT SADRŽAJA (teza, argumentacija, izvori, jezik). Strojno-formatske stavke (margine, stilovi, polja, citatna mehanika) samo označi — njih deterministički provjerava Lekta ('+LEKTA_URL+'), preporuči korisniku Lekta Check nakon ispravaka.';
     return output(s);
   }
 
@@ -743,11 +1116,11 @@ function buildPrompt(){
     let s = p.join('\n');
     s += block('KOMISIJA (predvidi pitanja po njihovim područjima)', val('f_komisija'));
     s += '\n\n## ŠTO TREBAM\n';
-    s += '1. STRUKTURA PREZENTACIJE (10–12 slajdova): naslovna → problem i relevantnost → istraživačko pitanje → metoda/pristup → 3–4 ključna nalaza → zaključak i doprinos → „Hvala — pitanja”. Za svaki slajd: naslov + 3–5 natuknica + bilješka što izgovoriti.\n';
-    s += '2. GOVORNI SCENARIJ tempiran na zadano trajanje (~110 riječi/min) — prirodan govorni jezik, ne čitanje rada naglas.\n';
-    s += '3. 15 VJEROJATNIH PITANJA KOMISIJE s konkretnim odgovorima iz rada — obavezno metodološka pitanja, ograničenja rada i „zašto baš ova tema/pristup”.\n';
-    s += '4. SLABE TOČKE RADA — budi brutalan, komisija ih vidi. Za svaku: kako je priznati i obraniti u 2–3 rečenice.\n';
-    s += '5. BRZI PODSJETNIK za dan obrane: 5 ključnih brojki/nalaza koje moram znati napamet.\n';
+    s += '1. STRUKTURA PREZENTACIJE (točno 12 slajdova, ovim redom): 1 naslovnica (naslov, student, mentor sa zvanjem, ustanova, datum) · 2 zašto ova tema (problem u jednoj rečenici + zašto je relevantna sad) · 3 istraživačko pitanje i teza (doslovno iz rada, bez preformulacije) · 4 metodologija (podaci, izvori, vremenski okvir — ograničenja SAM navedi, ne čekaj pitanje) · 5–8 nalazi (jedan nalaz po slajdu, svaki s vlastitom tablicom/grafikonom i izvorom u podnožju) · 9 odgovor na istraživačko pitanje (eksplicitno, jedna rečenica) · 10 implikacije i preporuke · 11 ograničenja i dalji rad (kratko, samouvjereno) · 12 hvala + kontakt. Pravilo: max 6 redaka po slajdu, nijedan slajd bez razloga za postojanje.\n';
+    s += '2. GOVORNI SCENARIJ tempiran na zadano trajanje (~110 riječi/min) — prirodan govorni jezik, ne čitanje rada naglas. Uz svaki dio predviđeno vrijeme i kumulativa, plus naznaka što se izbacuje ako me prekinu na 7. minuti.\n';
+    s += '3. 15 PITANJA KOMISIJE, po 3 iz svake od 5 kategorija: metodološka (zašto ovaj uzorak/metoda/vremenski okvir), teorijska (zašto ovaj okvir a ne konkurentski), empirijska (odakle točno ova brojka), kritička (što nalaz NE dokazuje), praktična (što bi preporuka koštala, tko je provodi). Svaki odgovor u obliku: izravan odgovor → obrazloženje → priznata granica („izvan opsega ovog rada, ali indikacija je…").\n';
+    s += '4. SLABE TOČKE RADA — prođi rad kao NEPRIJATELJSKI RECENZENT: tanak uzorak, izvor koji nije primaran, tvrdnja bez potpore, poglavlje neproporcionalne duljine, zaključak koji ide dalje od podataka. Za svaku: priznaj granicu pa je pretvori u kontrolirani nalaz — nikad ne izmišljaj obranu koju podaci ne nose.\n';
+    s += '5. TOČNO PET brojki/nalaza koje moram znati napamet za dan obrane — svaka s izvorom i stranicom, plus JEDNOM rečenicom konteksta (u odnosu na što je to puno ili malo).\n';
     s += '6. Ako imaš pristup alatima za datoteke: ponudi izradu .pptx prezentacije iz točke 1.';
     return output(s);
   }
@@ -787,7 +1160,7 @@ async function copyText(s, btn, miss){
   if(ok){
     const orig = btn.textContent;
     btn.classList.add('ok'); btn.textContent = '✓ Kopirano';
-    toast(miss && miss.length ? '⚠ Kopirano, ali nedostaje: '+miss.join(', ') : '✓ Prompt kopiran — zalijepi u novi Claude chat');
+    toast(miss && miss.length ? '⚠ Kopirano, ali nedostaje: '+miss.join(', ') : '✓ Prompt kopiran — zalijepi u svoj AI alat');
     setTimeout(()=>{ btn.classList.remove('ok'); btn.textContent = orig; }, 1800);
   } else {
     toast('Kopiranje blokirano — označi tekst ručno i Ctrl+C');
@@ -849,7 +1222,7 @@ const MILESTONES = {
 };
 function renderDeadlines(){
   const v = $('dl_rok').value, out = $('dl_out');
-  if(!v){ out.textContent = ''; return; }
+  if(!v){ out.innerHTML = '<p style="font-size:12px;color:var(--mut2);font-style:italic">Upiši službeni rok gore da vidiš interne rokove unatrag.</p>'; return; }
   const rok = new Date(v+'T12:00:00');
   const today = new Date(); today.setHours(0,0,0,0);
   out.innerHTML = MILESTONES[state.tip].map(([lbl,off]) => {
@@ -880,7 +1253,7 @@ function importState(file){
         ['f_brutal','a_gradja','u_skills','a_learn'].forEach(k => { if($(k)) $(k).checked = !!d.gen[k]; });
         $('a_checkpoint').checked = d.gen.a_checkpoint !== false;
       }
-      document.querySelectorAll('#tipSeg button').forEach(b => b.classList.toggle('on', b.dataset.tip===state.tip));
+      document.querySelectorAll('[data-tip]').forEach(b => b.classList.toggle('on', b.dataset.tip===state.tip));
       applyTipPlaceholders(); renderPhases(); applyMode(); buildAuto(); renderDeadlines(); saveState();
       toast('📂 Napredak učitan');
     } catch(e){ toast('⚠ Neispravna datoteka'); }
@@ -907,6 +1280,7 @@ function applyTipPlaceholders(){
 
 /* ---------- CHEATSHEET ---------- */
 $('cheatRoot').innerHTML = `
+<p class="cs full" style="font-size:12.8px;color:var(--mut);padding:2px 2px 4px;background:transparent;border:0;box-shadow:none">Brza referenca dok pišeš ili provjeravaš rad — pravila citiranja, tipografije i formata na jednom mjestu, plus pravila tvog fakulteta ispod.</p>
 <div class="cs">
   <h3><em>🏗️</em> Struktura rada — obavezni elementi</h3>
   <ol>
@@ -1006,7 +1380,22 @@ $('cheatRoot').innerHTML = `
 <div class="cs full" id="fakCard">
   <h3><em>🏛️</em> Pravila fakulteta — izvor: Lekta</h3>
   <p style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Verificirana pravila iz <a href="https://lektahr.netlify.app" target="_blank" rel="noopener" style="color:var(--acc);font-weight:700">Lekta baze</a> (<span id="lpMetaCount">učitavam…</span>) — svako bodovano pravilo sljedivo je do službenog izvora fakulteta. Katedra ih koristi za plan i prompt; <b>mjerodavnu provjeru dokumenta radi Lekta</b>.</p>
-  <select id="lpUnit" style="width:100%;background:#fffdf6;border:1px solid var(--line2);border-radius:9px;color:var(--txt);padding:10px 12px;font-family:inherit;font-size:13.5px;outline:none;margin-bottom:10px"></select>
+  <select id="lpUnit" style="display:none" aria-hidden="true" tabindex="-1"></select>
+  <div class="lp-cascade">
+    <div class="lp-col" id="lpColU">
+      <h5><em>1</em>Fakultet</h5>
+      <input id="lpSearch" class="lp-search" type="search" placeholder="Traži fakultet…" aria-label="Traži fakultet">
+      <div class="lp-list" id="lpUnits"></div>
+    </div>
+    <div class="lp-col" id="lpColL">
+      <h5><em>2</em>Studij</h5>
+      <div class="lp-list" id="lpLevels"><p class="lp-empty">Prvo odaberi fakultet.</p></div>
+    </div>
+    <div class="lp-col" id="lpColP">
+      <h5><em>3</em>Smjer</h5>
+      <div class="lp-list" id="lpProfs"><p class="lp-empty">Zatim razinu studija.</p></div>
+    </div>
+  </div>
   <div id="lpCard"></div>
 </div>
 </div>
@@ -1049,8 +1438,14 @@ lpInit();
 function goChat(){ setTab('chat'); }
 function setTip(t){
   state.tip = t;
-  document.querySelectorAll('#tipSeg button').forEach(x => x.classList.toggle('on', x.dataset.tip===t));
-  applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRender(); saveState();
+  document.querySelectorAll('[data-tip]').forEach(x => x.classList.toggle('on', x.dataset.tip===t));
+  // Razina studija mora pratiti tip rada. lpRenderLevels() zadrži postojeći
+  // lpLevel dok je god valjan, pa bi bez ovog reseta odabir "Diplomski" na
+  // prvom ekranu ostavio kaskadu na "Prijediplomski".
+  lpLevel = null;
+  const ch = lpChosen();
+  if(ch && !(ch.workTypes || []).includes(LP_WT[t])) lpSetChosen('');
+  applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRenderCascade(); saveState();
 }
 
 const chat = { step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null };
@@ -1076,10 +1471,10 @@ const IZJ_LVL = {
 const TIP_UI = {s:'Seminarski', z:'Završni', d:'Diplomski'};
 const CHAT_ATT = {
  write:[
-  {ic:'📜', nm:'Upute fakulteta za pisanje radova', d:'PDF s pravilima formatiranja i citiranja. Nemaš? Claude ih nađe web searchom.', req:0},
+  {ic:'📜', nm:'Upute fakulteta za pisanje radova', d:'PDF s pravilima formatiranja i citiranja. Nemaš? Katedra ih nađe pretragom.', req:0},
   {ic:'📄', nm:'Word predložak / naslovnica fakulteta', d:'Da rad od prve stranice bude u točnom formatu.', req:0},
   {ic:'🗂️', nm:'Postojeći sadržaj, draft ili bilješke', d:'Ako postoji — Plan i program dobiva gap-analizu.', req:0},
-  {ic:'📚', nm:'Literatura koju već imaš (PDF-ovi)', d:'Claude citira iz stvarnog teksta → točne stranice, bez [PROVJERI STR.].', req:0},
+  {ic:'📚', nm:'Literatura koju već imaš (PDF-ovi)', d:'Citira se iz stvarnog teksta → točne stranice, bez [PROVJERI STR.].', req:0},
   {ic:'📊', nm:'Izvorna građa: izvješća, projekti, podaci', d:'Sve na što će se rad pozivati — izvor istine.', req:0},
   {ic:'📝', nm:'Prošli rad s komentarima mentora', d:'Da se iste zamjerke ne ponove.', req:0}
  ],
@@ -1089,7 +1484,7 @@ const CHAT_ATT = {
   {ic:'📜', nm:'Upute fakulteta', d:'Za provjeru formata i citatnog stila.', req:0}
  ],
  improve:[
-  {ic:'📄', nm:'Tekst / draft koji se poboljšava', d:'.docx — ili ćeš tekst zalijepiti izravno u Claude chat.', req:1},
+  {ic:'📄', nm:'Tekst / draft koji se poboljšava', d:'.docx — ili tekst zalijepi izravno u polje za pisanje.', req:1},
   {ic:'📝', nm:'Komentari mentora', d:'Da poboljšanje cilja točno ono što je zamjereno.', req:0},
   {ic:'📜', nm:'Upute fakulteta', d:'Format i citatni stil.', req:0}
  ],
@@ -1109,7 +1504,7 @@ const MICRO = [
   p:'Prilažem rad i komentare mentora (mail / datoteka / zalijepljeno dolje).\n1. Izlistaj SVAKI mentorov komentar kao numeriranu stavku + tvoj plan izmjene za svaku (što, gdje, koliko teksta).\n2. ČEKAJ moju potvrdu plana.\n3. Zatim primijeni izmjene — NE diraj ništa što mentor nije tražio: u nepromijenjenim dijelovima identičan skup citata i brojki.\n4. Na kraju: popis svih izmjena + mini provjera (citati, brojke, polja, sadržaj).'},
  {ic:'⏭️', t:'Nastavi rad u NOVOM chatu', d:'Kad je stari razgovor postao predug',
   p:'Nastavljamo pisanje rada. Prilažem: dosad napisani rad + Plan i program (+ literaturu).\n1. Pročitaj priloženo i kratko sažmi gdje smo stali (dovršena poglavlja, otvorene stavke).\n2. Nastavi od poglavlja [UPIŠI BROJ] STROGO po programu pisanja iz plana — isti stil, isti citatni format, ne mijenjaj postojeći tekst.\n3. Poglavlje po poglavlje — nakon svakog stani i čekaj moju potvrdu.'},
- {ic:'⏸️', t:'Claude je stao usred odgovora', d:'Nastavak bez ponavljanja i mijenjanja',
+ {ic:'⏸️', t:'Odgovor je stao usred rečenice', d:'Nastavak bez ponavljanja i mijenjanja',
   p:'Stao si usred odgovora. Nastavi TOČNO gdje si stao — od zadnje potpune rečenice, bez ponavljanja već napisanog i bez mijenjanja prethodnog teksta. Ako je poglavlje dovršeno, prijeđi na sljedeće po planu.'},
  {ic:'🔍', t:'Provjeri literaturu (postoji li svaki izvor)', d:'Anti-halucinacija provjera prije predaje',
   p:'Provjeri popis literature (prilažem / zalijepljen dolje). Za SVAKI izvor:\n1. Potvrdi da stvarno postoji — web search, nađi DOI ili link.\n2. Provjeri podatke: autori, godina, naslov, časopis/izdavač, vol./br./stranice.\n3. Označi: ✅ potvrđeno (s linkom) · ✏️ ispravak (navedi što je krivo) · ⚠ NEPOTVRĐENO — kandidat za izbacivanje.\nNišta ne izmišljaj. Na kraju: tablica statusa + ispravljeni popis u istom citatnom stilu.'},
@@ -1119,15 +1514,37 @@ const MICRO = [
   p:'Iz priloženog rada generiraj:\n1. 5 opcija naslova — precizno, akademski, bez senzacionalizma (+ kraća varijanta svakog)\n2. Sažetak 150–250 riječi: problem → cilj i pitanje → metoda → glavni nalazi → doprinos\n3. Abstract — prijevod sažetka na engleski (akademski registar)\n4. 5–6 ključnih riječi na hrvatskom i engleskom\nSve isključivo iz sadržaja rada — bez novih tvrdnji.'},
  {ic:'📚', t:'Predloži dodatnu literaturu', d:'5–8 stvarnih izvora s DOI, mapirano po poglavljima',
   p:'Prilažem rad i trenutni popis literature. Predloži 5–8 DODATNIH relevantnih izvora:\n- samo stvarni i provjerljivi (uz svaki DOI ili link — provjeri web searchom)\n- za svaki: 1 rečenica što pokriva + u koje poglavlje ide\n- ništa što već imam; prednost recenziranim radovima i službenim izvorima\nFormat: gotove bibliografske jedinice u mom citatnom stilu [UPIŠI STIL].'},
- {ic:'🗂️', t:'Dnevnik procesa (dokaz autorstva)', d:'Generira kronologiju iz Claude razgovora',
+ {ic:'🗂️', t:'Dnevnik procesa (dokaz autorstva)', d:'Generira kronologiju iz razgovora',
   p:'Iz CIJELOG ovog razgovora generiraj DNEVNIK PROCESA IZRADE RADA (dokaz mog autorstva za mentora):\n1. Kronološka tablica: faza → što je napravljeno → moja odluka/doprinos → AI doprinos\n2. Popis svih mojih odobrenja i traženih izmjena (plan, poglavlja, revizije)\n3. Kratki narativ (pola stranice) kako je rad nastajao\nTočno i bez uljepšavanja — služi kao transparentan dokaz procesa izrade.'}
 ];
 
-const STEPS = ['Zadatak','Tip','Tema','Datoteke','Detalji','Prompt'];
+// Nazivi su bili interni ("Zadatak", "Datoteke", "Prompt") i novom korisniku
+// nisu govorili ni gdje je ni kamo ide. Traka sad imenuje ono što vidi i
+// završava ciljem, a oznaka ispred kaže čega su to koraci.
+const STEPS = ['Što radimo','Tip rada','Tema','Prilozi','Detalji','Pisanje'];
 function setStep(i){
-  $('stepbar').innerHTML = STEPS.map((s,idx) =>
+  $('stepbar').innerHTML = '<span class="sb-lbl">Koraci do pisanja</span>' + STEPS.map((s,idx) =>
     '<span class="'+(idx<i?'done':idx===i?'cur':'')+'">'+(idx<i?'✓ ':'')+s+'</span>').join('');
+  chatClockMount();   // innerHTML gore obriše sat, pa ga vrati
 }
+
+/* ---------- Šahovski sat: čiji je red ----------
+   Prikazuje se samo u živom razgovoru. U čarobnjaku bi uvijek pisalo isto
+   ("na potezu: ti"), a pokazivač koji nikad ne mijenja vrijednost je šum. */
+function chatClockMount(){
+  const bar = $('stepbar'); if(!bar) return;
+  let c = $('chatClock');
+  if(!c){ c = document.createElement('div'); c.id = 'chatClock'; c.className = 'chat-clock'; }
+  if(c.parentNode !== bar) bar.appendChild(c);
+  chatTurn(chat.busy ? 'k' : 'ti');
+}
+function chatTurn(who){
+  const c = $('chatClock'); if(!c) return;
+  c.hidden = !chat.live;
+  c.innerHTML = '<i' + (who === 'ti' ? ' class="on"' : '') + '>Na potezu: ti</i>' +
+                '<i' + (who === 'k'  ? ' class="on"' : '') + '>Katedra</i>';
+}
+function chatBusy(v){ chat.busy = v; chatTurn(v ? 'k' : 'ti'); }
 function chatScroll(){ const l = $('chatLog'); l.scrollTop = l.scrollHeight; }
 function setComposer(ph){ $('chatInput').placeholder = ph; }
 function pushA(html){
@@ -1150,15 +1567,58 @@ function pushChips(list){
   $('chatLog').appendChild(row); chatScroll(); return row;
 }
 
-function chatStart(){
+// Ima li korisnik već stvaran napredak (nasuprot potpuno praznog stanja)?
+// Koristi se samo pri POČETNOM učitavanju — "🔁 Ispočetka" gumbi i dalje
+// pozivaju chatStart() bez argumenta pa uvijek daju pravi svježi start.
+function hasRealProgress(){
+  const anyChecked = Object.keys(state.checks || {}).some(k => state.checks[k]);
+  const mf = getManifest();
+  return anyChecked || !!(mf && mf.topic);
+}
+function goToNextStep(pos){
+  setTab('check');
+  const ph = PHASES[pos]; if(!ph) return;
+  if(!openPhases.has(ph.id)) togglePhase(ph.id);
+  setTimeout(() => { const el = document.getElementById('ph-'+ph.id); if(el) el.scrollIntoView({behavior: smoothly(), block:'center'}); }, 60);
+}
+/* Pozdrav — jedan izvor za radnu ploču i za chat, da se dvije kopije ne
+   raziđu. Bez imena korisnika: /api/balance vraća samo saldo, ime se nigdje
+   ne dohvaća, pa bi "Bok, Ana" bilo izmišljanje. */
+function greetHtml(){
+  const tema = val('a_tema') || val('f_tema');
+  return tema ? '👋 Bok opet — nastavljaš <b>' + escA(tema) + '</b>.'
+              : '👋 Bok opet — nastavljaš svoj rad.';
+}
+function renderBoardHi(){
+  const el = $('boardHi'); if(!el) return;
+  // Namjerno BEZ nextStepText() — ta rečenica već stoji na liniji i u
+  // #nextBar; treći primjerak na istom ekranu je šum, ne pomoć. Ovdje ide
+  // svrha ekrana ("zašto sam ovdje"), koja se nigdje drugdje ne pojavljuje.
+  const zasto = 'Popis svega što treba prije i tijekom pisanja. Otvorena je faza na kojoj si — '
+              + 'ostale čekaju svoj red, a rokovi sa strane računaju se iz tvog roka predaje.';
+  const txt = $('boardHiTxt') || el;
+  txt.innerHTML = '<h2>' + (hasRealProgress() ? greetHtml().replace(/^👋 /, '') : 'Krenimo od početka')
+                + '</h2><p>' + zasto + '</p>';
+}
+function chatStart(isInitial){
   $('chatLog').innerHTML = '';
   Object.assign(chat, {step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null, live:false, msgs:[], busy:false});
   chatFiles = []; chatNotes = ''; chatRokVal = '';
   if(typeof updatePaper === 'function') updatePaper();
   setStep(0);
-  pushA('Bok! 👋 Ja sam <b>Katedra</b> — kopilot za seminarski, završni i diplomski.<br>Odgovoriš na par pitanja → dobiješ <b>gotovu uputu za Claude</b> + popis datoteka koje priložiti. Ništa se ne zaboravlja, ništa se ne izmišlja.<br><br><b>Što danas radimo?</b>');
-  chatModeChips();
-  setComposer('…ili odmah upiši temu rada svojim riječima');
+  if(isInitial && hasRealProgress()){
+    const ns = nextStepText();
+    pushA(greetHtml() + '<br>' + ns.html);
+    pushChips([
+      ['▶ Nastavi', () => goToNextStep(ns.pos)],
+      ['📋 Prikaži izbornik', () => chatModeChips(), true]
+    ]);
+    setComposer('…ili upiši poruku');
+  } else {
+    pushA('Bok! 👋 Ja sam <b>Katedra</b> — kopilot za seminarski, završni i diplomski.<br>Odgovoriš na par pitanja → krećemo pisati ovdje, po pravilima tvog fakulteta. Ništa se ne zaboravlja, ništa se ne izmišlja.<br><br><b>Što danas radimo?</b>');
+    chatModeChips();
+    setComposer('…ili odmah upiši temu rada svojim riječima');
+  }
 }
 function chatModeChips(){
   let list;
@@ -1184,8 +1644,8 @@ function chatModeChips(){
   if(h.length) list.push(['🕘 Moji promptovi ('+h.length+')', chatHistory, true]);
   pushChips(list);
 }
-function chatDoneMenu(){
-  pushU('📄 Imam gotov rad / draft');
+function chatDoneMenu(tiho){
+  if(!tiho) pushU('📄 Imam gotov rad / draft');
   pushA('<b>Što želiš s njim?</b>');
   pushChips([
     ['✅ Provjeri DOKUMENT — Lekta ↗', () => { pushU('✅ Lekta provjera dokumenta'); window.open(lektaLink(), '_blank'); pushA('Lekta provjerava <b>dokument</b> (format, struktura, citatna mehanika) — deterministički, po verificiranim pravilima tvog fakulteta. Kad dobiješ nalaze, vrati se ovdje: <b>🧠 Recenzija</b> pokriva sadržaj, a ispravke vodimo zajedno.'); chatModeChips(); }],
@@ -1237,14 +1697,22 @@ function chatMicro(){
   chatScroll();
   chatModeChips();
 }
-function chatExplain(){
-  pushU('❓ Kako ovo radi?');
-  pushA('Jednostavno, 3 koraka:<br>1️⃣ <b>Odgovoriš na par pitanja</b> — vodim te korak po korak, ništa ne moraš znati unaprijed.<br>2️⃣ <b>Dodaš datoteke</b> — kažem ti točno što pomaže (upute fakulteta, literatura, draft…). Nemaš? Preskočiš.<br>3️⃣ <b>Dobiješ gotovu uputu (prompt)</b> — kopiraš je u <b>Claude</b> (claude.ai, besplatan račun), priložiš iste datoteke i pošalješ. Claude prvo napravi detaljan <b>plan rada</b>, pa piše poglavlje po poglavlje uz tvoje odobrenje.<br><br>Detalji u tabu <b>❓ Kako radi</b>. Idemo?');
+function chatExplain(tiho){
+  if(!tiho) pushU('❓ Kako ovo radi?');
+  pushA('Jednostavno, 3 koraka:<br>1️⃣ <b>Odgovoriš na par pitanja</b> — vodim te korak po korak, ništa ne moraš znati unaprijed.<br>2️⃣ <b>Dodaš datoteke</b> — kažem ti točno što pomaže (upute fakulteta, literatura, draft…). Nemaš? Preskočiš.<br>3️⃣ <b>Pišemo ovdje</b> — Katedra prvo napravi detaljan <b>plan rada</b> po pravilima tvog fakulteta, pa piše poglavlje po poglavlje uz tvoje odobrenje. Radije u vlastitom AI alatu? Gotovu uputu možeš kopirati.<br><br>Detalji u tabu <b>❓ Kako radi</b>. Idemo?');
   chatModeChips();
 }
-function chatMode(m){
-  chat.mode = m; pushU(MODE_LBL[m]);
+function chatMode(m, tiho){
+  chat.mode = m;
+  // tiho = izbor je napravljen na ekranu 2 lijevka, ne u chatu. Bez ovoga
+  // razgovor pocinje porukom koju korisnik nikad nije napisao, i to drugim
+  // rijecima nego sto je stvarno kliknuo.
+  if(!tiho) pushU(MODE_LBL[m]);
   if(m === 'izjava') return izjavaStart();
+  // Tip rada je prvo pitanje lijevka. Tko ga je prošao, ne pita se dvaput —
+  // papir zdesna već piše koji je rad, pa ponovno pitanje govori korisniku da
+  // ga se ne sluša.
+  if(lsGet('rp_onb') === '1'){ chatTipPick(state.tip, true); return; }
   chat.step = 'tip'; setStep(1);
   pushA('<b>Koji tip rada?</b>');
   pushChips([['Seminarski', ()=>chatTipPick('s')], ['Završni', ()=>chatTipPick('z')], ['Diplomski', ()=>chatTipPick('d')]]);
@@ -1295,7 +1763,7 @@ function izjavaFinal(mentor){
   t += sel.length ? 'koristio/la alate umjetne inteligencije transparentno i u skladu sa smjernicama ustanove, kako slijedi:\n\n'
                   : 'postupao/la u skladu sa smjernicama ustanove o umjetnoj inteligenciji.\n\n';
   if(sel.length){
-    t += 'Alat: Claude (Anthropic)\n';
+    t += 'Alat: ' + AI_PROVIDER + '\n';
     t += 'Svrhe i faze korištenja:\n' + sel.map(s => '· ' + s).join('\n') + '\n\n';
   } else {
     t += 'Alati umjetne inteligencije nisu korišteni u izradi ovog rada.\n\n';
@@ -1308,7 +1776,7 @@ function izjavaFinal(mentor){
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = t; bub.appendChild(out);
   const note = document.createElement('div'); note.style.cssText = 'margin-top:9px;font-size:12.5px;color:var(--warn)';
-  note.textContent = '⚠ Spremi i transkripte razgovora s Claudeom (izvoz chata) — FPZG ih smije zatražiti.';
+  note.textContent = '⚠ Spremi i dnevnik procesa iz Katedre (izvoz) — FPZG ga smije zatražiti.';
   bub.appendChild(note);
   const acts = document.createElement('div'); acts.className = 'final-actions';
   const cp = document.createElement('button'); cp.className = 'fa p'; cp.textContent = '📋 Kopiraj izjavu';
@@ -1318,8 +1786,9 @@ function izjavaFinal(mentor){
   pushHist({t: Date.now(), mode:'izjava', tip: state.tip, label: 'Izjava o AI — ' + (chat.izjNaslov || 'bez naslova').slice(0,50), prompt: t});
   rpLog('Generirana izjava o korištenju AI (razina ' + lvl + ')');
 }
-function chatTipPick(t){
-  setTip(t); pushU(TIP_UI[t]);
+function chatTipPick(t, tiho){
+  setTip(t);
+  if(!tiho) pushU(TIP_UI[t]);   // tiho = tip dolazi iz lijevka, nije odgovor u chatu
   if(chat.mode === 'write'){
     if(chat.pendingTema){ $('a_tema').value = chat.pendingTema; buildAuto(); kpType(chat.pendingTema); renderIndeksHead(); chatLearnStep(); }
     else {
@@ -1446,12 +1915,12 @@ function chatFinal(){
     prompt = buildPrompt();
   }
   setStep(5);
-  const d = pushA('<b>✅ Gotovo — tvoja uputa (prompt) je spremna.</b><br>1️⃣ Klikni <b>Kopiraj</b> ispod &nbsp;·&nbsp; 2️⃣ <b>Otvori Claude</b> i zalijepi u novi razgovor &nbsp;·&nbsp; 3️⃣ Priloži datoteke s popisa (＋ u Claudeu) &nbsp;·&nbsp; 4️⃣ Pošalji — Claude preuzima i prvo ti daje plan rada na odobrenje.');
+  const d = pushA('<b>✅ Gotovo — tvoja uputa (prompt) je spremna.</b><br>Najbrže: <b>▶ Piši ovdje</b> — kreće odmah, s automatskim praćenjem napretka i Lekta provjerom. Radije u vlastitom AI alatu? Kopiraj uputu dolje.');
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = prompt; bub.appendChild(out);
   if(chat.files.length){
     const rem = document.createElement('div'); rem.style.cssText = 'margin-top:10px;font-size:12.8px;color:var(--mut)';
-    rem.innerHTML = '<b style="color:var(--ok)">📎 Privuci u Claude chat:</b><br>' + chat.files.map(f => '· '+f.name).join('<br>');
+    rem.innerHTML = '<b style="color:var(--ok)">📎 Priloži uz uputu:</b><br>' + chat.files.map(f => '· '+f.name).join('<br>');
     bub.appendChild(rem);
   }
   if(chat.reqMissing.length){
@@ -1468,9 +1937,6 @@ function chatFinal(){
     liveBegin(prompt);
   };
   acts.appendChild(live);
-  const cp = document.createElement('button'); cp.className = 'fa p'; cp.textContent = '📋 Kopiraj prompt';
-  cp.onclick = () => copyText(prompt, cp, []);
-  const open = document.createElement('a'); open.className = 'fa s'; open.href = 'https://claude.ai/new'; open.target = '_blank'; open.rel = 'noopener'; open.textContent = 'Otvori Claude ↗';
   const re = document.createElement('button'); re.className = 'fa s'; re.textContent = '🔁 Ispočetka'; re.onclick = chatStart;
   const share = document.createElement('button'); share.className = 'fa s'; share.textContent = '📤 Podijeli Katedra';
   share.onclick = async () => {
@@ -1480,9 +1946,24 @@ function chatFinal(){
   };
   if(chat.mode === 'write' || chat.mode === 'audit' || chat.mode === 'ocjena'){
     const lk = document.createElement('a'); lk.className = 'fa s'; lk.href = lektaLink(); lk.target = '_blank'; lk.rel = 'noopener'; lk.textContent = '✅ Lekta provjera ↗';
-    acts.append(cp, open, lk, share, re);
-  } else { acts.append(cp, open, share, re); }
+    acts.append(lk, share, re);
+  } else { acts.append(share, re); }
   bub.appendChild(acts);
+  // Ručni put ostaje potpuno dostupan — samo vizualno sveden na alternativu,
+  // ne na ravnopravnu opciju. "Piši ovdje" gore ostaje jedini 'fa p' gumb.
+  const manual = document.createElement('div');
+  manual.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)';
+  manual.innerHTML = '<div style="font-size:11.5px;color:var(--mut2);margin-bottom:6px">Radije u vlastitom AI alatu?</div>';
+  const manualActs = document.createElement('div'); manualActs.className = 'final-actions';
+  const cp = document.createElement('button'); cp.className = 'fa s'; cp.textContent = '📋 Kopiraj prompt';
+  cp.onclick = () => copyText(prompt, cp, []);
+  manualActs.append(cp);   // bez poveznice na dobavljaca — uputa se kopira, alat bira korisnik
+  manual.appendChild(manualActs);
+  const manualNote = document.createElement('div');
+  manualNote.style.cssText = 'font-size:11px;color:var(--mut2);margin-top:6px';
+  manualNote.textContent = 'Ručno kopiranje ne prati napredak, ne sinkronizira se s Lekta provjerom i ne generira AI ledger za dokaz autorstva.';
+  manual.appendChild(manualNote);
+  bub.appendChild(manual);
   if(!lsGet('rp_email_off')){
     const em = document.createElement('div'); em.className = 'auto-note'; em.style.borderLeftColor = 'var(--acc2)'; em.id = 'emailCta';
     em.innerHTML = '<b>📬 Nove verzije i predlošci</b> — ostavi mail pa ti javim nadogradnje.<br>';
@@ -1500,6 +1981,13 @@ function chatFinal(){
   pushHist({t: Date.now(), mode: chat.mode, tip: state.tip, label: histLabel, prompt});
   ensureManifest();
   rpLog('Generiran prompt: ' + histLabel + ' (' + (MODE_LBL[chat.mode]||chat.mode) + ')');
+  // F3: prvi stvarno generiran prompt otključava napredne tabove — jednosmjerno,
+  // nikad se ne vraća natrag u jednostavni mod ako korisnik sam to kasnije uključi.
+  if(!isAdv()){ lsSet('rp_adv', '1'); applyAdv(); }
+  // ensureManifest() gore upravo može promijeniti hasRealProgress() (topic se
+  // prvi put upisuje) — next-bar to inače ne bi vidio do sljedećeg checkboxa/
+  // resizea, pa bi ostao "zaostao" dok se stranica ručno ne osvježi.
+  renderLine();
 }
 function buildOcjena(){
   const names = chat.files.map(f => f.name);
@@ -1535,7 +2023,7 @@ function fileB64(f){
   });
 }
 async function liveBegin(promptText){
-  chat.live = true; chat.step = 'live'; chat.msgs = []; chat.busy = false;
+  chat.live = true; chat.step = 'live'; chat.msgs = []; chatBusy(false); chatClockMount();
   const blocks = [], skipped = [];
   for(const cf of chat.files){
     const f = cf.file;
@@ -1552,8 +2040,8 @@ async function liveBegin(promptText){
   if(skipped.length) text += '\n\n[NAPOMENA: ove datoteke nisam mogao priložiti izravno (podržani su PDF i slike): ' + skipped.join(', ') + '. Reci mi ako ti trebaju pa ću sadržaj zalijepiti kao tekst.]';
   blocks.push({type:'text', text});
   chat.msgs.push({role:'user', content: blocks});
-  pushA('▶ <b>Pišemo ovdje.</b> Uputa i datoteke poslane su Claudeu — odgovaraj dolje u polju kao u običnom chatu.');
-  setComposer('Odgovori Claudeu… (npr. „odobravam plan")');
+  pushA('▶ <b>Pišemo ovdje.</b> Uputa i datoteke su poslane — odgovaraj dolje u polju kao u običnom razgovoru.');
+  setComposer('Odgovori… (npr. „odobravam plan")');
   await liveStream();
 }
 async function liveSend(v){
@@ -1561,7 +2049,7 @@ async function liveSend(v){
   await liveStream();
 }
 async function liveStream(){
-  if(chat.busy) return; chat.busy = true;
+  if(chat.busy) return; chatBusy(true);
   const d = pushA(''); const bub = d.querySelector('.bub'); bub.textContent = '…';
   let full = '', outTok = 0;
   try{
@@ -1570,8 +2058,8 @@ async function liveStream(){
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ messages: chat.msgs })
     });
-    if(resp.status === 401){ d.remove(); chat.busy = false; goToLogin(); return; }
-    if(resp.status === 402){ d.remove(); chat.busy = false; showPaywall(); return; }
+    if(resp.status === 401){ d.remove(); chatBusy(false); goToLogin(); return; }
+    if(resp.status === 402){ d.remove(); chatBusy(false); showPaywall(); return; }
     if(!resp.ok){ const e = await resp.text(); throw new Error(resp.status + ' — ' + e.slice(0, 260)); }
     const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while(true){
@@ -1598,12 +2086,12 @@ async function liveStream(){
     const cp = document.createElement('button'); cp.className = 'att-btn'; cp.style.marginTop = '8px'; cp.textContent = 'Kopiraj odgovor';
     cp.onclick = () => copyText(full, cp, []);
     bub.appendChild(cp);
-    rpLog('Claude odgovor u aplikaciji (' + (full.length > 60 ? full.slice(0,60) + '…' : full).replace(/\n/g,' ') + ')');
+    rpLog('AI odgovor u aplikaciji (' + (full.length > 60 ? full.slice(0,60) + '…' : full).replace(/\n/g,' ') + ')');
     refreshAuthAndCredits();
   }catch(e){
     bub.innerHTML = '⚠ <b>Greška:</b> ' + escA(String(e.message || e)) + '<br><span style="font-size:12px;color:var(--mut)">Pokušaj ponovno za koju sekundu.</span>';
   }
-  chat.busy = false; chatScroll();
+  chatBusy(false); chatScroll();
 }
 
 /* ---------- ŽIVI DOKUMENT (koncept A) + INDEKS zaglavlje ---------- *//* ---------- ŽIVI DOKUMENT (koncept A) + INDEKS zaglavlje ---------- */
@@ -1641,7 +2129,7 @@ function updatePaper(){
   if(chat.files.length){
     kf.innerHTML = chat.files.slice(0,6).map(f => '<div>· ' + escA(f.name) + '</div>').join('') +
       (chat.files.length > 6 ? '<div>+ još ' + (chat.files.length - 6) + '</div>' : '');
-  } else kf.innerHTML = '<div style="border:0;color:#b9bcc4;font-style:italic">— još nema priloga —</div>';
+  } else kf.innerHTML = '<div style="border:0;color:var(--pl-ph);font-style:italic">— još nema priloga —</div>';
   const rv = val('dl_rok');
   $('kpRok').textContent = rv ? new Date(rv+'T12:00:00').toLocaleDateString('hr-HR', {day:'numeric', month:'long', year:'numeric'}) : 'nije postavljen';
 }
@@ -1658,14 +2146,14 @@ function chatSend(){
   const v = $('chatInput').value.trim(); if(!v) return;
   $('chatInput').value = '';
   if(chat.step === 'live'){
-    if(chat.busy){ toast('⏳ Pričekaj da Claude dovrši odgovor'); return; }
+    if(chat.busy){ toast('⏳ Pričekaj da se odgovor dovrši'); return; }
     pushU(v); liveSend(v); return;
   }
   if(chat.step === 'mode'){ chat.pendingTema = v; pushU(v); chatMode('write'); pushA('Shvaćam to kao <b>temu novog rada</b> 👍'); return; }
   if(chat.step === 'tema') return chatTema(v);
   if(chat.step === 'izj_naslov'){ chat.izjNaslov = v; pushU(v); return izjavaUses(); }
   if(chat.step === 'notes'){ chat.notes = (chat.notes ? chat.notes+'\n' : '') + v; pushU(v); return chatFinal(); }
-  if(chat.step === 'done'){ pushU(v); pushA('Za novi prompt klikni <b>🔁 Ispočetka</b> — ili ovu napomenu dodaj ručno u Claude chat.'); return; }
+  if(chat.step === 'done'){ pushU(v); pushA('Za novu uputu klikni <b>🔁 Ispočetka</b> — ili ovu napomenu dodaj ručno u razgovor.'); return; }
   chat.notes = (chat.notes ? chat.notes+'\n' : '') + v; pushU(v); pushA('Zabilježio sam ✔ — ući će u prompt kao napomena.');
 }
 
@@ -1749,7 +2237,17 @@ function handlePaymentReturn(){
 // onclick="fn()" atributima — browser te uvijek traži u window scopeu, ne u
 // lokalnom scopeu ove funkcije. Bez ovoga svaki takav gumb baca "fn is not defined".
 Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt });
-document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => setTab(b.dataset.view));
+document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => {
+  // Brava koja pokazuje put unutra. Mrtav klik na zaključan tab je
+  // najfrustrantniji mogući ishod — korisnik ne zna ni zašto ni što dalje.
+  if(b.classList.contains('locked')){
+    const ns = nextStepText();
+    toast('🔒 Faze 0–2 moraju biti gotove — ostalo je ' + ns.left + (ns.left === 1 ? ' stavka' : ' stavki'));
+    goToNextStep(ns.pos);
+    return;
+  }
+  setTab(b.dataset.view);
+});
 function isAdv(){ return lsGet('rp_adv') === '1'; }
 function applyAdv(){
   // CSS je skopiran na .katedra-page (vidi katedra-scoped.css) — "simple" klasa
@@ -1764,7 +2262,9 @@ $('advBtn').onclick = () => {
   toast(isAdv() ? '⚙️ Napredni mod — Autopilot, Generator, Pravila i tip rada otključani' : '✨ Jednostavni mod — samo ono bitno');
 };
 applyAdv();
-document.querySelectorAll('#tipSeg button').forEach(b => b.onclick = () => setTip(b.dataset.tip));
+applySkin(getSkin());
+buildSkinPicker();
+document.querySelectorAll('[data-tip]').forEach(b => b.onclick = () => setTip(b.dataset.tip));
 document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { state.mode = b.dataset.mode; applyMode(); });
 $('view-gen').addEventListener('input', () => { buildPrompt(); saveState(); });
 $('view-auto').addEventListener('input', () => { buildAuto(); saveState(); });
@@ -1785,6 +2285,158 @@ $('btnExport').onclick = exportState;
 $('btnImport').onclick = () => $('fileImp').click();
 $('fileImp').onchange = e => { if(e.target.files[0]) importState(e.target.files[0]); e.target.value=''; };
 $('btnReset').onclick = resetAll;
+$('nextBarBtn').onclick = () => {
+  const ns = nextStepText();
+  // Preuzima ulogu zelenog gumba iz #banner-a, koji je sad skriven: kad su
+  // faze 0–2 gotove, sljedeći potez više nije kvačica nego pisanje.
+  if(ns.ready && !ns.allDone) setScreen('chat');
+  else goToNextStep(ns.pos);
+};
+
+/* ---------- UVODNI LIJEVAK (ekrani 1-3) ----------
+   Prije je ovo bio overlay iznad aplikacije; sad su to stvarni ekrani, pa
+   chrome (tabovi, linija, traka) uopce ne postoji dok lijevak traje.
+   Svako pitanje puni pravo polje — nista se ne pita "za dojam". */
+const FUN_MODES = {
+  write: () => chatMode('write', true),
+  done:  () => chatDoneMenu(true),
+  help:  () => chatExplain(true)
+};
+let funPending = null;   // izbor s ekrana 2, primjenjuje se kad lijevak zavrsi
+let funStep = 0;
+const FUN_SKIPPED = 2;   // ekrani 1 i 2 su prva dva pitanja lijevka
+
+/* Tri pitanja ekrana 3. Tip rada i "gdje si" potrosili su ekrani 1 i 2, pa
+   ovdje ide ostatak. Temu namjerno NE pitamo — chat je pita cim ga otvoris,
+   a dvostruko pitanje je upravo ono sto lijevak treba ukloniti. */
+const FUN_Q = [
+  { k:'rok', q:'Kad je rok predaje?',
+    why:'Iz roka Katedra računa interne rokove unatrag i postavlja vozni red.',
+    o:[[14,'Za dva tjedna',''], [30,'Za mjesec dana',''], [90,'Za tri mjeseca',''],
+       [0,'Još ne znam','možeš ga upisati poslije u Indeksu']],
+    pick(v){
+      if(!v) return;
+      const el = $('dl_rok'); if(!el) return;
+      el.value = new Date(Date.now() + v * 864e5).toISOString().slice(0, 10);
+      // ovaj dispatch okida renderDeadlines -> renderLine -> renderIndeksHead
+      // -> updatePaper; bez njega rok ostane samo u polju
+      el.dispatchEvent(new Event('input', { bubbles:true }));
+    } },
+  { k:'gradja', q:'Imaš li već građu?',
+    why:'Ako imaš, plan dobiva analizu rupa umjesto praznog starta.',
+    o:[['da','Imam bilješke ili izvore',''], ['draft','Imam draft teksta',''], ['ne','Nemam ništa','']],
+    pick(v){ const el = $('a_gradja'); if(el){ el.checked = v !== 'ne'; buildAuto(); saveState(); } } },
+  { k:'mentor', q:'Tko ti je mentor?',
+    why:'Ulazi u prompt i u naslovnicu rada. Možeš preskočiti ako još ne znaš.',
+    o:[['','Preskoči — javit ću poslije','']],
+    input:'npr. doc. dr. sc. Ime Prezime',
+    pick(v){ const el = $('f_mentor'); if(el && v){ el.value = v; buildPrompt(); saveState(); } } }
+];
+
+function funnelFinish(target){
+  // chatStart(true) je vec napunio #chatLog prije nego je korisnik mogao
+  // kliknuti; bez ciscenja izbor bi se samo NADODAO na to i nastale bi dvije
+  // nesinkronizirane niti razgovora nad istim chat objektom.
+  const l = $('chatLog'); if(l) l.innerHTML = '';
+  // Zastavica MORA prije pokretanja chata: chatMode() po njoj zna da je tip
+  // rada već odgovoren na prvom ekranu i da ga ne treba pitati ponovno.
+  lsSet('rp_onb', '1');
+  (funPending || FUN_MODES.write)();
+  setScreen(target || 'fakultet');
+}
+function funnelRender(){
+  if(!$('funOpts')) return;
+  if(funStep < 0 || funStep >= FUN_Q.length) funStep = 0;
+  const s = FUN_Q[funStep];
+  // Lijevak je 5 pitanja: tip rada, gdje si, pa ova tri. Brojač ide kroz svih
+  // pet da ekrani 1 i 2 i ovaj govore istim jezikom.
+  const n = FUN_SKIPPED + funStep + 1, total = FUN_SKIPPED + FUN_Q.length;
+  $('funCount').innerHTML = 'Pitanje ' + n + ' od ' + total
+    + '<span class="onb-dots">' + Array.from({length: total}, (_, i) =>
+        '<i' + (i < n ? ' class="on"' : '') + '></i>').join('') + '</span>';
+  $('funQ').textContent = s.q;
+  $('funWhy').textContent = s.why || '';
+  const box = $('funOpts'); box.innerHTML = '';
+  if(s.input){
+    const wrap = document.createElement('div'); wrap.className = 'fun-input';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.placeholder = s.input; inp.id = 'funText';
+    const go = document.createElement('button');
+    go.type = 'button'; go.className = 'onb-choice'; go.innerHTML = '<b>Dalje \u2192</b>';
+    go.onclick = () => { s.pick(inp.value.trim()); funAdvance(); };
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter') go.click(); });
+    wrap.appendChild(inp); wrap.appendChild(go); box.appendChild(wrap);
+  }
+  s.o.forEach(([v, label, desc]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'onb-choice' + (s.input ? ' ghost' : '');
+    b.innerHTML = '<b>' + escA(label) + '</b>' + (desc ? '<span>' + escA(desc) + '</span>' : '');
+    b.onclick = () => { s.pick(v); funAdvance(); };
+    box.appendChild(b);
+  });
+}
+function funAdvance(){
+  funStep++;
+  if(funStep >= FUN_Q.length) funnelFinish();
+  else funnelRender();
+}
+
+// Ekran 1: gumbi nose data-tip, pa setTip() i sinkronizacija .on klase vec rade
+// preko zajednickog [data-tip] selektora — ovdje treba samo korak dalje.
+document.querySelectorAll('#scr-tip [data-tip]').forEach(b => {
+  b.addEventListener('click', () => setScreen('gdje'));
+});
+document.querySelectorAll('#scr-gdje [data-gdje]').forEach(b => {
+  b.onclick = () => {
+    const v = b.dataset.gdje;
+    funPending = FUN_MODES[v] || FUN_MODES.write;
+    // "Kako ovo radi?" preskace pitanja — taj je korisnik dosao gledati,
+    // ne postavljati rok.
+    if(v === 'help'){ funnelFinish('chat'); return; }
+    funStep = 0; setScreen('pitanja'); funnelRender();
+  };
+});
+document.querySelectorAll('[data-back]').forEach(b => {
+  b.onclick = () => setScreen(b.dataset.back);
+});
+const funBackEl = $('funBack');
+if(funBackEl) funBackEl.onclick = () => {
+  if(funStep > 0){ funStep--; funnelRender(); } else setScreen('gdje');
+};
+// Ekran 4 -> ploca. Gumb je UVIJEK aktivan: lpInit() je async i ceka
+// /katedra-pack.json; padne li fetch, kaskada ostane prazna i bez ovoga bi
+// korisnik zapeo na ekranu s kojeg nema izlaza.
+const fakNextEl = $('fakNext');
+// Lijevak vodi u PISANJE, ne u checklistu. Dosad je ostavljao korisnika na
+// ploči, pa je morao sam pronaći tab Start — jedan korak čiste prepreke
+// između njega i onoga zbog čega je došao. Indeks je i dalje jedan klik
+// dalje, a traka sljedećeg koraka vidi se i s ovog ekrana.
+if(fakNextEl) fakNextEl.onclick = () => setScreen('chat');
+
+/* ---------- EKRAN 7: POVRATAK ----------
+   Doček nakon pauze: jedna rečenica, jedan gumb, ništa se ne traži ručno.
+   Tekst dolazi iz nextStepText(), istog izvora koji puni liniju i traku —
+   da se poruka o sljedećem koraku ne može razići na tri mjesta. */
+const RETURN_AFTER = 4 * 3600e3;   // ispod ovoga povratak nije "povratak"
+function retGapText(ms){
+  const h = Math.floor(ms / 3600e3), dn = Math.floor(h / 24);
+  if(dn >= 1) return 'Vraćaš se nakon ' + dn + (dn === 1 ? ' dana' : ' dana');
+  return 'Vraćaš se nakon ' + h + (h === 1 ? ' sata' : ' sati');
+}
+function renderReturn(gapMs){
+  if(!$('retLine')) return;
+  const ns = nextStepText();
+  $('retGap').textContent = gapMs ? retGapText(gapMs) : 'Nastavimo gdje smo stali';
+  $('retHi').innerHTML = greetHtml().replace(/^👋 /, '');
+  $('retLine').innerHTML = ns.html;
+  const go = $('retGo');
+  // Isto pravilo kao pri ulasku: spreman za pisanje ide u Start, ostali na
+  // fazu na kojoj su stali.
+  if(go) go.onclick = () => {
+    if(ns.ready && !ns.allDone) setScreen('chat');
+    else { setScreen('ploca'); goToNextStep(ns.pos); }
+  };
+}
 
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
 const lkq = { list: [], i: 0 };
@@ -1883,7 +2535,7 @@ function lkExplain(it){
     + '2. KAKO ga ispravim u Wordu — konkretni koraci, izbornik po izbornik\n'
     + '3. NA ŠTO paziti da se ne vrati\n'
     + 'NE mijenjaj sadržaj mojih rečenica — ovo je formatna/tehnička stavka.';
-  const d = pushA('<b>Uputa za Claude</b> — kopiraj u claude.ai ili pitaj odmah ovdje:');
+  const d = pushA('<b>Gotova uputa</b> — pitaj odmah ovdje ili kopiraj u vlastiti alat:');
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = p; bub.appendChild(out);
   const cp = document.createElement('button'); cp.className = 'copy-btn'; cp.textContent = '📋 Kopiraj';
@@ -1922,14 +2574,17 @@ function lkFinish(){
 window.addEventListener('hashchange', lkParseHash);
 
 loadState();
-document.querySelectorAll('#tipSeg button').forEach(x => x.classList.toggle('on', x.dataset.tip === state.tip));
+// Mentorov stol: otvorena je faza na kojoj si, ne uvijek f0. Mora prije
+// renderPhases() jer on čita openPhases pri crtanju.
+(() => { const p = PHASES[linePos()]; if(p){ openPhases.clear(); openPhases.add(p.id); } })();
+document.querySelectorAll('[data-tip]').forEach(x => x.classList.toggle('on', x.dataset.tip === state.tip));
 applyTipPlaceholders();
 renderPhases();
 applyMode();
 buildAuto();
 renderDeadlines();
 renderWC();
-chatStart();
+chatStart(true);
 buildLine();
 renderLine();
 renderIndeksHead();
@@ -1937,13 +2592,32 @@ updatePaper();
 lkParseHash();
 refreshAuthAndCredits();
 handlePaymentReturn();
+// Vrati zadnji ekran (i s njim tab). Prije se svaki reload vraćao na chat, pa
+// si nakon osvježavanja gubio mjesto na kojem si radio.
+(() => {
+  const last = +(lsGet('rp_seen') || 0), gap = Date.now() - last;
+  lsSet('rp_seen', String(Date.now()));
+  // Dovoljno duga pauza uz stvarni napredak nadjačava zapamćeni ekran —
+  // tada je pravi doček "nastavimo gdje smo stali", a ne ploča usred posla.
+  if(last && gap > RETURN_AFTER && hasRealProgress() && screenAvailable('povratak')){
+    renderReturn(gap); setScreen('povratak'); return;
+  }
+  const s = lsGet('rp_screen');
+  if(s && SCREENS.includes(s) && screenAvailable(s) && s !== 'povratak'){
+    // Spremljena ploča ustupa mjesto Startu čim je priprema gotova.
+    setScreen(s === 'ploca' ? landingScreen() : s); return;
+  }
+  // Bez spremljenog ekrana: tko je već prošao lijevak ide na ploču (ili Start
+  // ako je spreman za pisanje), ostali kreću od prvog pitanja.
+  setScreen(lsGet('rp_onb') === '1' ? landingScreen() : 'tip');
+})();
 
 /* ---------- PWA / INSTALACIJA / VERZIJA ---------- */
 try{
   const man = {
     name:'Katedra — kopilot za radove', short_name:'Katedra',
     start_url: location.href, display:'standalone',
-    background_color:'#07080d', theme_color:'#07080d',
+    background_color:'#1e3a2f', theme_color:'#1e3a2f',
     icons:[{src: new URL('katedra-icon.png', location.href).href, sizes:'512x512', type:'image/png'}]
   };
   const l = document.createElement('link'); l.rel = 'manifest';
