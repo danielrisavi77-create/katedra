@@ -327,9 +327,11 @@ function scrollToNow(){
   el.scrollIntoView({ behavior: smoothly(), block: 'center' });
   return true;
 }
+const TABS = ['chat','check','help','cheat','auto','gen'];
 function setTab(v){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id==='view-'+v));
+  lsSet('rp_tab', v);   // aktivni tab preživi reload; prije se uvijek vraćalo na chat
   if(v === 'check'){
     if(typeof renderIndeksHead === 'function') renderIndeksHead();
     // Ulazak u Indeks vodi točno na mjesto gdje treba djelovati. Dok napretka
@@ -2379,6 +2381,12 @@ updatePaper();
 lkParseHash();
 refreshAuthAndCredits();
 handlePaymentReturn();
+// Vrati zadnji otvoreni tab. Prije se svaki reload vraćao na chat, pa si
+// nakon osvježavanja gubio mjesto na kojem si radio.
+(() => {
+  const t = lsGet('rp_tab');
+  if(t && TABS.includes(t) && t !== 'chat') setTab(t);
+})();
 
 /* ---------- PWA / INSTALACIJA / VERZIJA ---------- */
 try{

@@ -669,3 +669,44 @@
   .katedra-page .skin-note{font-size:11px;color:var(--mut2);padding:9px 9px 4px;border-top:1px solid var(--line);
     margin-top:6px;line-height:1.45}
   @media(max-width:560px){.katedra-page .skin-open span.lbl{display:none}}
+
+  /* ══════════════════════════════════════════════════════════════════
+     LINEARNI TOK EKRANA — data-screen / data-chrome na #katedra-root
+
+     Ekran je vanjski okvir, tab je unutarnja ploha radne ploče. setTab()
+     ostaje jedini koji dira .view.on; ova pravila samo sakrivaju okvir.
+
+     ZAŠTO POSTOJI data-chrome: ".katedra-page .view.on" ima specifičnost
+     (0,2,1). Pravilo tipa [data-screen="tip"] .view ima (0,2,0) i GUBI, pa
+     bi viewovi ostali vidljivi ispod uvodnih ekrana. Oblik
+     ".katedra-page[data-chrome=…] .view.on" ima (0,3,1) i pobjeđuje čisto.
+     Ne "popravljati" ovo s !important — time pucaju ekrani 4–6.
+     ══════════════════════════════════════════════════════════════════ */
+  .katedra-page .screen{display:none}
+  .katedra-page[data-screen="tip"] #scr-tip,
+  .katedra-page[data-screen="gdje"] #scr-gdje,
+  .katedra-page[data-screen="pitanja"] #scr-pitanja,
+  .katedra-page[data-screen="povratak"] #scr-povratak{display:block;animation:katedra-fade .25s ease}
+
+  /* uvodni ekrani i ekran fakulteta gase cijelu plohu tabova */
+  .katedra-page[data-chrome="funnel"] .view.on{display:none}
+
+  /* ekran fakulteta = #view-cheat sveden na #fakCard.
+     Selektor MORA biti "#cheatRoot > *", ne ".cs-grid > *" — #view-help je
+     također .cs-grid pa bi se inače ispraznio. */
+  .katedra-page[data-chrome="fak"] #cheatRoot > *:not(#fakCard){display:none}
+  .katedra-page[data-chrome="fak"] #fakCard{grid-column:1/-1}
+  .katedra-page:not([data-chrome="fak"]) #fakHead,
+  .katedra-page:not([data-chrome="fak"]) #fakFoot{display:none}
+
+  .katedra-page[data-chrome="funnel"] #tabs,
+  .katedra-page[data-chrome="fak"] #tabs,
+  .katedra-page[data-chrome="funnel"] #stepbar,
+  .katedra-page[data-chrome="fak"] #stepbar{display:none}
+  /* #nextBar dobiva inline display iz renderLine(), pa ga CSS smije samo
+     skrivati — prikaz i dalje odlučuje hasRealProgress(). */
+  .katedra-page[data-chrome="funnel"] #nextBar,
+  .katedra-page[data-chrome="fak"] #nextBar{display:none!important}
+
+  .katedra-page:not([data-screen="ploca"]) .tip-row,
+  .katedra-page:not([data-screen="ploca"]) .linija{display:none}
