@@ -395,7 +395,10 @@
   .katedra-page .kp-chap.live .sk i{transform:scaleX(1);background:var(--pl-skel2)}
   .katedra-page .kp-files{font-size:10.5px;color:var(--ink2)}
   .katedra-page .kp-files div{padding:2px 0;border-bottom:1px dotted var(--pline)}
-  .katedra-page .kp-pct{position:absolute;top:9px;right:9px;font-size:9.5px;font-weight:800;background:var(--ink);color:var(--paper);border-radius:99px;padding:3px 9px}
+  .katedra-page .kp-file-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .katedra-page .kp-file-del{cursor:pointer;font-style:normal;opacity:.6;padding:0 4px}
+  .katedra-page .kp-file-del:hover{opacity:1;color:var(--bad)}
+  .katedra-page .kp-pct{position:absolute;top:9px;right:9px;left:60px;font-size:9.5px;font-weight:800;background:var(--ink);color:var(--paper);border-radius:99px;padding:3px 9px;max-width:calc(100% - 69px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:right}
   .katedra-page .kp-rok{font-size:10.5px;color:var(--stamp);font-weight:700}
 
   /* chat kao marginalije */

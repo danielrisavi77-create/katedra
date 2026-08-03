@@ -2657,12 +2657,21 @@ function updatePaper(){
   const tl = TIP_LABEL[state.tip];
   $('kpSub').textContent = tl.charAt(0) + tl.slice(1).toLowerCase() + ' · Zagreb, ' + new Date().getFullYear() + '.';
   $('kpFak').textContent = val('f_fakultet') || 'tvoj fakultet';
+  // .kp-pct je mali position:absolute pill u kutu kartice (bio je "RAD: 45 %",
+  // ~10 znakova) — puni readinessSummary() tekst ("FAZA: PISANJE · 2 kritična
+  // blockera · Lekta re-check potreban") je predugačak za taj oblik i prelijeva
+  // se preko naslova. Značka ostaje kratka (faza + kompaktan broj kritičnih),
+  // puni detalj ide u title tooltip; potpun prikaz živi u scanSummary panelu
+  // na vrhu Indeksa, gdje ima stvarnog prostora.
   const rs = readinessSummary();
-  const rsBits = ['FAZA: ' + rs.phase];
-  if(rs.crit) rsBits.push(rs.crit + ' ' + (rs.crit === 1 ? 'kritičan blocker' : 'kritičnih blockera'));
-  else if(rs.open) rsBits.push(rs.open + ' ' + (rs.open === 1 ? 'otvoren zadatak' : 'otvorenih zadataka'));
-  if(rs.lektaOpen) rsBits.push('Lekta re-check potreban');
-  $('kpPct').textContent = rsBits.join(' · ');
+  const kpEl = $('kpPct');
+  kpEl.textContent = 'FAZA: ' + rs.phase + (rs.crit ? ' · ' + rs.crit + '🔴' : '');
+  kpEl.title = [
+    'Faza: ' + rs.phase,
+    rs.crit ? rs.crit + ' ' + (rs.crit === 1 ? 'kritičan blocker' : 'kritičnih blockera')
+            : (rs.open ? rs.open + ' ' + (rs.open === 1 ? 'otvoren zadatak' : 'otvorenih zadataka') : 'Nema otvorenih kritičnih stavki'),
+    rs.lektaOpen ? 'Lekta re-check potreban' : '',
+  ].filter(Boolean).join(' · ');
   /* sadržaj: poglavlja iz raspodjele opsega; žive nakon PLAN faze, pune se s PISANJEM */
   const chaps = WC_SPLIT[state.tip];
   const pos = linePos();
@@ -2680,8 +2689,17 @@ function updatePaper(){
   }).join('');
   const kf = $('kpFiles');
   if(chat.files.length){
-    kf.innerHTML = chat.files.slice(0,6).map(f => '<div>· ' + escA(f.name) + '</div>').join('') +
-      (chat.files.length > 6 ? '<div>+ još ' + (chat.files.length - 6) + '</div>' : '');
+    // Jedino trajno vidljivo mjesto s popisom priloga (chat-bubble chipovi s
+    // × iz addChatFiles() nestaju sa scrollom ili uopće ne postoje ako je
+    // datoteka dodana preko glavnog ＋ gumba izvan chatAttach() koraka — v.
+    // audit nalaz). Zato i ovdje mora postojati stvaran način brisanja, ne
+    // samo read-only ispis.
+    kf.innerHTML = chat.files.slice(0,6).map((f, i) =>
+      '<div class="kp-file-row"><span>· ' + escA(f.name) + '</span><i class="kp-file-del" data-idx="' + i + '" title="Ukloni">×</i></div>'
+    ).join('') + (chat.files.length > 6 ? '<div>+ još ' + (chat.files.length - 6) + '</div>' : '');
+    kf.querySelectorAll('[data-idx]').forEach(el => {
+      el.onclick = () => { chat.files.splice(Number(el.dataset.idx), 1); updatePaper(); };
+    });
   } else kf.innerHTML = '<div style="border:0;color:var(--pl-ph);font-style:italic">— još nema priloga —</div>';
   const rv = val('dl_rok');
   $('kpRok').textContent = rv ? new Date(rv+'T12:00:00').toLocaleDateString('hr-HR', {day:'numeric', month:'long', year:'numeric'}) : 'nije postavljen';
@@ -2739,14 +2757,24 @@ async function refreshAuthAndCredits(){
     const projectId = (getManifest() || {}).projectId || '';
     const resp = await fetch('/api/balance?projectId=' + encodeURIComponent(projectId));
     if(resp.status === 401){ katedraNeedsPass = false; katedraLoggedIn = false; renderAuthHeader(false, false); return false; }
-    if(!resp.ok){ return false; }
+    if(!resp.ok){
+      // Ne znamo stvarno stanje (npr. 500) — #katedraAuth NE smije ostati
+      // trajno prazan bez prijave opcije. Ako smo prije bili prijavljeni, ne
+      // diramo header (moglo bi biti prolazna greška); inače pokaži "Prijavi
+      // se" kao siguran default umjesto tihog odustajanja.
+      if(katedraLoggedIn !== true) renderAuthHeader(false, false);
+      return false;
+    }
     const data = await resp.json();
     katedraNeedsPass = !data.hasPass && !!data.low;
     katedraLoggedIn = true;
     renderAuthHeader(true, data.hasPass);
     if(!katedraStateReconciled){ katedraStateReconciled = true; reconcileServerState(); }
     return true;
-  }catch(e){ return false; }
+  }catch(e){
+    if(katedraLoggedIn !== true) renderAuthHeader(false, false);
+    return false;
+  }
 }
 function showPaywall(){
   if(document.getElementById('katedraPaywall')) return;
