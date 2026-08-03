@@ -14,7 +14,7 @@ import {
   fromLegacyKatedraWorkType,
   isAcademicWorkType,
 } from '@/lib/academic-suite/contracts'
-import { GEN_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
+import { GEN_SERVER_SAFE_KEYS, LOG_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
 
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
@@ -85,7 +85,13 @@ function sanitizeHist(raw) {
 }
 function sanitizeLog(raw) {
   if (!Array.isArray(raw)) return raw
-  return raw.map((e) => ({ t: e?.t, txt: typeof e?.txt === 'string' ? e.txt.slice(0, 120) : e?.txt }))
+  return raw.map((e) => {
+    const safe = { t: e?.t, txt: typeof e?.txt === 'string' ? e.txt.slice(0, 120) : e?.txt }
+    for (const key of LOG_SERVER_SAFE_KEYS) {
+      if (e && Object.prototype.hasOwnProperty.call(e, key)) safe[key] = e[key]
+    }
+    return safe
+  })
 }
 
 function cleanOpaqueId(value) {

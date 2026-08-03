@@ -38,3 +38,21 @@ export const GEN_SERVER_SAFE_KEYS = [
   'a_learn',
   'aiAck',
 ]
+
+// Same allowlist pattern, applied to `log` entries (Project Ledger v1 —
+// rpLog() in app/katedra-engine.js). `t`/`txt` always pass through (txt is
+// already length-capped, never raw academic content by convention); these
+// are the ADDITIONAL structured fields a log entry may carry — short
+// enums/ids/numbers only, never free text. A field not listed here is
+// dropped on sync, same fail-closed default as GEN_SERVER_SAFE_KEYS.
+export const LOG_SERVER_SAFE_KEYS = [
+  'kind',
+  'phaseId',
+  'level',
+  'mode',
+  'files',
+  'lekta_result',
+  'done',
+  'skip',
+  'open',
+]
