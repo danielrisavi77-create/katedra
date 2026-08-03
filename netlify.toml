@@ -2,6 +2,9 @@
   command = "npm run build"
   publish = ".next"
 
+[build.environment]
+  NODE_VERSION = "22"
+
 # Modern Next.js is deployed by Netlify through its automatically managed
 # OpenNext adapter. Do not pin @netlify/plugin-nextjs unless a rollback to a
 # specific adapter version is intentionally required.
