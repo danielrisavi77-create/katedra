@@ -77,7 +77,9 @@
   .katedra-page .tabs button.on{background:var(--grad);border-color:transparent;color:var(--on-acc);box-shadow:0 4px 16px rgba(var(--acc-rgb),.3)}
 
   /* ---------- NEXT-STEP TRAKA (F2) — uvijek vidljiv sljedeći korak, isti CTA kroz cijelu app ---------- */
-  .katedra-page .next-bar{position:sticky;top:52px;z-index:45;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 16px;margin:0 0 12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  /* top se prepisuje iz syncStickyOffsets() prema stvarnoj visini #tabs —
+     fiksnih 52px bilo je manje od trake tabova, pa je traka klizila ispod nje. */
+  .katedra-page .next-bar{position:sticky;top:52px;z-index:45;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 16px;margin:10px 0 14px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
   .katedra-page .nb-txt{flex:1;min-width:0;font-size:14px;color:var(--txt);line-height:1.35;font-weight:600}
   .katedra-page .nb-lbl{display:block;font-size:9.5px;font-weight:800;letter-spacing:1.5px;
     text-transform:uppercase;color:var(--mut2);margin-bottom:2px}
@@ -106,7 +108,7 @@
   .katedra-page .ph-ico{width:40px;height:40px;border-radius:12px;background:var(--card2);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
   .katedra-page .phase.done .ph-ico{background:rgba(var(--ok-rgb),.12);border-color:rgba(var(--ok-rgb),.4)}
   .katedra-page .ph-tit{flex:1;min-width:0}
-  .katedra-page .ph-tit h3{font-size:15px;font-weight:800;letter-spacing:-.2px}
+  .katedra-page .ph-tit h3{font-size:16.5px;font-weight:800;letter-spacing:-.35px}
   .katedra-page .ph-tit p{font-size:12.5px;color:var(--mut);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .katedra-page .ph-meta{display:flex;align-items:center;gap:10px;flex-shrink:0}
   .katedra-page .ph-count{font-size:12px;font-weight:800;color:var(--mut)}
@@ -140,8 +142,8 @@
   .katedra-page .it-detail{display:none;font-size:12.8px;color:var(--mut);margin-top:6px;background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:9px;padding:9px 12px}
   .katedra-page .item.exp .it-detail{display:block}
   .katedra-page .it-detail b{color:var(--txt)}
-  .katedra-page .why{border:0;background:transparent;color:var(--acc2);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;padding:2px 0 0;display:inline-flex;gap:4px;align-items:center}
-  .katedra-page .why:hover{text-decoration:underline}
+  .katedra-page .why{border:0;background:transparent;color:var(--mut2);font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;padding:2px 0 0;display:inline-flex;gap:4px;align-items:center;transition:color .15s}
+  .katedra-page .why:hover{color:var(--acc);text-decoration:underline}
   .katedra-page .jump{display:inline-flex;align-items:center;gap:6px;margin-top:7px;background:rgba(var(--acc-rgb),.12);color:var(--acc);border:1px solid rgba(var(--acc-rgb),.35);border-radius:9px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
 
   /* ---------- GENERATOR ---------- */
@@ -235,7 +237,7 @@
   .katedra-page .dl-row.past .date{color:var(--bad)}
 
   /* ---------- CHAT ---------- */
-  .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:min(74vh,720px);min-height:460px;overflow:hidden}
+  .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:min(78vh,900px);min-height:460px;overflow:hidden}
   .katedra-page .chat-log{flex:1;overflow-y:auto;padding:18px 14px;display:flex;flex-direction:column;gap:12px}
   .katedra-page .msg{max-width:92%;display:flex;flex-direction:column;gap:8px;animation:katedra-fade .25s ease}
   .katedra-page .msg.a{align-self:flex-start}
@@ -311,7 +313,7 @@
   .katedra-page .tabs button.adv{opacity:1}
 
   /* ══════════ LINIJA (koncept C — header) ══════════ */
-  .katedra-page .linija{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px 4px;margin:14px 0 4px}
+  .katedra-page .linija{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px 4px;margin:14px 0 12px}
   .katedra-page .lin-map{position:relative;padding:24px 6px 2px}
   .katedra-page .lin-rail{position:absolute;left:26px;right:26px;top:42px;height:6px;background:var(--rail);border-radius:99px}
   .katedra-page .lin-rail i{position:absolute;left:0;top:0;bottom:0;background:var(--grad);border-radius:99px;width:0%;transition:width .7s cubic-bezier(.6,0,.3,1)}

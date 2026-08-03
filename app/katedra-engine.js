@@ -327,6 +327,15 @@ function refreshProgress(){
 function escA(s){ return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 /* ---------- TABS ---------- */
 function smoothly(){ return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'; }
+// #nextBar se lijepi ispod #tabs. Fiksni top u CSS-u bio je 52px, a traka
+// tabova je visoka 63 — pa je traka pri skrolanju klizila 11px ispod njih.
+// Mjeri se jer se tabovi na uskom ekranu prelome u dva reda.
+function syncStickyOffsets(){
+  const t = $('tabs'), n = $('nextBar');
+  if(!t || !n) return;
+  const h = Math.round(t.getBoundingClientRect().height);
+  if(h > 0) n.style.top = h + 'px';
+}
 // Dovedi pogled na fazu na kojoj si. Ako je već pred tobom, ne miči stranicu —
 // skrol koji se dogodi bez potrebe djeluje kao da je nešto puklo.
 function scrollToNow(){
@@ -379,6 +388,7 @@ function setScreen(id, tab){
   // .linija je do maloprije mogla biti skrivena; renderLine() mjeri offsetWidth
   // pa bi bez ovoga tračnica ostala široka 0 i tramvaj bi ispao izvan okvira.
   if(typeof renderLine === 'function') renderLine();
+  syncStickyOffsets();   // traka tabova mijenja visinu kad se ekran promijeni
 }
 function setTab(v){
   // Bez ovoga bi view dobio .on, a chrome ga skrio — tiha prazna stranica.
@@ -974,7 +984,7 @@ function renderLine(){
   const nbBtn = $('nextBarBtn');
   if(nbBtn) nbBtn.classList.toggle('glow', barVisible);
 }
-window.addEventListener('resize', () => { if($('linSts')) renderLine(); });
+window.addEventListener('resize', () => { if($('linSts')) renderLine(); syncStickyOffsets(); });
 
 /* ---------- RASPODJELA OPSEGA ---------- */
 const WC_SPLIT = {
