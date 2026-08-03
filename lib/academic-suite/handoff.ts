@@ -19,11 +19,6 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-/**
- * Decode a fragment value without relying on the legacy escape/decodeURIComponent
- * UTF-8 trick. URL fragments may arrive percent-encoded or already decoded,
- * depending on how the browser/navigation constructed the URL, so try both.
- */
 function decodeUtf8Base64(value: string): unknown {
   const candidates = [value]
   try {
@@ -59,11 +54,6 @@ function isSharedLektaResult(value: any): value is LektaResult {
   )
 }
 
-/**
- * Converts shared `LektaResult v0.1` into the payload expected by today's
- * vanilla `lkParseHash/lkNorm` implementation. This is a temporary compatibility
- * seam; the shared payload remains the source contract.
- */
 export function sharedLektaResultToLegacyPayload(result: LektaResult) {
   return {
     v: 1,
@@ -89,11 +79,13 @@ export function sharedLektaResultToLegacyPayload(result: LektaResult) {
 }
 
 /**
- * Runs before `initKatedraEngine()`.
+ * Runs before the legacy engine consumes a #lekta= payload. Shared v0.1 links
+ * are reconciled and rewritten in-place to the legacy internal shape.
  *
- * Existing legacy #lekta= links are left untouched. Shared v0.1 links first
- * reconcile the previous stable finding set, then are rewritten to the legacy
- * internal shape so the current engine can consume them without a large edit.
+ * `history.replaceState` is intentional: on a live hashchange we must update
+ * `location.hash` synchronously without emitting a second hashchange event.
+ * The legacy listener, registered after this normalizer, then reads the already
+ * normalized fragment from the same original event.
  */
 export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
   if (typeof window === 'undefined') return false
@@ -122,12 +114,16 @@ export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
     diagnostic('reconciled', decoded.analysisId)
 
     const legacy = sharedLektaResultToLegacyPayload(decoded)
-    window.location.hash = `#lekta=${encodeUtf8Base64(legacy)}`
+    const normalizedHash = `#lekta=${encodeUtf8Base64(legacy)}`
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}${normalizedHash}`,
+    )
     diagnostic('normalized', decoded.analysisId)
     return true
   } catch (error) {
     diagnostic('error', error instanceof Error ? error.message : String(error))
-    // Let the existing engine show its established unreadable-link message.
     return false
   }
 }
