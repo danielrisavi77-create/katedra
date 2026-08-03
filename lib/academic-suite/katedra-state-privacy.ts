@@ -45,6 +45,10 @@ export const GEN_SERVER_SAFE_KEYS = [
 // are the ADDITIONAL structured fields a log entry may carry — short
 // enums/ids/numbers only, never free text. A field not listed here is
 // dropped on sync, same fail-closed default as GEN_SERVER_SAFE_KEYS.
+//
+// aiGenerated/tool/model/reviewed/stage come from the honest AI ledger
+// (Faze 2-4 review) — all short enums/booleans/model-id strings, never the
+// actual AI response or prompt text (that stays txt-capped, same as before).
 export const LOG_SERVER_SAFE_KEYS = [
   'kind',
   'phaseId',
@@ -55,4 +59,9 @@ export const LOG_SERVER_SAFE_KEYS = [
   'done',
   'skip',
   'open',
+  'aiGenerated',
+  'tool',
+  'model',
+  'reviewed',
+  'stage',
 ]

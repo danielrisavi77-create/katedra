@@ -166,7 +166,7 @@ const PHASES = [
 ];
 
 /* ---------- STATE ---------- */
-const state = { tip:'z', checks:{}, mode:'write' };
+const state = { tip:'z', checks:{}, mode:'write', mentorTasks:[] };
 const TIP_LABEL = {s:'SEMINARSKI RAD', z:'ZAVRŠNI RAD', d:'DIPLOMSKI RAD'};
 const TIP_MOD = {s:'SEMINAR MODE', z:'DIPLOMSKI MODE (završni rad — manji opseg)', d:'DIPLOMSKI MODE'};
 const TIP_OPSEG = {s:'npr. 1.500–3.000 riječi', z:'npr. 25–35 stranica', d:'npr. 15.000–30.000 riječi'};
@@ -287,7 +287,7 @@ function refreshProgress(){
     PHASES.forEach(ph => {
       const items = visibleItems(ph); if(!items.length) return;
       const full = items.every(it => state.checks[ph.id+':'+it.t]);
-      if(full && !logged.has(ph.id)){ logged.add(ph.id); rpLog('Dovršena '+ph.tit, {kind:'milestone', phaseId: ph.id}); dirty = true; }
+      if(full && !logged.has(ph.id)){ logged.add(ph.id); rpLog('Dovršena '+ph.tit, {kind:'milestone', phaseId: ph.id, aiGenerated:false, stage:'process'}); dirty = true; }
     });
     if(dirty) lsSet('rp_logf', JSON.stringify([...logged]));
   }catch(e){}
@@ -299,6 +299,7 @@ function refreshProgress(){
   if(typeof renderIndeksHead === 'function') renderIndeksHead();
   if(typeof updatePaper === 'function') updatePaper();
   if(typeof renderBoardHi === 'function') renderBoardHi();
+  if(typeof renderScanSummary === 'function') renderScanSummary();
   /* Semafor na tabovima: nedostupno je vidljivo, ali zaključano. Uvjet je
      pravilo same aplikacije — faze 0–2 na 100 % prije prvog prompta. */
   const preP = totPre ? ckPre/totPre : 0;
@@ -507,7 +508,9 @@ function capabilityGate(capId){
   return {allowed:false, resolved};
 }
 function saveState(){
-  lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen()}));
+  // mentorTasks NE ide u gatherServerState()/syncServerDebounced(): PRODUCT_CONSTITUTION.md
+  // izričito zabranjuje "mentor comments" u shared backendu — ostaju samo ovdje, lokalno.
+  lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen(), mentorTasks: state.mentorTasks}));
   syncServerDebounced();
 }
 /* ---------- SUITE ANALYTICS (priprema za Layer E — completion outcome data) ----------
@@ -537,6 +540,7 @@ function loadState(){
     const d = JSON.parse(raw);
     if(d.tip) state.tip = d.tip;
     if(d.checks) state.checks = d.checks;
+    if(Array.isArray(d.mentorTasks)) state.mentorTasks = d.mentorTasks;
     if(d.gen){
       GEN_IDS.forEach(id => { if($(id) && d.gen[id] !== undefined) $(id).value = d.gen[id]; });
       ['f_brutal','a_gradja','u_skills','a_learn'].forEach(k => { if($(k)) $(k).checked = !!d.gen[k]; });
@@ -547,10 +551,15 @@ function loadState(){
 function getHist(){ try{ return JSON.parse(lsGet('rp_hist') || '[]'); }catch(e){ return []; } }
 function pushHist(entry){ const h = getHist(); h.unshift(entry); lsSet('rp_hist', JSON.stringify(h.slice(0,10))); syncServerNow(); }
 function getLog(){ try{ return JSON.parse(lsGet('rp_log') || '[]'); }catch(e){ return []; } }
-// meta nosi strukturirane podatke uz čitljivi txt (kind + specifična polja po
-// vrsti događaja: phaseId, level, mode, files, lekta_result, done/skip/open…)
-// — v1 Project Ledgera: isti log kao prije, samo strojno čitljiv uz tekstualni.
-// Server-safe polja idu kroz LOG_SERVER_SAFE_KEYS (logForServer/sanitizeLog).
+// meta nosi DVA nezavisna sloja podataka koja mogu koegzistirati na istom
+// zapisu: {kind} = strojno čitljiva taksonomija DOGAĐAJA (v. LOG_KIND_LABELS
+// — milestone/ai_declaration/prompt_generated/session_started/ai_response/
+// lekta_check/lekta_fix_round, + specifična polja po vrsti poput
+// phaseId/level/mode/files/lekta_result/done/skip/open), i {aiGenerated,
+// stage, tool, model, reviewed} = AI-provenance signal (je li ZAPIS AI
+// sadržaj, koji model, je li student stvarno pregledao) — potonje ima smisla
+// prvenstveno na kind:'ai_response' zapisima. Server-safe polja idu kroz
+// LOG_SERVER_SAFE_KEYS (logForServer/sanitizeLog).
 function rpLog(txt, meta){
   const l = getLog();
   const entry = Object.assign({t: Date.now(), txt}, meta || {});
@@ -567,6 +576,15 @@ const LOG_KIND_LABELS = {
   lekta_check: 'Lekta provjera',
   lekta_fix_round: 'Krug ispravaka',
 };
+// "Pregledano" nije checkbox nego stvaran signal: student je ili kopirao AI
+// odgovor, ili nastavio razgovor (poslao sljedeću poruku) — oboje znači da je
+// prethodni odgovor stvarno vidio prije nego je krenuo dalje.
+function markLastAiEntryReviewed(){
+  const l = getLog();
+  for(let i = l.length - 1; i >= 0; i--){
+    if(l[i].aiGenerated){ if(!l[i].reviewed){ l[i].reviewed = true; lsSet('rp_log', JSON.stringify(l)); syncServerNow(); } return; }
+  }
+}
 // Server-sync copies of hist/log (Audit 5) — pushHist()/rpLog() themselves
 // stay full-fidelity for localStorage; only what leaves the browser drops
 // the actual generated prompt text / AI-response content, keeping just
@@ -582,13 +600,14 @@ function logForServer(list){
 function exportDnevnik(){
   const l = getLog();
   const fmt = ts => new Date(ts).toLocaleString('hr-HR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+  const src = e => e.aiGenerated ? ('🤖 AI (' + (e.model || 'nepoznat model') + ')' + (e.reviewed ? ' · pregledano' : ' · NIJE JOŠ PREGLEDANO') ) : '🎓 Katedra/proces';
   let md = '# DNEVNIK PROCESA IZRADE RADA\n\n';
   md += 'Student: ______________________\n\n';
   md += 'Rad: ' + (val('a_tema') || val('f_tema') || '______________________') + '\n\n';
   md += 'Izvezeno: ' + fmt(Date.now()) + ' (Katedra)\n\n';
-  md += '## Kronologija (automatski bilježeno u alatu)\n\n| Datum i vrijeme | Vrsta | Događaj |\n|---|---|---|\n';
-  md += (l.length ? l.map(e => '| ' + fmt(e.t) + ' | ' + (LOG_KIND_LABELS[e.kind] || '—') + ' | ' + String(e.txt).replace(/\|/g,'/') + ' |').join('\n') : '| — | — | (još nema zabilježenih događaja) |');
-  md += '\n\n## Napomena\n\nPotpuni dokaz procesa izrade čine i: transkripti razgovora (izvoz dnevnika iz Katedre), sačuvane verzije dokumenta i komunikacija s mentorom.\n';
+  md += '## Kronologija (automatski bilježeno u alatu)\n\n| Datum i vrijeme | Vrsta | Izvor | Događaj |\n|---|---|---|---|\n';
+  md += (l.length ? l.map(e => '| ' + fmt(e.t) + ' | ' + (LOG_KIND_LABELS[e.kind] || '—') + ' | ' + src(e) + ' | ' + String(e.txt).replace(/\|/g,'/') + ' |').join('\n') : '| — | — | — | (još nema zabilježenih događaja) |');
+  md += '\n\n## Napomena\n\n"Vrsta" je kategorija događaja (v. legenda gore). "🤖 AI" u stupcu Izvor je AI ledger — bilježi da je tekst nastao u Katedrinom chatu (uz model koji je odgovorio) i je li ga student pregledao prije nastavka. "🎓 Katedra/proces" su koraci koje je napravio student (checklist, izjava, Lekta provjera) — ne AI sadržaj. Potpuni dokaz procesa izrade čine i: sačuvane verzije dokumenta i komunikacija s mentorom.\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'}));
   a.download = 'dnevnik-procesa.md';
@@ -708,8 +727,7 @@ function ensureManifest(){
   let m = getManifest();
   const isNew = !m;
   if(!m) m = { v:1, projectId: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-               createdAt: Date.now(), lektaIssues: [], lektaScore: null, lektaCheckedAt: '', lektaFixedTotal: 0, mentorComments: [] };
-  if(!Array.isArray(m.mentorComments)) m.mentorComments = [];
+               createdAt: Date.now(), lektaIssues: [], lektaScore: null, lektaCheckedAt: '', lektaFixedTotal: 0 };
   if(isNew) emitSuiteEvent('project_created', { workType: state.tip });
   m.unitId = lsGet('rp_unit') || m.unitId || '';
   m.profileId = lsGet('rp_profile') || m.profileId || '';
@@ -734,7 +752,6 @@ function gatherServerState(){
     topic: m.topic || '', deadline: m.deadline || '', rulesetVersion: m.rulesetVersion || '',
     lektaScore: m.lektaScore, lektaCheckedAt: m.lektaCheckedAt || '',
     lektaIssues: m.lektaIssues || [], lektaFixedTotal: m.lektaFixedTotal || 0,
-    mentorComments: m.mentorComments || [],
     checks: state.checks, gen: gatherGenForServer(),
     hist: histForServer(getHist()), log: logForServer(getLog()), logf: (() => { try{ return JSON.parse(lsGet('rp_logf')||'[]'); }catch(e){ return []; } })(),
   };
@@ -765,23 +782,19 @@ function applyServerState(d){
   if(d.logf) lsSet('rp_logf', JSON.stringify(d.logf));
   if(d.unitId){ lsSet('rp_unit', d.unitId); const lpSel = $('lpUnit'); if(lpSel) lpSel.value = d.unitId; }
   if(d.profileId){ lsSet('rp_profile', d.profileId); lpLevel = null; }   // razina se izvede iz profila
-  // mentorComments NEMA stupac u katedra_projects (WRITABLE_FIELDS ga svjesno
-  // izostavlja — nova kolona ide kroz Lekta migraciju prvo, v. CLAUDE.md
-  // "Database authority rule"). d.mentorComments je zato uvijek undefined;
-  // čuvamo postojeći lokalni popis umjesto da ga server-reconcile obriše.
-  const prevM = getManifest();
   const m = {
     v:1, projectId: d.guestProjectId || ('k'+Date.now().toString(36)),
     createdAt: Date.now(),
     unitId: d.unitId||'', profileId: d.profileId||'', workType: d.workType||state.tip,
     topic: d.topic||'', deadline: d.deadline||'', rulesetVersion: d.rulesetVersion||'',
     lektaScore: d.lektaScore ?? null, lektaCheckedAt: d.lektaCheckedAt||'',
-    lektaIssues: d.lektaIssues||[], lektaFixedTotal: d.lektaFixedTotal||0,
-    mentorComments: d.mentorComments || (prevM && prevM.mentorComments) || []
+    lektaIssues: d.lektaIssues||[], lektaFixedTotal: d.lektaFixedTotal||0
   };
   // izravno u localStorage — ne kroz saveManifest()/saveState() da ne okineš sync natrag
   lsSet('rp_manifest', JSON.stringify(m));
-  lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen()}));
+  // mentorTasks nikad ne dolazi sa servera (v. gatherGenForServer/state.mentorTasks
+  // komentar) — čuvamo postojeći lokalni popis umjesto da ga ovaj rewrite obriše.
+  lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen(), mentorTasks: state.mentorTasks}));
 }
 async function reconcileServerState(){
   if(!katedraLoggedIn) return;
@@ -1208,6 +1221,69 @@ function renderCompletionScan(){
     if(!loggedIn) return goToLogin();
     startCheckout(PKG_BY_TIP[state.tip] || 'diplomski');
   };
+}
+// Kompaktan "gdje sam sada" sažetak na vrhu Indeksa — isti podaci kao puna
+// checklista i nextStepText(), samo destilirani u tri broja i tri rizika.
+// Namjerno bez novog izvora istine: čita PHASES/state.checks/nextStepText().
+function renderScanSummary(){
+  const host = $('scanSummary'); if(!host) return;
+  let totAll = 0, ckAll = 0;
+  const risks = [];
+  PHASES.forEach(ph => {
+    visibleItems(ph).forEach(it => {
+      totAll++;
+      if(state.checks[ph.id+':'+it.t]) ckAll++;
+      else if(it.crit) risks.push(it.t);
+    });
+  });
+  let ns; try{ ns = nextStepText(); }catch(e){ ns = null; }
+  const rokLine = ns && ns.rok ? ns.rok.replace(/^\s*·\s*/, '') : 'Postavi rok predaje za vozni red.';
+  const hasRisks = risks.length > 0;
+  host.innerHTML =
+    '<div class="scan-head"><b>📋 Katedra Scan</b><span>Gdje stojiš upravo sada</span></div>' +
+    '<div class="scan-row">' +
+      '<div class="scan-stat"><b>' + ckAll + '/' + totAll + '</b><span>koraka riješeno</span></div>' +
+      '<div class="scan-line">' + rokLine + '</div>' +
+    '</div>' +
+    '<div class="scan-risk-head' + (hasRisks ? '' : ' ok') + '">' +
+      (hasRisks ? 'Najkritičnije još otvoreno' : '✅ Nema otvorenih kritičnih stavki — dobro stojiš') +
+    '</div>' +
+    (hasRisks ? '<ul class="scan-risks">' + risks.slice(0,3).map(t => '<li>' + escA(t) + '</li>').join('') + '</ul>' : '') +
+    (risks.length > 3 ? '<p class="scan-more">+ još ' + (risks.length - 3) + ' kritičnih stavki niže u Indeksu</p>' : '') +
+    (mentorOpenCount() ? '<p class="scan-mentor">🗣️ ' + mentorOpenCount() + ' ' + (mentorOpenCount()===1?'otvoren komentar mentora':'otvorena komentara mentora') + ' — v. Mentorovi komentari niže</p>' : '');
+}
+
+/* ---------- MENTOROVI KOMENTARI (lokalno, v. contracts.ts MentorTaskSyncCandidate) ----------
+   Namjerno bez sync-a na server: PRODUCT_CONSTITUTION.md zabranjuje "mentor comments"
+   u shared backendu, pa ovo ostaje u rp_state (localStorage), kao i checks/gen. */
+function mentorOpenCount(){ return state.mentorTasks.filter(t => !t.done).length; }
+function addMentorTask(text){
+  const t = (text || '').trim(); if(!t) return;
+  state.mentorTasks.push({ id: 'm'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), text: t, done:false });
+  saveState(); renderMentorTasks(); renderScanSummary();
+}
+function toggleMentorTask(id){
+  const t = state.mentorTasks.find(x => x.id === id); if(!t) return;
+  t.done = !t.done;
+  saveState(); renderMentorTasks(); renderScanSummary();
+}
+function deleteMentorTask(id){
+  state.mentorTasks = state.mentorTasks.filter(x => x.id !== id);
+  saveState(); renderMentorTasks(); renderScanSummary();
+}
+function renderMentorTasks(){
+  const host = $('mentorList'); if(!host) return;
+  if(!state.mentorTasks.length){
+    host.innerHTML = '<p class="mentor-empty">Još nema zabilježenih komentara.</p>';
+    return;
+  }
+  host.innerHTML = state.mentorTasks.map(t =>
+    '<div class="mentor-item' + (t.done ? ' done' : '') + '" data-id="' + escA(t.id) + '">' +
+      '<div class="cb" onclick="toggleMentorTask(\'' + t.id + '\')"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M2 7.5 5.5 11 12 3.5" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+      '<span class="mentor-txt" onclick="toggleMentorTask(\'' + t.id + '\')">' + escA(t.text) + '</span>' +
+      '<button type="button" class="mentor-del" onclick="deleteMentorTask(\'' + t.id + '\')" title="Ukloni">✕</button>' +
+    '</div>'
+  ).join('');
 }
 function renderLine(){
   const host = $('linSts'); if(!host) return;
@@ -2107,7 +2183,7 @@ function izjavaFinal(mentor){
   const re = document.createElement('button'); re.className = 'fa s'; re.textContent = '🔁 Ispočetka'; re.onclick = chatStart;
   acts.append(cp, re); bub.appendChild(acts); chatScroll();
   pushHist({t: Date.now(), mode:'izjava', tip: state.tip, label: 'Izjava o AI — ' + (chat.izjNaslov || 'bez naslova').slice(0,50), prompt: t});
-  rpLog('Generirana izjava o korištenju AI (razina ' + lvl + ')', {kind:'ai_declaration', level: lvl});
+  rpLog('Generirana izjava o korištenju AI (razina ' + lvl + ')', {kind:'ai_declaration', level: lvl, aiGenerated:false, stage:'izjava'});
 }
 function chatTipPick(t, tiho){
   setTip(t);
@@ -2378,7 +2454,7 @@ function chatFinal(){
     : (val('f_radfile') || MODE_LBL[chat.mode])).slice(0,60);
   pushHist({t: Date.now(), mode: chat.mode, tip: state.tip, label: histLabel, prompt});
   ensureManifest();
-  rpLog('Generiran prompt: ' + histLabel + ' (' + (MODE_LBL[chat.mode]||chat.mode) + ')', {kind:'prompt_generated', mode: chat.mode});
+  rpLog('Generiran prompt: ' + histLabel + ' (' + (MODE_LBL[chat.mode]||chat.mode) + ')', {kind:'prompt_generated', mode: chat.mode, aiGenerated:false, stage: chat.mode, tool:'prompt-copy'});
   // F3: prvi stvarno generiran prompt otključava napredne tabove — jednosmjerno,
   // nikad se ne vraća natrag u jednostavni mod ako korisnik sam to kasnije uključi.
   if(!isAdv()){ lsSet('rp_adv', '1'); applyAdv(); }
@@ -2460,6 +2536,9 @@ async function liveBegin(promptText){
   await liveStream();
 }
 async function liveSend(v){
+  // Sljedeća poruka znači da je student vidio prethodni AI odgovor prije nego
+  // je krenuo dalje — to je "pregledano", ne checkbox koji se lako zaboravi.
+  markLastAiEntryReviewed();
   chat.msgs.push({role:'user', content: v});
   await liveStream();
 }
@@ -2491,6 +2570,7 @@ async function liveStream(){
       return;
     }
     if(!resp.ok){ const e = await resp.text(); throw new Error(resp.status + ' — ' + e.slice(0, 260)); }
+    const usedModel = resp.headers.get('x-katedra-model') || 'claude-sonnet-5';
     const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while(true){
       const {done, value} = await reader.read(); if(done) break;
@@ -2514,9 +2594,15 @@ async function liveStream(){
       bub.appendChild(u);
     }
     const cp = document.createElement('button'); cp.className = 'att-btn'; cp.style.marginTop = '8px'; cp.textContent = 'Kopiraj odgovor';
-    cp.onclick = () => copyText(full, cp, []);
+    // Kopiranje je jednako jak signal "pregledano" kao i slanje sljedeće poruke —
+    // student uzima ovaj tekst da ga stvarno upotrijebi.
+    cp.onclick = () => { copyText(full, cp, []); markLastAiEntryReviewed(); };
     bub.appendChild(cp);
-    rpLog('AI odgovor u aplikaciji primljen (' + full.length + ' znakova' + (outTok ? ', ~' + outTok + ' tokena' : '') + ')', {kind:'ai_response'});
+    // Napomena: txt namjerno NE sadrži izvadak stvarnog AI odgovora (Audit 5 —
+    // log se djelomično sync-a na server, v. logForServer/LOG_SERVER_SAFE_KEYS,
+    // pa i skraćeni izvadak akademskog sadržaja ondje ne smije završiti).
+    rpLog('AI odgovor u aplikaciji primljen (' + full.length + ' znakova' + (outTok ? ', ~' + outTok + ' tokena' : '') + ')',
+      {kind:'ai_response', aiGenerated:true, tool:'katedra-chat', stage: chat.mode, model: usedModel, reviewed:false});
     refreshAuthAndCredits();
   }catch(e){
     bub.innerHTML = '⚠ <b>Greška:</b> ' + escA(String(e.message || e)) + '<br><span style="font-size:12px;color:var(--mut)">Pokušaj ponovno za koju sekundu.</span>';
@@ -2528,56 +2614,7 @@ async function liveStream(){
 function renderIndeksHead(){
   const r = $('ihRad'); if(r) r.textContent = val('a_tema') || '— upiši temu u Startu —';
   const k = $('ihRok'); if(k){ const rv = val('dl_rok'); k.textContent = rv ? new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') : 'nije postavljen'; }
-  renderMentorComments();
-}
-/* ---------- MENTOR KOMENTARI (minimalna verzija) ----------
-   Namjerno plitko: { id, text, status, createdAt } lista na manifestu,
-   isti "klik = toggle" pattern kao PHASES stavke. Bez automatizacije
-   revizija/verzija na komentar — to je sljedeći korak, ne ovaj. */
-function ensureMentorManifest(){
-  const m = ensureManifest();
-  if(!Array.isArray(m.mentorComments)) m.mentorComments = [];
-  return m;
-}
-function addMentorComment(text){
-  text = (text || '').trim();
-  if(!text) return;
-  const m = ensureMentorManifest();
-  m.mentorComments.push({
-    id: 'mc' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
-    text, status: 'open', createdAt: Date.now()
-  });
-  saveManifest(m);
-  renderMentorComments();
-}
-function toggleMentorComment(id){
-  const m = ensureMentorManifest();
-  const c = m.mentorComments.find(x => x.id === id);
-  if(!c) return;
-  c.status = c.status === 'open' ? 'addressed' : 'open';
-  saveManifest(m);
-  renderMentorComments();
-}
-function deleteMentorComment(id){
-  const m = ensureMentorManifest();
-  m.mentorComments = m.mentorComments.filter(x => x.id !== id);
-  saveManifest(m);
-  renderMentorComments();
-}
-function renderMentorComments(){
-  const host = $('mcList'); if(!host) return;
-  const m = getManifest();
-  const list = (m && m.mentorComments) || [];
-  if(!list.length){ host.innerHTML = '<p class="mc-empty">Još nema zabilježenih mentorovih komentara.</p>'; return; }
-  host.innerHTML = list.slice().reverse().map(c =>
-    '<div class="mc-item' + (c.status === 'addressed' ? ' done' : '') + '">'
-    + '<input type="checkbox" data-mc-toggle="' + c.id + '"' + (c.status === 'addressed' ? ' checked' : '') + '>'
-    + '<span>' + escA(c.text) + '</span>'
-    + '<button type="button" data-mc-del="' + c.id + '" title="Ukloni">✕</button>'
-    + '</div>'
-  ).join('');
-  host.querySelectorAll('[data-mc-toggle]').forEach(el => { el.onchange = () => toggleMentorComment(el.dataset.mcToggle); });
-  host.querySelectorAll('[data-mc-del]').forEach(el => { el.onclick = () => deleteMentorComment(el.dataset.mcDel); });
+  renderMentorTasks();
 }
 function updatePaper(){
   if(!$('kpaper')) return;
@@ -2736,7 +2773,7 @@ function handlePaymentReturn(){
 // Dio HTML-a se ubacuje kao string (dangerouslySetInnerHTML) s inline
 // onclick="fn()" atributima — browser te uvijek traži u window scopeu, ne u
 // lokalnom scopeu ove funkcije. Bez ovoga svaki takav gumb baca "fn is not defined".
-Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt, toggleCapabilityAck });
+Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt, toggleCapabilityAck, toggleMentorTask, deleteMentorTask });
 document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => {
   // Brava koja pokazuje put unutra. Mrtav klik na zaključan tab je
   // najfrustrantniji mogući ishod — korisnik ne zna ni zašto ni što dalje.
@@ -2771,14 +2808,12 @@ $('view-auto').addEventListener('input', () => { buildAuto(); saveState(); });
 $('view-auto').addEventListener('change', () => { buildAuto(); saveState(); });
 $('copyBtn').onclick = copyPrompt;
 $('autoCopy').onclick = () => copyText($('autoOut').textContent, $('autoCopy'), val('a_tema') ? [] : ['tema']);
-$('dl_rok').addEventListener('input', () => { renderDeadlines(); renderLine(); renderIndeksHead(); updatePaper(); saveState(); if(getManifest()) ensureManifest(); });
-const mcAddBtnEl = $('mcAddBtn'), mcInputEl = $('mcInput');
-function mcSubmit(){ if(!mcInputEl) return; addMentorComment(mcInputEl.value); mcInputEl.value = ''; mcInputEl.focus(); }
-if(mcAddBtnEl) mcAddBtnEl.onclick = mcSubmit;
-if(mcInputEl) mcInputEl.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); mcSubmit(); } });
+$('dl_rok').addEventListener('input', () => { renderDeadlines(); renderLine(); renderIndeksHead(); renderScanSummary(); updatePaper(); saveState(); if(getManifest()) ensureManifest(); });
 $('wc_total').addEventListener('input', () => { renderWC(); saveState(); });
 $('wc_unit').addEventListener('change', () => { renderWC(); saveState(); });
 $('btnDnevnik').onclick = exportDnevnik;
+$('mentorAddBtn').onclick = () => { addMentorTask($('mentorInput').value); $('mentorInput').value = ''; };
+$('mentorInput').addEventListener('keydown', e => { if(e.key === 'Enter'){ addMentorTask(e.target.value); e.target.value = ''; } });
 $('bGo').onclick = goChat;
 $('sendBtn').onclick = chatSend;
 $('chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') chatSend(); });
@@ -3010,7 +3045,7 @@ function lkStart(raw){
   h += '<br><span style="font-size:12px;color:var(--mut)">Usklađenost dokumenta mjeri isključivo Lekta — ja pomažem razumjeti i riješiti nalaze, jedan po jedan. Rad ostaje kod tebe: ovamo su stigli samo ID-jevi nalaza, ni jedna rečenica.</span>';
   pushA(h);
   rpLog('Lekta handoff: ' + res.issues.length + ' nalaza' + (res.score != null ? ', score ' + res.score + '/100' : '') + (fixed.length ? ', ' + fixed.length + ' potvrđeno riješeno' : ''),
-    {kind:'lekta_check', lekta_result: {score: res.score ?? null, issueCount: res.issues.length, findingIds: res.issues.map(i => i.id)}});
+    {kind:'lekta_check', lekta_result: {score: res.score ?? null, issueCount: res.issues.length, findingIds: res.issues.map(i => i.id)}, aiGenerated:false, stage:'lekta-preflight'});
   if(!res.issues.length){
     pushA('🎉 <b>Nula otvorenih nalaza — dokument je po pravilima tvog fakulteta čist.</b> Idemo na sadržaj? 🧠 Recenzija ili 🎤 obrana.');
     chatModeChips(); return;
@@ -3080,7 +3115,7 @@ function lkFinish(){
   const acts = document.createElement('div'); acts.className = 'final-actions';
   const a = document.createElement('a'); a.className = 'fa p'; a.href = lektaLink(); a.target = '_blank'; a.rel = 'noopener'; a.textContent = '🔁 Ponovi Lekta Check ↗';
   acts.appendChild(a); bub.appendChild(acts); chatScroll();
-  rpLog('Lekta krug ispravaka: ' + done + ' označeno riješeno, ' + skip + ' preskočeno, ' + open + ' otvoreno', {kind:'lekta_fix_round', done, skip, open});
+  rpLog('Lekta krug ispravaka: ' + done + ' označeno riješeno, ' + skip + ' preskočeno, ' + open + ' otvoreno', {kind:'lekta_fix_round', done, skip, open, aiGenerated:false, stage:'lekta-preflight'});
   renderLine();
   chatModeChips();
 }
@@ -3101,6 +3136,7 @@ chatStart(true);
 buildLine();
 renderLine();
 renderIndeksHead();
+renderMentorTasks();
 updatePaper();
 lkParseHash();
 refreshAuthAndCredits();

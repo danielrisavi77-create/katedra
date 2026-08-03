@@ -13,6 +13,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MIN_BALANCE } from '@/lib/limits'
+import { ensureFreeStarterGrant } from '@/lib/katedra-free-starter'
 import { resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 
@@ -32,10 +33,6 @@ const MODEL_COST_MULTIPLIER = {
 }
 
 const PASS_SCOPES = ['academic-pass', 'academic-pass-plus']
-
-// "Jedna mala Katedra AI intervencija" po projektu bez Passa (Audit 4 §16-17) —
-// malo iznad MIN_BALANCE da jedan kraći odgovor stane, ne obrok.
-const FREE_STARTER_TOKENS = 5_000
 
 // Server-side product boundary. This is intentionally enforced above every
 // legacy/user prompt so a stale client cannot turn Katedra into a competing
@@ -109,21 +106,11 @@ export async function POST(req) {
   }
 
   // ---------- 5. WALLET — interni spend-guard / free-tier starter budžet ----------
+  // Isti helper kao /api/balance (v. lib/katedra-free-starter.js) — mora ostati
+  // identičan mehanizam na oba mjesta, inače se proaktivna provjera i stvarni
+  // gate opet mogu razići (v. napomena u balance/route.js).
   if (!hasPass && projectId) {
-    // Jedna besplatna starter dodjela po PROJEKTU (Audit 4 §16-17 "jedna
-    // kontekstualna Katedra AI intervencija"), ne po računu — koristi isti
-    // idempotentni mehanizam kao pravi Stripe top-up (katedra_topups.stripe_session_id
-    // UNIQUE + on-conflict-do-nothing u katedra_grant), pa je siguran pozvati na
-    // svaki pokušaj: prvi put upiše balans, svaki sljedeći je no-op.
-    // NAPOMENA: p_amount=0 pretpostavlja da RPC/stupac to dopušta — provjeri
-    // protiv stvarne Lekta migracije prije produkcije (nije vidljivo iz ovog repoa).
-    const { error: freeGrantError } = await db.rpc('katedra_grant', {
-      p_user: userId,
-      p_tokens: FREE_STARTER_TOKENS,
-      p_session: `free:${projectId}`,
-      p_amount: 0,
-    })
-    if (freeGrantError) console.error('free starter grant failed (non-fatal)', freeGrantError)
+    await ensureFreeStarterGrant(db, userId, projectId)
   }
 
   const { data: wallet } = await db
@@ -260,6 +247,10 @@ export async function POST(req) {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache',
       'x-katedra-balance-before': String(balance),
+      // Klijent nikad ne šalje model (v. MODELS default gore) — ovo mu javlja
+      // koji je STVARNO odgovorio, za lokalni AI ledger (rpLog), umjesto da
+      // klijent pogađa/pretpostavlja vrijednost koju server odluči promijeniti.
+      'x-katedra-model': model,
     },
   })
 }
