@@ -1304,7 +1304,7 @@ function goChat(){ setTab('chat'); }
 function setTip(t){
   state.tip = t;
   document.querySelectorAll('#tipSeg button').forEach(x => x.classList.toggle('on', x.dataset.tip===t));
-  applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRender(); saveState();
+  applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRenderCascade(); saveState();
 }
 
 const chat = { step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null };
@@ -2110,6 +2110,70 @@ else {
   const pickWrite = $('onbPickWrite'); if(pickWrite) pickWrite.onclick = () => onbPick(() => chatMode('write'));
   const pickDone = $('onbPickDone'); if(pickDone) pickDone.onclick = () => onbPick(chatDoneMenu);
   const pickHelp = $('onbPickHelp'); if(pickHelp) pickHelp.onclick = () => onbPick(chatExplain);
+
+  /* ----- Lijevak: tip rada → gdje si → rok -----
+     Bez JS-a ostaje gornji markup: jedan ekran, tri izbora, <label for="onbx">
+     ga zatvara. Kad JS postoji, isti overlay postaje lijevak od tri pitanja.
+     Svako pitanje puni pravo polje (state.tip, chat mode, #dl_rok) — ništa se
+     ne pita "za dojam". */
+  const onbCard = $('onb') && $('onb').querySelector('.onb-card');
+  const onbChoices = onbCard && onbCard.querySelector('.onb-choices');
+  if(onbCard && onbChoices){
+    const MODES = {
+      write: ['✍️ Počinjem pisati', 'Nova tema — kreni od plana i programa', () => chatMode('write'), false],
+      done:  ['📄 Imam draft ili gotov rad', 'Recenzija, poboljšanje ili priprema obrane', chatDoneMenu, false],
+      help:  ['❓ Kako ovo radi?', 'Prvo pogledaj kako funkcionira', chatExplain, true]
+    };
+    const ONB = [
+      { q:'Koji rad pišeš?', why:'Od toga ovise faze, opseg i interni rokovi.',
+        opts:[['s','Seminarski',''], ['z','Završni',''], ['d','Diplomski','']],
+        pick:v => setTip(v) },
+      { q:'Gdje si s radom?', why:'',
+        opts:Object.keys(MODES).map(k => [k, MODES[k][0], MODES[k][1]]),
+        pick:v => { onbRun = MODES[v][2]; if(MODES[v][3]) onbStep = ONB.length; } },
+      { q:'Kad je rok predaje?', why:'Iz roka Katedra računa interne rokove unatrag i postavlja vozni red.',
+        opts:[[14,'Za dva tjedna',''], [30,'Za mjesec dana',''], [90,'Za tri mjeseca',''], [0,'Još ne znam','možeš ga upisati poslije u Indeksu']],
+        pick:v => {
+          if(!v) return;
+          const el = $('dl_rok'); if(!el) return;
+          el.value = new Date(Date.now() + v * 864e5).toISOString().slice(0, 10);
+          el.dispatchEvent(new Event('input', { bubbles:true }));
+        } }
+    ];
+    let onbStep = 0, onbRun = null;
+    const onbFinish = () => {
+      lsSet('rp_onb', '1');
+      if(onbxEl) onbxEl.checked = true;
+      const o = $('onb'); if(o) o.remove();
+      onbPick(onbRun || (() => chatMode('write')));
+    };
+    const onbRender = () => {
+      if(onbStep >= ONB.length){ onbFinish(); return; }
+      const s = ONB[onbStep];
+      const h2 = onbCard.querySelector('h2');
+      const sub = onbCard.querySelector('.onb-sub');
+      let cnt = onbCard.querySelector('.onb-count');
+      if(!cnt){
+        cnt = document.createElement('div'); cnt.className = 'onb-count';
+        onbCard.insertBefore(cnt, h2);
+      }
+      cnt.innerHTML = 'Pitanje ' + (onbStep + 1) + ' od ' + ONB.length +
+        '<span class="onb-dots">' + ONB.map((_, i) => '<i' + (i <= onbStep ? ' class="on"' : '') + '></i>').join('') + '</span>';
+      if(h2) h2.textContent = s.q;
+      if(sub) sub.textContent = s.why || '';
+      if(sub) sub.style.display = s.why ? '' : 'none';
+      onbChoices.innerHTML = '';
+      s.opts.forEach(([v, label, desc]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'onb-choice' + (v === 'help' ? ' ghost' : '');
+        b.innerHTML = '<b>' + escA(label) + '</b>' + (desc ? '<span>' + escA(desc) + '</span>' : '');
+        b.onclick = () => { s.pick(v); onbStep++; onbRender(); };
+        onbChoices.appendChild(b);
+      });
+    };
+    onbRender();
+  }
 }
 
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
