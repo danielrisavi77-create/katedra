@@ -50,8 +50,8 @@ async function clickWithoutNavigation(page, locator) {
 }
 
 /**
- * Katedra onboarding is a real CSS checkbox overlay: the visible action is a
- * <label role="button" for="onbx">Kreni ➜</label>, not a native <button>.
+ * Katedra onboarding is a CSS checkbox overlay: `#onbx:checked ~ .onb`
+ * switches the overlay to `display:none` after the real Kreni control is used.
  */
 async function completeOnboarding(page) {
   const overlay = page.locator('#onb')
@@ -64,7 +64,7 @@ async function completeOnboarding(page) {
   await page.waitForFunction(() => {
     const checkbox = document.querySelector('#onbx')
     const overlay = document.querySelector('#onb')
-    return Boolean(checkbox?.checked) && overlay && getComputedStyle(overlay).pointerEvents === 'none'
+    return Boolean(checkbox?.checked) && overlay && getComputedStyle(overlay).display === 'none'
   })
 }
 
