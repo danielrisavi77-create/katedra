@@ -1,7 +1,8 @@
 /* eslint-disable react-hooks/rules-of-hooks -- this is a mounted vanilla-JS
    engine, not a React component; useSkills() below is a plain helper whose
    name only coincidentally matches the hook-naming convention. */
-import { loadProcessFacts, processFactsForUnit, AI_POLICY_LABELS, PROCESS_FACT_STATUS_BADGE } from '@/lib/academic-suite/process-facts'
+import { loadProcessFacts, processFactsForUnit, resolveCapability, AI_POLICY_LABELS, PROCESS_FACT_STATUS_BADGE, AI_CAPABILITY_LABELS, AI_CAPABILITY_STANCE_BADGE } from '@/lib/academic-suite/process-facts'
+import { GEN_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
 
 export function initKatedraEngine() {
   const __root = document.getElementById('katedra-root');
@@ -225,7 +226,7 @@ function renderPhases(){
         <div class="ph-meta">
           <span class="ph-count" id="cnt-${ph.id}"></span>
           <div class="ph-bar"><i id="bar-${ph.id}"></i></div>
-          <div class="ph-stamp"><div class="stp${ph.id==='f6'?' gold':''}" id="stp-${ph.id}">${ph.id==='f6'?'KATEDRA ★ OBRANJENO':'KATEDRA ✓ OVJERENO'}</div></div>
+          <div class="ph-stamp"><div class="stp${ph.id==='f6'?' gold':''}" id="stp-${ph.id}">${ph.id==='f6'?'✓ Označeno kao obranjeno':'✓ Označio korisnik'}</div></div>
           <span class="chev">▼</span>
         </div>
       </div>
@@ -459,6 +460,52 @@ function gatherGen(){
   ['f_brutal','a_gradja','a_checkpoint','u_skills','a_learn'].forEach(k => { if($(k)) gen[k] = $(k).checked; });
   return gen;
 }
+// Server-sync copy of gatherGen() — allowlist-filtered (Audit 5): the shared
+// backend never sees mentor instructions, attached-material descriptions,
+// concerns, text-to-improve or the research question, only structural
+// metadata. gatherGen() itself stays untouched — localStorage (this
+// browser only) keeps full fidelity. See GEN_SERVER_SAFE_KEYS for the
+// excluded-field rationale.
+function gatherGenForServer(){
+  const full = gatherGen();
+  const safe = {};
+  GEN_SERVER_SAFE_KEYS.forEach(k => { if(full[k] !== undefined) safe[k] = full[k]; });
+  safe.aiAck = getCapabilityAcks();
+  return safe;
+}
+/* ---------- AI CAPABILITY GATE (Audit 5) ----------
+   Self-reported mentor-approval acknowledgments — short structured data
+   only (which capability, which sourced ProcessFact it was acked against,
+   when), never content. Kept in localStorage + synced inside gen.aiAck
+   (server-safe by construction, not free text) so a policy revision
+   (different sourceFactId) automatically invalidates a stale ack. */
+function getCapabilityAcks(){ try{ return JSON.parse(lsGet('rp_ai_ack') || '{}'); }catch(e){ return {}; } }
+function setCapabilityAck(capId, resolved){
+  const acks = getCapabilityAcks();
+  acks[capId] = { factId: resolved.sourceFactId || '', factVerifiedDate: resolved.sourceVerifiedDate || '', ackedAt: Date.now() };
+  lsSet('rp_ai_ack', JSON.stringify(acks));
+  syncServerNow();
+}
+function clearCapabilityAck(capId){
+  const acks = getCapabilityAcks(); delete acks[capId];
+  lsSet('rp_ai_ack', JSON.stringify(acks));
+  syncServerNow();
+}
+// Resolves whether the active project may use a given AI capability.
+// unitId comes from the active project (rp_unit / manifest) — never
+// hardcoded, never assumed allowed. This is the CLIENT-side gate used to
+// shape prompts/UI; app/api/chat/route.js independently re-resolves the
+// same policy server-side so a stale/modified client cannot bypass it.
+function capabilityGate(capId){
+  const unitId = (getManifest() || {}).unitId || lsGet('rp_unit') || '';
+  const resolved = resolveCapability(PROCESS_FACTS, unitId, capId);
+  if(resolved.effective === 'allowed') return {allowed:true, resolved};
+  if(resolved.condition && resolved.condition.mentorApproval){
+    const ack = getCapabilityAcks()[capId];
+    if(ack && ack.factId && ack.factId === resolved.sourceFactId) return {allowed:true, resolved, ack};
+  }
+  return {allowed:false, resolved};
+}
 function saveState(){
   lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen()}));
   syncServerDebounced();
@@ -501,6 +548,12 @@ function getHist(){ try{ return JSON.parse(lsGet('rp_hist') || '[]'); }catch(e){
 function pushHist(entry){ const h = getHist(); h.unshift(entry); lsSet('rp_hist', JSON.stringify(h.slice(0,10))); syncServerNow(); }
 function getLog(){ try{ return JSON.parse(lsGet('rp_log') || '[]'); }catch(e){ return []; } }
 function rpLog(txt){ const l = getLog(); l.push({t: Date.now(), txt}); lsSet('rp_log', JSON.stringify(l.slice(-200))); syncServerNow(); }
+// Server-sync copies of hist/log (Audit 5) — pushHist()/rpLog() themselves
+// stay full-fidelity for localStorage; only what leaves the browser drops
+// the actual generated prompt text / AI-response content, keeping just
+// enough structure to power the cross-device process ledger UX.
+function histForServer(list){ return (list || []).map(e => ({t: e.t, mode: e.mode, tip: e.tip, label: e.label})); }
+function logForServer(list){ return (list || []).map(e => ({t: e.t, txt: String(e.txt || '').slice(0, 120)})); }
 function exportDnevnik(){
   const l = getLog();
   const fmt = ts => new Date(ts).toLocaleString('hr-HR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
@@ -657,8 +710,8 @@ function gatherServerState(){
     lektaScore: m.lektaScore, lektaCheckedAt: m.lektaCheckedAt || '',
     lektaIssues: m.lektaIssues || [], lektaFixedTotal: m.lektaFixedTotal || 0,
     mentorComments: m.mentorComments || [],
-    checks: state.checks, gen: gatherGen(),
-    hist: getHist(), log: getLog(), logf: (() => { try{ return JSON.parse(lsGet('rp_logf')||'[]'); }catch(e){ return []; } })(),
+    checks: state.checks, gen: gatherGenForServer(),
+    hist: histForServer(getHist()), log: logForServer(getLog()), logf: (() => { try{ return JSON.parse(lsGet('rp_logf')||'[]'); }catch(e){ return []; } })(),
   };
 }
 function syncServerNow(){
@@ -907,6 +960,57 @@ function lpRenderCascade(){
   });
   lpRender();
 }
+// AI-policy + capability-gate HTML block for the "Literatura/pravila" card —
+// shared between the "has a Lekta document-rules profile" and "no Lekta
+// profile yet" render paths (Audit 5's AI-policy answer is independent of
+// whether Lekta has a font/citation profile for this unit — a unit can be
+// AI-policy-sourced without a full Lekta profile, or vice versa).
+function aiPolicyBlockHtml(unitId){
+  // Coarse AI-policy proof-layer badge — isti vizualni jezik kao citation/
+  // format badge, ali odvojen izvor podataka (Katedra process-facts, ne
+  // Lekta pack). Nema zapisa za ovaj unit = nema badgea (bez nagađanja).
+  const pf = processFactsForUnit(PROCESS_FACTS, unitId)[0];
+  let h = '';
+  if(pf){
+    const pfBadge = (PROCESS_FACT_STATUS_BADGE[pf.status] || '⚪') + ' ' + escA(AI_POLICY_LABELS[pf.aiPolicy] || pf.aiPolicy);
+    h += '<div style="font-size:11.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--pline)">'
+       + '<b style="color:var(--ink)">AI politika' + (pf.scopeLabel ? ' ('+escA(pf.scopeLabel)+')' : '') + ':</b> ' + pfBadge
+       + (pf.verifiedDate ? ' · provjereno '+escA(pf.verifiedDate) : '')
+       + (pf.source ? ' · <a href="'+escA(pf.source.u)+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(pf.source.t)+'</a>' : '')
+       + (pf.note ? '<div style="color:var(--mut);margin-top:3px">'+escA(pf.note)+'</div>' : '')
+       + '</div>';
+  }
+  // AI capability gate (Audit 5) — resolved, per-action answers for this
+  // unit; more granular than the coarse aiPolicy badge above, and shown
+  // even with zero process-facts entries (unspecified → tiered default from
+  // process-facts.ts) so the student sees WHY chapter-writing is Socratic
+  // rather than experiencing it as an unexplained limitation.
+  const capIds = ['generate_large_sections','research_discovery','language_editing','translation'];
+  const resolvedCaps = capIds.map(id => resolveCapability(PROCESS_FACTS, unitId, id));
+  const mainCap = resolvedCaps[0];
+  h += '<div style="font-size:11.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--pline)">'
+     + '<b style="color:var(--ink)">Smije li AI pisati dijelove rada za predaju?</b> '
+     + AI_CAPABILITY_STANCE_BADGE[mainCap.stance] + ' ' + escA(AI_CAPABILITY_LABELS[mainCap.capability])
+     + (mainCap.stance === 'unspecified' ? ' <span style="color:var(--mut)">— politika nije potvrđena, Katedra po zadanom ne piše tekst za predaju</span>' : '')
+     + '<div style="color:var(--mut);margin-top:4px">'
+       + resolvedCaps.slice(1).map(rc => AI_CAPABILITY_STANCE_BADGE[rc.stance] + ' ' + escA(AI_CAPABILITY_LABELS[rc.capability])).join(' · ')
+     + '</div>';
+  if(mainCap.condition && mainCap.condition.mentorApproval){
+    const ack = getCapabilityAcks()[mainCap.capability];
+    const checked = ack && ack.factId && ack.factId === mainCap.sourceFactId;
+    h += '<label style="display:flex;gap:7px;align-items:flex-start;margin-top:7px;font-size:11px;color:var(--mut)">'
+       + '<input type="checkbox" style="margin-top:2px" '+(checked?'checked':'')+' onchange="toggleCapabilityAck(\''+mainCap.capability+'\', this.checked)">'
+       + '<span>Mentor je izričito odobrio da AI generira dijelove teksta za ovaj rad — potvrđujem (samoprijava koju Katedra ne može provjeriti; odgovornost ostaje na tebi).</span>'
+       + '</label>';
+  }
+  h += '</div>';
+  return h;
+}
+function toggleCapabilityAck(capId, checked){
+  const resolved = capabilityGate(capId).resolved;
+  if(checked) setCapabilityAck(capId, resolved); else clearCapabilityAck(capId);
+  lpRender();
+}
 function lpRender(){
   const box = $('lpCard'); if(!box || !$('lpUnit')) return;
   // Prazno stanje mora objasniti samo sebe — prije je kartica ostajala nijemo
@@ -919,7 +1023,7 @@ function lpRender(){
   const p = lpProfileFor(u.id);
   const lekta = '<a class="att-btn" style="text-decoration:none" href="'+LEKTA_URL+'/?unit='+encodeURIComponent(u.id)+'" target="_blank" rel="noopener">✅ Provjeri u Lekti ↗</a>';
   if(!p){
-    box.innerHTML = '<div class="att-card"><b>'+escA(u.name)+'</b><br><span style="font-size:12.5px;color:var(--mut)">Detaljni profili za ovaj fakultet žive u Lekti — otvori je za provjeru dokumenta.</span><div class="final-actions">'+lekta+'</div></div>';
+    box.innerHTML = '<div class="att-card"><b>'+escA(u.name)+'</b><br><span style="font-size:12.5px;color:var(--mut)">Detaljni profili za ovaj fakultet žive u Lekti — otvori je za provjeru dokumenta.</span>'+aiPolicyBlockHtml(u.id)+'<div class="final-actions">'+lekta+'</div></div>';
     return;
   }
   const stLbl = (LEKTA_PACK.meta.statusLabels || {})[p.status] || p.status;
@@ -937,19 +1041,7 @@ function lpRender(){
   if(fm.length) h += '<div style="font-size:12px;color:var(--mut2);margin-top:6px">'+escA(fm.join(' · '))+'</div>';
   if(p.manualChecks) h += '<div style="font-size:11.5px;color:var(--mut);margin-top:7px"><b style="color:var(--ink)">Ručne provjere:</b> '+escA(p.manualChecks.slice(0,3).join(' '))+'</div>';
   if(p.sources) h += '<div style="font-size:11px;margin-top:7px">'+p.sources.slice(0,3).map(s => '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(s.t)+'</a>').join(' · ')+'</div>';
-  // AI-policy proof-layer badge — isti vizualni jezik kao gornji citation/format
-  // badge, ali odvojen izvor podataka (Katedra process-facts, ne Lekta pack).
-  // Nema zapisa za ovaj unit = nema badgea (bez nagađanja, v. process-facts.ts).
-  const pf = processFactsForUnit(PROCESS_FACTS, u.id)[0];
-  if(pf){
-    const pfBadge = (PROCESS_FACT_STATUS_BADGE[pf.status] || '⚪') + ' ' + escA(AI_POLICY_LABELS[pf.aiPolicy] || pf.aiPolicy);
-    h += '<div style="font-size:11.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--pline)">'
-       + '<b style="color:var(--ink)">AI politika' + (pf.scopeLabel ? ' ('+escA(pf.scopeLabel)+')' : '') + ':</b> ' + pfBadge
-       + (pf.verifiedDate ? ' · provjereno '+escA(pf.verifiedDate) : '')
-       + (pf.source ? ' · <a href="'+escA(pf.source.u)+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(pf.source.t)+'</a>' : '')
-       + (pf.note ? '<div style="color:var(--mut);margin-top:3px">'+escA(pf.note)+'</div>' : '')
-       + '</div>';
-  }
+  h += aiPolicyBlockHtml(u.id);
   h += '<div class="final-actions"><button class="att-btn" onclick="lpToGen()">→ U Generator</button>'+lekta+'</div></div>';
   box.innerHTML = h;
 }
@@ -1155,6 +1247,23 @@ function checkMissing(){
   return miss;
 }
 
+// Audit 5 — shared BLOCKED-branch writing instructions for buildPrompt()'s
+// write branch and buildAuto(): when the resolved AI-policy capability does
+// not allow AI to draft submission text, both callers swap their normal
+// chapter-writing step for this Socratic/coaching-only instruction set
+// instead of drafting prose. Only the blocked branch is shared here — each
+// caller keeps its own distinct ALLOWED drafting instructions (Generator
+// vs. Autopilot already differ intentionally there, unrelated to policy).
+function socraticWritingBlock(gate){
+  const why = gate.resolved.stance === 'unspecified'
+    ? 'AI politika tvoje ustanove još nije potvrđena, pa Katedra po zadanom ne piše tekst za predaju'
+    : 'institucijska AI politika ne dopušta da AI generira dijelove ili cijeli tekst rada za predaju';
+  return [
+    'NE PIŠI tekst rada umjesto mene (' + why + ' — ' + AI_CAPABILITY_LABELS.generate_large_sections + '). Nakon odobrenja plana, za svako poglavlje/potpoglavlje postavi mi sokratska pitanja koja me vode do vlastite verzije teksta (teza odlomka → koji dokaz koristim → kako ga povezujem s argumentom); strukturu nudi SAMO u naznakama/bullet pointovima, nikad u gotovim rečenicama za copy-paste.',
+    'Kad ja napišem odlomak, daj mi povratnu informaciju o logici, dokazima i jasnoći teksta — ne prepisuj ga umjesto mene.',
+    'Smiješ mi pomoći s pretraživanjem literature, jezičnom provjerom MOG teksta, prijevodom i provjerom citata — to institucionalna politika dopušta.',
+  ];
+}
 function buildPrompt(){
   checkMissing();
   const t = state.tip, p = [];
@@ -1162,7 +1271,10 @@ function buildPrompt(){
   const meta = (lbl,v,suffix) => { if(v) p.push('- '+lbl+': '+v+(suffix||'')); };
 
   if(state.mode === 'write'){
-    p.push(useSkills() ? 'Koristi skill katedra (mod: pisanje).' : 'Ti si vrhunski akademski pisac i mentor za radove na hrvatskom jeziku — strog prema pravilima, alergičan na izmišljene izvore.');
+    const gate = capabilityGate('generate_large_sections');
+    p.push(useSkills() ? 'Koristi skill katedra (mod: pisanje).' : gate.allowed
+      ? 'Ti si vrhunski akademski pisac i mentor za radove na hrvatskom jeziku — strog prema pravilima, alergičan na izmišljene izvore.'
+      : 'Ti si akademski mentor koji studenta vodi kroz proces pisanja SOKRATSKI — ne pišeš rad umjesto studenta, nego ga pitanjima i strukturom vodiš da ga napiše sam.');
     p.push('');
     p.push('Pišem '+tipL+' — prati stroga pravila akademskog pisanja (formalni ton, treće lice, svaka tvrdnja s izvorom).');
     p.push('');
@@ -1186,7 +1298,11 @@ function buildPrompt(){
     let n = 1;
     if(!val('f_pitanje')) s += '0. PRVO mi predloži 3 opcije istraživačkog pitanja s kratkim obrazloženjem i ČEKAJ moj izbor prije svega ostalog.\n';
     s += (n++)+'. PRVO izradi PLAN I PROGRAM IZRADE RADA: formalni zahtjevi mog fakulteta iz službenih uputa (web search + navedi izvor svakog zahtjeva), gap-analiza priloženog materijala ako postoji, obranjiva TEZA s empirijskim dokazima, struktura s budžetom stranica, program pisanja po potpoglavljima s izvorima, plan tablica/grafikona s vlastitim izračunima, verificirana literatura mapirana po poglavljima, metodološka upozorenja, hodogram do roka, pitanja za mene. NE piši tekst rada dok ne odobrim plan.\n';
-    s += (n++)+'. Nakon odobrenja plana piši POGLAVLJE PO POGLAVLJE — strogo po programu pisanja iz plana; nakon svakog stani i čekaj moju potvrdu prije nastavka.\n';
+    if(gate.allowed){
+      s += (n++)+'. Nakon odobrenja plana piši POGLAVLJE PO POGLAVLJE — strogo po programu pisanja iz plana; nakon svakog stani i čekaj moju potvrdu prije nastavka.\n';
+    } else {
+      socraticWritingBlock(gate).forEach(line => { s += (n++)+'. '+line+'\n'; });
+    }
     s += (n++)+'. Uvod obavezno: kontekst i relevantnost → istraživačko pitanje → cilj rada → pregled strukture. Zaključak = direktan odgovor na istraživačko pitanje + implikacije/preporuke.\n';
     s += (n++)+'. Svaki paragraf: tematska rečenica → objašnjenje → primjer/razrada → referenca → mini zaključak ili prijelaz.\n';
     s += (n++)+'. NIKAD ne izmišljaj izvore, citate ni podatke. Za tvrdnju bez stvarnog izvora iz priložene građe/literature označi [TREBA IZVOR] i nastavi.\n';
@@ -1296,7 +1412,13 @@ function buildAuto(){
   const t = state.tip, D = AUTO_DEF[t];
   const tema = val('a_tema');
   const cp = $('a_checkpoint').checked, hasG = $('a_gradja').checked || chatFiles.length > 0;
-  let s = (useSkills() ? 'Koristi skill katedra (mod: plan i program → pisanje).' : 'Ti si vrhunski akademski pisac i mentor za radove na hrvatskom jeziku — strog prema pravilima, alergičan na izmišljene izvore.') + ' AUTOPILOT MODE — vodiš cijeli proces sam, ja se uključujem minimalno.\n\n';
+  const gate = capabilityGate('generate_large_sections');
+  let s = (useSkills() ? 'Koristi skill katedra (mod: plan i program → pisanje).' : gate.allowed
+    ? 'Ti si vrhunski akademski pisac i mentor za radove na hrvatskom jeziku — strog prema pravilima, alergičan na izmišljene izvore.'
+    : 'Ti si akademski mentor koji studenta vodi kroz proces pisanja SOKRATSKI — ne pišeš rad umjesto studenta.')
+    + (gate.allowed
+      ? ' AUTOPILOT MODE — vodiš cijeli proces sam, ja se uključujem minimalno.\n\n'
+      : ' AUTOPILOT MODE — vodiš plan i istraživanje sam; pisanje teksta ostaje na meni, uz tvoje sokratsko vođenje (institucijska AI politika ne dopušta da ti generiraš tekst za predaju).\n\n');
   s += '## ZADANO (jedino što definiram)\n';
   s += '- Tip: '+TIP_LABEL[t]+'\n';
   s += '- Tema: '+(tema || '[UPIŠI TEMU]')+'\n';
@@ -1319,9 +1441,11 @@ function buildAuto(){
     s += '- Svaki tvoj tekstualni prijedlog označi [AI PRIJEDLOG] dok ga ne potvrdim ili preradim svojim riječima.\n';
   }
   s += '\n## AUTOPILOT PROTOKOL\n';
-  s += '1. PRVI KORAK — PLAN I PROGRAM IZRADE RADA (ne piši još nijedno poglavlje!). Izradi dokument sa sekcijama: (0) izvršni sažetak — što stoji između mene i ocjene 5 i kako to plan rješava, (1) formalni zahtjevi MOG fakulteta provjereni web pretragom iz SLUŽBENIH uputa (tehnička pravila, obvezni dijelovi uklj. naslovnicu na engleskom / izjavu o čestitosti / životopis ako se traže, točan lokalni citatni format, hodogram predaje s rokovima) — uz naveden izvor svakog zahtjeva, (2) gap-analiza materijala ako sam ga priložio, (3) 3 opcije istraživačkog pitanja → sam odaberi najbolju + obranjiva TEZA s tablicom empirijskih dokaza i izvorima, (4) struktura s budžetom stranica po poglavlju, (5) program pisanja po potpoglavljima — za svako: sadržaj + izvori, (6) plan tablica i grafikona s VLASTITIM izračunima, (7) literatura verificirana (Crossref/Hrčak/DOI) i mapirana po poglavljima, (8) metodološka upozorenja — brojke koje se ne smiju koristiti bez ograde, (9) hodogram unatrag od roka s kritičnim putem, (10) pitanja za mene, (11) popis isporuka.'+(cp?' TU STANI — pisanje počinje tek kad odobrim Plan i program.':' NE čekaj odobrenje — sam usvoji plan, deklariraj to jasno i odmah nastavi na pisanje.')+'\n';
+  s += '1. PRVI KORAK — PLAN I PROGRAM IZRADE RADA (ne piši još nijedno poglavlje!). Izradi dokument sa sekcijama: (0) izvršni sažetak — što stoji između mene i ocjene 5 i kako to plan rješava, (1) formalni zahtjevi MOG fakulteta provjereni web pretragom iz SLUŽBENIH uputa (tehnička pravila, obvezni dijelovi uklj. naslovnicu na engleskom / izjavu o čestitosti / životopis ako se traže, točan lokalni citatni format, hodogram predaje s rokovima) — uz naveden izvor svakog zahtjeva, (2) gap-analiza materijala ako sam ga priložio, (3) 3 opcije istraživačkog pitanja → sam odaberi najbolju + obranjiva TEZA s tablicom empirijskih dokaza i izvorima, (4) struktura s budžetom stranica po poglavlju, (5) program pisanja po potpoglavljima — za svako: sadržaj + izvori, (6) plan tablica i grafikona s VLASTITIM izračunima, (7) literatura verificirana (Crossref/Hrčak/DOI) i mapirana po poglavljima, (8) metodološka upozorenja — brojke koje se ne smiju koristiti bez ograde, (9) hodogram unatrag od roka s kritičnim putem, (10) pitanja za mene, (11) popis isporuka.'+(cp?' TU STANI — pisanje počinje tek kad odobrim Plan i program.': gate.allowed ? ' NE čekaj odobrenje — sam usvoji plan, deklariraj to jasno i odmah nastavi na pisanje.' : ' Plan možeš sam usvojiti i deklarirati — ali pisanje teksta ionako ne kreće bez mene (v. korak 3), pa tu nema "odmah nastavi na pisanje" kratice.')+'\n';
   s += '2. LITERATURA (u planu i tijekom pisanja): samo stvarni, provjerljivi izvori (HRČAK, Google Scholar, akademske knjige, službeni dokumenti, Eurostat/World Bank/OECD). Uz svaki izvor link ili DOI. Izvor čije postojanje ne možeš potvrditi — NE koristi. Wikipedia i nerecenzirano: nikad.\n';
-  s += '3. PISANJE: strogo po sekciji 5 plana, poglavlje po poglavlje u jednom nizu. Nakon svakog poglavlja interni self-check (svaki paragraf: tematska rečenica → objašnjenje → primjer → referenca → prijelaz; citati odmah uz tvrdnje; bez zabranjenih fraza) pa ispravi PRIJE nastavka. Odstupanje od plana deklariraj i obrazloži — ne mijenjaj tiho. Ne postavljaj mi pitanja osim ako je nešto stvarno blokirajuće.\n';
+  s += gate.allowed
+    ? '3. PISANJE: strogo po sekciji 5 plana, poglavlje po poglavlje u jednom nizu. Nakon svakog poglavlja interni self-check (svaki paragraf: tematska rečenica → objašnjenje → primjer → referenca → prijelaz; citati odmah uz tvrdnje; bez zabranjenih fraza) pa ispravi PRIJE nastavka. Odstupanje od plana deklariraj i obrazloži — ne mijenjaj tiho. Ne postavljaj mi pitanja osim ako je nešto stvarno blokirajuće.\n'
+    : '3. PISANJE: ' + socraticWritingBlock(gate).join(' ') + '\n';
   s += '4. CITATI: s točnom stranicom. Stranicu koju ne možeš potvrditi iz teksta izvora označi (Prezime, godina) + [PROVJERI STR.] — nikad je ne izmišljaj.\n';
   s += '5. ZAKLJUČAK = direktan odgovor na istraživačko pitanje + eksplicitan dokaz teze iz plana + implikacije/preporuke.\n';
   s += '6. ISPORUKA na kraju, bez da tražim — sve iz sekcije 11 plana, minimalno: (a) cijeli rad u jednom komadu, (b) popis literature u odabranom stilu, (c) tablica „RUČNO PROVJERI” — svi [PROVJERI STR.], pretpostavke koje mentor mora potvrditi, pravila fakulteta, (d) samoprocjena po self-check listi.\n';
@@ -1565,7 +1689,7 @@ function setTip(t){
   applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRenderCascade(); saveState();
 }
 
-const chat = { step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null };
+const chat = { step:'mode', mode:null, files:[], skipped:new Set(), notes:'', rok:'', pendingTema:'', warned:false, reqMissing:[], learn:false, izjNaslov:'', izjSel:null, capability:'' };
 let currentCat = -1;
 const MODE_LBL = {write:'✍️ Novi rad', audit:'🧠 Recenzija rada', ocjena:'📊 Ocijeni draft', improve:'🛠️ Poboljšanje teksta', obrana:'🎤 Priprema obrane', izjava:'📝 Izjava o AI'};
 const IZJ_USES = [
@@ -1578,6 +1702,18 @@ const IZJ_USES = [
   'izrada i provjera tablica ili grafikona',
   'provjera citata i literature',
   'priprema za obranu'
+];
+// Audit 5 — maps each IZJ_USES entry (index-aligned) to the closest gated AI
+// capability, so the declaration chips can be ANNOTATED with the resolved
+// policy stance. Options are never hidden/filtered: the declaration is a
+// retrospective record of what was actually used (possibly with any AI
+// tool, not just in-app), and hiding an option would make honestly
+// disclosing a prohibited use impossible — the opposite of the point of a
+// declaration. `undefined` = no direct capability mapping (left unannotated).
+const IZJ_USE_CAPABILITY = [
+  'research_discovery', 'structure_assist', 'language_editing',
+  'paraphrase_for_submission', 'generate_large_sections', 'translation',
+  undefined, undefined, 'defense_assistance',
 ];
 const IZJ_LVL = {
   0:'0 — alati umjetne inteligencije nisu korišteni',
@@ -1631,8 +1767,8 @@ const MICRO = [
   p:'Iz priloženog rada generiraj:\n1. 5 opcija naslova — precizno, akademski, bez senzacionalizma (+ kraća varijanta svakog)\n2. Sažetak 150–250 riječi: problem → cilj i pitanje → metoda → glavni nalazi → doprinos\n3. Abstract — prijevod sažetka na engleski (akademski registar)\n4. 5–6 ključnih riječi na hrvatskom i engleskom\nSve isključivo iz sadržaja rada — bez novih tvrdnji.'},
  {ic:'📚', t:'Predloži dodatnu literaturu', d:'5–8 stvarnih izvora s DOI, mapirano po poglavljima',
   p:'Prilažem rad i trenutni popis literature. Predloži 5–8 DODATNIH relevantnih izvora:\n- samo stvarni i provjerljivi (uz svaki DOI ili link — provjeri web searchom)\n- za svaki: 1 rečenica što pokriva + u koje poglavlje ide\n- ništa što već imam; prednost recenziranim radovima i službenim izvorima\nFormat: gotove bibliografske jedinice u mom citatnom stilu [UPIŠI STIL].'},
- {ic:'🗂️', t:'Dnevnik procesa (dokaz autorstva)', d:'Generira kronologiju iz razgovora',
-  p:'Iz CIJELOG ovog razgovora generiraj DNEVNIK PROCESA IZRADE RADA (dokaz mog autorstva za mentora):\n1. Kronološka tablica: faza → što je napravljeno → moja odluka/doprinos → AI doprinos\n2. Popis svih mojih odobrenja i traženih izmjena (plan, poglavlja, revizije)\n3. Kratki narativ (pola stranice) kako je rad nastajao\nTočno i bez uljepšavanja — služi kao transparentan dokaz procesa izrade.'}
+ {ic:'🗂️', t:'Dnevnik procesa', d:'Generira kronologiju iz razgovora',
+  p:'Iz CIJELOG ovog razgovora generiraj DNEVNIK PROCESA IZRADE RADA (evidencija za mentora, ne dokaz autorstva u pravnom smislu):\n1. Kronološka tablica: faza → što je napravljeno → moja odluka/doprinos → AI doprinos\n2. Popis svih mojih odobrenja i traženih izmjena (plan, poglavlja, revizije)\n3. Kratki narativ (pola stranice) kako je rad nastajao\nTočno i bez uljepšavanja — služi kao transparentna evidencija procesa izrade.'}
 ];
 
 // Nazivi su bili interni ("Zadatak", "Datoteke", "Prompt") i novom korisniku
@@ -1783,9 +1919,19 @@ function chatHistory(){
   h.forEach(e => {
     const row = document.createElement('div'); row.className = 'att-card';
     row.innerHTML = '<div class="att-top"><span class="ic">📄</span><span class="nm">'+escA(e.label||'Prompt')+'<small>'+new Date(e.t).toLocaleDateString('hr-HR')+' · '+(MODE_LBL[e.mode]||e.mode)+'</small></span></div>';
-    const b = document.createElement('button'); b.className = 'att-btn'; b.textContent = 'Kopiraj';
-    b.onclick = () => copyText(e.prompt, b, []);
-    row.querySelector('.att-top').appendChild(b); bub.appendChild(row);
+    // Audit 5 privacy fix: entries synced down from another device never
+    // carry the full prompt text (only this device's own localStorage does)
+    // — degrade to a label-only note instead of copying `undefined`.
+    if(e.prompt){
+      const b = document.createElement('button'); b.className = 'att-btn'; b.textContent = 'Kopiraj';
+      b.onclick = () => copyText(e.prompt, b, []);
+      row.querySelector('.att-top').appendChild(b);
+    } else {
+      const note = document.createElement('small'); note.style.color = 'var(--mut2)';
+      note.textContent = 'Puni tekst dostupan samo na uređaju gdje je nastao.';
+      row.querySelector('.att-top').appendChild(note);
+    }
+    bub.appendChild(row);
   });
   const clr = document.createElement('button'); clr.className = 'att-skip'; clr.textContent = 'Obriši povijest';
   clr.onclick = () => { lsSet('rp_hist','[]'); d.remove(); toast('Povijest obrisana'); };
@@ -1848,7 +1994,17 @@ function izjavaUses(){
   const bub = d.querySelector('.bub');
   const row = document.createElement('div'); row.className = 'chips-row'; row.style.marginTop = '10px'; row.style.maxWidth = '100%';
   IZJ_USES.forEach((u, i) => {
-    const b = document.createElement('button'); b.className = 'qchip ghost'; b.textContent = u;
+    // Audit 5 — badge each option with the resolved AI-policy stance for
+    // this project's unit. Purely informational: every option stays
+    // clickable regardless of stance, since this is a retrospective
+    // declaration of what was actually used, not a menu of what's allowed.
+    const capId = IZJ_USE_CAPABILITY[i];
+    const gate = capId ? capabilityGate(capId) : null;
+    const b = document.createElement('button'); b.className = 'qchip ghost';
+    b.textContent = (gate ? AI_CAPABILITY_STANCE_BADGE[gate.resolved.stance] + ' ' : '') + u;
+    if(gate) b.title = gate.allowed ? 'Dopušteno prema aktivnoj AI politici'
+      : gate.resolved.stance === 'unspecified' ? 'AI politika tvoje ustanove još nije potvrđena'
+      : 'Institucijska AI politika ovo ograničava ili ne dopušta';
     b.onclick = () => { b.classList.toggle('sel'); chat.izjSel.has(i) ? chat.izjSel.delete(i) : chat.izjSel.add(i); };
     row.appendChild(b);
   });
@@ -1869,7 +2025,15 @@ function izjavaMentor(){
 }
 function izjavaFinal(mentor){
   chat.step = 'done'; setStep(5);
-  const sel = [...(chat.izjSel || [])].map(i => IZJ_USES[i]);
+  const selIdx = [...(chat.izjSel || [])];
+  const sel = selIdx.map(i => IZJ_USES[i]);
+  // Audit 5 — disclosure ≠ permission. Selecting a use here only records
+  // that it happened; it must never be presented as proof the use complied
+  // with institutional policy. Collect selected items whose resolved
+  // capability is NOT allowed, to append an explicit disclaimer below.
+  const nonAllowed = selIdx
+    .filter(i => IZJ_USE_CAPABILITY[i] && !capabilityGate(IZJ_USE_CAPABILITY[i]).allowed)
+    .map(i => IZJ_USES[i]);
   const lvl = chat.izjSel.has(4) ? 3 : (chat.izjSel.has(1) || chat.izjSel.has(3)) ? 2 : sel.length ? 1 : 0;
   const mentorLine = mentor === 'da' ? 'korištenje AI alata odobrio je mentor'
                    : mentor === 'ne' ? 'konzultacija s mentorom o korištenju AI alata bit će obavljena prije predaje rada'
@@ -1877,7 +2041,10 @@ function izjavaFinal(mentor){
   let t = 'IZJAVA O KORIŠTENJU ALATA UMJETNE INTELIGENCIJE\n\n';
   t += 'Ja, ______________________, izjavljujem da sam pri izradi rada\n';
   t += '„' + (chat.izjNaslov || '______________________') + '”\n';
-  t += sel.length ? 'koristio/la alate umjetne inteligencije transparentno i u skladu sa smjernicama ustanove, kako slijedi:\n\n'
+  // Ne tvrdi "u skladu sa smjernicama ustanove" bezuvjetno — sama prijava
+  // korištenja ne čini uporabu dopuštenom (v. NAPOMENA ispod kad je
+  // primjenjivo). Izjava bilježi ono što je stvarno korišteno.
+  t += sel.length ? 'koristio/la alate umjetne inteligencije transparentno, kako slijedi:\n\n'
                   : 'postupao/la u skladu sa smjernicama ustanove o umjetnoj inteligenciji.\n\n';
   if(sel.length){
     t += 'Alat: ' + AI_PROVIDER + '\n';
@@ -1887,6 +2054,10 @@ function izjavaFinal(mentor){
   }
   t += 'Procijenjena razina korištenja (skala 0–4): ' + IZJ_LVL[lvl] + '\n';
   t += 'Mentor: ' + mentorLine + '.\n\n';
+  if(nonAllowed.length){
+    t += 'NAPOMENA: ' + nonAllowed.join(', ') + ' možda ' + (nonAllowed.length > 1 ? 'nisu' : 'nije') +
+      ' u skladu s objavljenom AI politikom tvoje ustanove. Ova izjava bilježi ono što je stvarno korišteno — samo prijavljivanje korištenja ne čini tu upotrebu dopuštenom. Provjeri s mentorom prije predaje.\n\n';
+  }
   t += 'Sav tekst rada moje je autorsko djelo za koje preuzimam punu odgovornost. Svi izvori i citati provjereni su u izvornoj literaturi. Sadržaj u čijoj je izradi sudjelovao AI alat pregledan je, uređen i potvrđen s moje strane. Transkripti razgovora s AI alatom pohranjeni su i mogu se dostaviti na zahtjev.\n\n';
   t += 'U ______________, dana ______________          Potpis: ______________';
   const d = pushA('<b>✅ Izjava je spremna.</b> Kopiraj je u rad (obično iza izjave o akademskoj čestitosti) i <b>prilagodi točnom obrascu svog fakulteta</b> — FPZG i FOI imaju vlastite formate.');
@@ -1907,7 +2078,7 @@ function chatTipPick(t, tiho){
   setTip(t);
   if(!tiho) pushU(TIP_UI[t]);   // tiho = tip dolazi iz lijevka, nije odgovor u chatu
   if(chat.mode === 'write'){
-    if(chat.pendingTema){ $('a_tema').value = chat.pendingTema; buildAuto(); kpType(chat.pendingTema); renderIndeksHead(); chatLearnStep(); }
+    if(chat.pendingTema){ $('a_tema').value = chat.pendingTema; buildAuto(); kpType(chat.pendingTema); renderIndeksHead(); chatUnitStep(); }
     else {
       chat.step = 'tema'; setStep(2);
       pushA('<b>Tema rada?</b> Upiši je dolje ↓ — dovoljna je radna verzija, izoštrit ćemo je u planu.');
@@ -1916,7 +2087,44 @@ function chatTipPick(t, tiho){
   } else chatAttach();
 }
 function chatTema(text){
-  $('a_tema').value = text; buildAuto(); kpType(text); renderIndeksHead(); pushU(text); chatLearnStep();
+  $('a_tema').value = text; buildAuto(); kpType(text); renderIndeksHead(); pushU(text); chatUnitStep();
+}
+// Audit 5 — the write-chat flow never used to ask which faculty/ustanova the
+// project belongs to (only the separate "Lekta pravila" sidebar panel set
+// rp_unit, and a user can complete this whole flow without ever opening it).
+// Without a unitId, capabilityGate() can never resolve anything but the
+// unspecified default, so the AI-policy gate would be permanently inert for
+// the primary write flow. Skips silently once rp_unit is already known.
+function chatUnitStep(){
+  if(lsGet('rp_unit')){ chatLearnStep(); return; }
+  chat.step = 'unit';
+  loadLektaPack().then(pack => {
+    if(!pack || !pack.units || !pack.units.length){ chatLearnStep(); return; }
+    const d = pushA('<b>Koji je tvoj fakultet/ustanova?</b> Katedra time zna koja AI pravila vrijede za tvoj rad — dok to ne znamo, pisanje poglavlja ostaje sokratsko vođenje pitanjima, ne gotov tekst.');
+    const bub = d.querySelector('.bub');
+    const sel = document.createElement('select');
+    sel.style.cssText = 'margin-top:10px;width:100%;padding:9px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--card);color:var(--txt);font-size:13px';
+    const ph = document.createElement('option'); ph.value = ''; ph.textContent = '— odaberi —'; sel.appendChild(ph);
+    pack.units.slice().sort((a,b) => a.name.localeCompare(b.name, 'hr')).forEach(u => {
+      const o = document.createElement('option'); o.value = u.id; o.textContent = u.name + (u.inst ? ' — ' + u.inst : '');
+      sel.appendChild(o);
+    });
+    bub.appendChild(sel);
+    const acts = document.createElement('div'); acts.className = 'final-actions';
+    const go = document.createElement('button'); go.className = 'fa p'; go.textContent = 'Nastavi ➜';
+    go.onclick = () => {
+      if(sel.value){
+        lsSet('rp_unit', sel.value);
+        const lpSel = $('lpUnit'); if(lpSel) lpSel.value = sel.value;
+        if(getManifest()) ensureManifest();
+        pushU(sel.options[sel.selectedIndex].textContent);
+      } else {
+        pushU('⏭ Preskoči — ne znam još');
+      }
+      chatLearnStep();
+    };
+    acts.appendChild(go); bub.appendChild(acts); chatScroll();
+  });
 }
 function chatLearnStep(){
   chat.step = 'learn';
@@ -2010,9 +2218,18 @@ function chatFinal(){
   chat.step = 'done';
   chatFiles = chat.files.map(f => f.name); chatNotes = chat.notes;
   let prompt = '';
-  if(chat.mode === 'write'){ buildAuto(); prompt = $('autoOut').textContent; }
-  else if(chat.mode === 'ocjena'){ prompt = buildOcjena(); }
+  if(chat.mode === 'write'){
+    // Reflects what buildAuto() itself just decided (Audit 5 capability
+    // gate) — 'generate_large_sections' only when the drafting instructions
+    // actually went into the prompt, never when it degraded to Socratic
+    // coaching, so the server-side 403 (app/api/chat/route.js) only fires
+    // for a genuine drafting request, not for a coaching one.
+    chat.capability = capabilityGate('generate_large_sections').allowed ? 'generate_large_sections' : 'structure_assist';
+    buildAuto(); prompt = $('autoOut').textContent;
+  }
+  else if(chat.mode === 'ocjena'){ chat.capability = ''; prompt = buildOcjena(); }
   else {
+    chat.capability = '';
     state.mode = chat.mode; applyMode();
     const names = chat.files.map(f => f.name);
     const doc = names.find(n => /\.(docx?|pdf)$/i.test(n)) || names[0] || '';
@@ -2078,7 +2295,7 @@ function chatFinal(){
   manual.appendChild(manualActs);
   const manualNote = document.createElement('div');
   manualNote.style.cssText = 'font-size:11px;color:var(--mut2);margin-top:6px';
-  manualNote.textContent = 'Ručno kopiranje ne prati napredak, ne sinkronizira se s Lekta provjerom i ne generira AI ledger za dokaz autorstva.';
+  manualNote.textContent = 'Ručno kopiranje ne prati napredak, ne sinkronizira se s Lekta provjerom i ne generira zapis u Dnevniku procesa.';
   manual.appendChild(manualNote);
   bub.appendChild(manual);
   if(!lsGet('rp_email_off')){
@@ -2139,7 +2356,17 @@ function fileB64(f){
     r.readAsDataURL(f);
   });
 }
+// AI Act čl. 50 (Audit 5) — jednokratna, činjenična objava prije PRVOG
+// stvarnog AI razgovora (ne prije svake poruke — to bi bilo iritantno bez
+// dodatne vrijednosti). Provjerava vlastitu localStorage zastavicu, ne
+// nešto što treba pravni pregled — čisto informativna rečenica.
+function ensureAiActNotice(){
+  if(lsGet('rp_ai_notice_seen')) return;
+  lsSet('rp_ai_notice_seen', '1');
+  pushA('🤖 <b>Katedra koristi umjetnu inteligenciju</b><br>Ovaj korak koristi generativnu umjetnu inteligenciju. AI odgovor može sadržavati pogreške i ne predstavlja odluku mentora ili fakulteta — Katedra prije slanja primjenjuje dopuštenja tvog projekta (v. AI politika u panelu pravila).');
+}
 async function liveBegin(promptText){
+  ensureAiActNotice();
   chat.live = true; chat.step = 'live'; chat.msgs = []; chatBusy(false); chatClockMount();
   const blocks = [], skipped = [];
   for(const cf of chat.files){
@@ -2167,16 +2394,31 @@ async function liveSend(v){
 }
 async function liveStream(){
   if(chat.busy) return; chatBusy(true);
-  const d = pushA(''); const bub = d.querySelector('.bub'); bub.textContent = '…';
+  const d = pushA(''); const bub = d.querySelector('.bub');
+  // AI Act čl. 50 (Audit 5) — svaki AI-generirani odgovor nosi malu oznaku,
+  // odvojeno od Katedrinih vlastitih skriptiranih poruka (koje isto koriste
+  // pushA(), ali nisu LLM output — v. ensureAiActNotice() za jednokratni
+  // banner prije prvog razgovora).
+  const tagEl = document.createElement('span'); tagEl.className = 'ai-tag'; tagEl.textContent = 'AI';
+  tagEl.style.cssText = 'display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:var(--mut2);border:1px solid var(--line2);border-radius:5px;padding:1px 5px;margin-bottom:5px';
+  const contentEl = document.createElement('div'); contentEl.textContent = '…';
+  bub.append(tagEl, contentEl);
   let full = '', outTok = 0;
   try{
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messages: chat.msgs, projectId: (getManifest() || {}).projectId || '' })
+      body: JSON.stringify({ messages: chat.msgs, projectId: (getManifest() || {}).projectId || '', capability: chat.capability || '' })
     });
     if(resp.status === 401){ d.remove(); chatBusy(false); goToLogin(); return; }
     if(resp.status === 402){ d.remove(); chatBusy(false); showPaywall(); return; }
+    if(resp.status === 403){
+      d.remove(); chatBusy(false);
+      let msg = 'Tvoja odobrena AI razina ne dopušta generiranje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.';
+      try{ const body = await resp.json(); if(body && body.error) msg = body.error; }catch(e){}
+      pushA('🎓 <b>Institucijska AI politika</b><br>' + escA(msg));
+      return;
+    }
     if(!resp.ok){ const e = await resp.text(); throw new Error(resp.status + ' — ' + e.slice(0, 260)); }
     const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while(true){
@@ -2187,7 +2429,7 @@ async function liveStream(){
         if(!ln.startsWith('data: ')) continue;
         try{
           const ev = JSON.parse(ln.slice(6));
-          if(ev.type === 'content_block_delta' && ev.delta && ev.delta.text){ full += ev.delta.text; bub.textContent = full; chatScroll(); }
+          if(ev.type === 'content_block_delta' && ev.delta && ev.delta.text){ full += ev.delta.text; contentEl.textContent = full; chatScroll(); }
           if(ev.type === 'message_delta' && ev.usage && ev.usage.output_tokens) outTok = ev.usage.output_tokens;
         }catch(e){}
       }
@@ -2203,7 +2445,7 @@ async function liveStream(){
     const cp = document.createElement('button'); cp.className = 'att-btn'; cp.style.marginTop = '8px'; cp.textContent = 'Kopiraj odgovor';
     cp.onclick = () => copyText(full, cp, []);
     bub.appendChild(cp);
-    rpLog('AI odgovor u aplikaciji (' + (full.length > 60 ? full.slice(0,60) + '…' : full).replace(/\n/g,' ') + ')');
+    rpLog('AI odgovor u aplikaciji primljen (' + full.length + ' znakova' + (outTok ? ', ~' + outTok + ' tokena' : '') + ')');
     refreshAuthAndCredits();
   }catch(e){
     bub.innerHTML = '⚠ <b>Greška:</b> ' + escA(String(e.message || e)) + '<br><span style="font-size:12px;color:var(--mut)">Pokušaj ponovno za koju sekundu.</span>';
@@ -2410,7 +2652,7 @@ function handlePaymentReturn(){
 // Dio HTML-a se ubacuje kao string (dangerouslySetInnerHTML) s inline
 // onclick="fn()" atributima — browser te uvijek traži u window scopeu, ne u
 // lokalnom scopeu ove funkcije. Bez ovoga svaki takav gumb baca "fn is not defined".
-Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt });
+Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt, toggleCapabilityAck });
 document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => {
   // Brava koja pokazuje put unutra. Mrtav klik na zaključan tab je
   // najfrustrantniji mogući ishod — korisnik ne zna ni zašto ni što dalje.

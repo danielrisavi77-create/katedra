@@ -14,6 +14,7 @@ import {
   fromLegacyKatedraWorkType,
   isAcademicWorkType,
 } from '@/lib/academic-suite/contracts'
+import { GEN_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
 
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
@@ -61,6 +62,30 @@ const WRITABLE_FIELDS = {
   hist: 'hist',
   log: 'log',
   logf: 'logf',
+}
+
+// Audit 5 — server-side backstop, symmetric with the client-side filtering
+// in app/katedra-engine.js (gatherGenForServer/histForServer/logForServer).
+// A stale/un-migrated client would otherwise keep writing full free-text
+// academic content (mentor instructions, attached-material descriptions,
+// the actual generated prompt/response text) forever — this repeats the
+// SAME allowlist here so the write path is safe even when the client
+// "forgets" to filter, not only when it remembers to.
+function sanitizeGen(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  const safe = {}
+  for (const key of GEN_SERVER_SAFE_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(raw, key)) safe[key] = raw[key]
+  }
+  return safe
+}
+function sanitizeHist(raw) {
+  if (!Array.isArray(raw)) return raw
+  return raw.map((e) => ({ t: e?.t, mode: e?.mode, tip: e?.tip, label: typeof e?.label === 'string' ? e.label.slice(0, 80) : e?.label }))
+}
+function sanitizeLog(raw) {
+  if (!Array.isArray(raw)) return raw
+  return raw.map((e) => ({ t: e?.t, txt: typeof e?.txt === 'string' ? e.txt.slice(0, 120) : e?.txt }))
 }
 
 function cleanOpaqueId(value) {
@@ -192,8 +217,11 @@ export async function PUT(req) {
     patch.lekta_fixed_total = fixedTotal ?? 0
   }
 
+  const SANITIZERS = { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog }
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
-    if (Object.prototype.hasOwnProperty.call(body, camel)) patch[column] = body[camel]
+    if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
+    const sanitize = SANITIZERS[camel]
+    patch[column] = sanitize ? sanitize(body[camel]) : body[camel]
   }
 
   const { data: row, error } = await supabase

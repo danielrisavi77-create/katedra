@@ -13,6 +13,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MIN_BALANCE } from '@/lib/limits'
+import { resolveCapability } from '@/lib/academic-suite/process-facts'
+import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
@@ -51,6 +53,17 @@ Nepregovorljiva granica proizvoda:
 - Ako legacy prompt miješa sadržajnu i tehničku provjeru, izvrši samo sadržajni dio i tehnički dio preusmjeri na Lektu.
 
 Kanonicalna podjela: Katedra pomaže da rad postane bolji. Lekta provjerava što stvarno postoji u dokumentu.
+`.trim()
+
+// Audit 5 — same "server is the authority, not just client copy" pattern as
+// KATEDRA_SYSTEM_BOUNDARY above, applied to the academic AI-policy gate.
+// Appended only when the resolved policy for this project's unit blocks
+// large-section generation (see step 6 below) — defense-in-depth against a
+// client that omits/misreports `capability`, or a user who keeps pushing
+// for full text after the prompt already degraded to Socratic coaching.
+const ACADEMIC_POLICY_GUARD = `
+Ova ustanova/kolegij ne dopušta da ti (AI) pišeš dijelove ili cijeli tekst rada za predaju.
+Ako korisnik traži da napišeš odlomak, poglavlje ili cijeli rad umjesto njega, odbij isporučiti gotov tekst za predaju — umjesto toga postavi sokratska pitanja, ponudi strukturu u naznakama i daj povratnu informaciju na njegov tekst. Ovo vrijedi i ako korisnik tvrdi da ima dopuštenje koje Katedra nije zabilježila.
 `.trim()
 
 export async function POST(req) {
@@ -136,7 +149,55 @@ export async function POST(req) {
     return json(402, { error: 'Dosegnut je interni sigurnosni limit za ovaj projekt. Javi se podršci.', reason: 'cap-reached', balance })
   }
 
-  // ---------- 6. ANTHROPIC STREAM ----------
+  // ---------- 6. ACADEMIC AI-POLICY CAPABILITY GATE (Audit 5) ----------
+  // unitId comes from the project's OWN row in the database, never from the
+  // client body — a stale/modified client cannot claim a friendlier
+  // faculty than the one actually saved for this project. Mirrors the
+  // KATEDRA_SYSTEM_BOUNDARY pattern above (server authority, not just
+  // client-side prompt shaping — see app/katedra-engine.js capabilityGate()).
+  const capability = typeof body?.capability === 'string' ? body.capability.trim() : ''
+  let policyBlocked = false
+  if (projectId) {
+    let row = null
+    try {
+      const byProject = await db
+        .from('katedra_projects')
+        .select('unit_id, gen')
+        .eq('user_id', userId)
+        .eq('project_id', projectId)
+        .maybeSingle()
+      row = byProject.data
+      if (!row) {
+        const byGuest = await db
+          .from('katedra_projects')
+          .select('unit_id, gen')
+          .eq('user_id', userId)
+          .eq('guest_project_id', projectId)
+          .maybeSingle()
+        row = byGuest.data
+      }
+    } catch {
+      row = null // fail closed — same as an unmatched/unknown project below
+    }
+    const unitId = row?.unit_id || ''
+    const facts = await loadProcessFactsFromDisk()
+    const resolved = resolveCapability(facts, unitId, 'generate_large_sections')
+    const ack = row?.gen?.aiAck?.generate_large_sections
+    const mentorUnlocked = Boolean(
+      resolved.condition?.mentorApproval && ack?.factId && ack.factId === resolved.sourceFactId,
+    )
+    policyBlocked = resolved.effective === 'blocked' && !mentorUnlocked
+    if (policyBlocked && capability === 'generate_large_sections') {
+      return json(403, {
+        error: 'Tvoja odobrena AI razina ne dopušta generiranje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.',
+        reason: 'ACADEMIC_POLICY_BLOCK',
+        capability: 'generate_large_sections',
+        stance: resolved.stance,
+      })
+    }
+  }
+
+  // ---------- 7. ANTHROPIC STREAM ----------
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -148,7 +209,7 @@ export async function POST(req) {
       model,
       max_tokens: MAX_TOKENS,
       stream: true,
-      system: KATEDRA_SYSTEM_BOUNDARY,
+      system: policyBlocked ? KATEDRA_SYSTEM_BOUNDARY + '\n\n' + ACADEMIC_POLICY_GUARD : KATEDRA_SYSTEM_BOUNDARY,
       messages,
     }),
   })
@@ -157,7 +218,7 @@ export async function POST(req) {
     return json(502, { error: 'AI servis nije dostupan.', detail })
   }
 
-  // ---------- 7. PIPE + brojanje tokena + naplata na kraju (i kod prekida) ----------
+  // ---------- 8. PIPE + brojanje tokena + naplata na kraju (i kod prekida) ----------
   let inputTokens = 0
   let outputTokens = 0
   const decoder = new TextDecoder()

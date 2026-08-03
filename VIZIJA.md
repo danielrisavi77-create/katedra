@@ -75,8 +75,10 @@ prompt-modovi (jeftin port) + podsjetnici na rok (retention) + povijest verzija 
 ## Monetizacija — premium pozicioniranje
 
 Sidro nije SaaS pretplata nego **sivo tržište pisanja radova** (seminarski ~€50,
-završni ~€150, diplomski €200–300+). Mi smo **legalna, transparentna i bolja** alternativa —
-cijena mora signalizirati vrijednost, ne jeftinoću (odluka osnivača).
+završni ~€150, diplomski €200–300+). Mi smo **transparentna i bolja** alternativa —
+cijena mora signalizirati vrijednost, ne jeftinoću (odluka osnivača). Ne "legalna"
+alternativa (Audit 5): AI politika nije binarna legalno/ilegalno, pa ta riječ otvara
+pitanje "legalno prema čemu" umjesto da zatvara priču — vidi "Jedna rečenica" gore.
 
 - **Seminarski Pass ~€29 · Završni Pass ~€79 · Diplomski Pass ~€129** (donja granica: nikad ispod
   19/49/99). Prvih 20 kupaca = **price discovery cohort**, ne pravi A/B test (bilježi
