@@ -160,10 +160,17 @@ try {
   realLekta.on('pageerror', error => browserErrors.push(`Lekta DOCX: ${String(error)}`))
   await realLekta.goto(previewEntry, { waitUntil: 'domcontentloaded' })
   await realLekta.waitForFunction(expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected, projectId)
-  await realLekta.locator('#fileInput').setInputFiles(E2E_DOCX_PATH)
 
-  // `setFile()` deliberately advances the wizard to Profile (step 2). Follow
-  // the same real user control that confirms the profile and opens step 3.
+  // Use Lekta's actual paper-cover upload CTA. This is important because the
+  // application deliberately keeps the analyzer form hidden until that real
+  // user action marks the form as engaged.
+  const fileChooserPromise = realLekta.waitForEvent('filechooser')
+  await realLekta.locator('#paperCoverBtn').click()
+  const fileChooser = await fileChooserPromise
+  await fileChooser.setFiles(E2E_DOCX_PATH)
+
+  // `setFile()` advances the wizard to Profile (step 2). Follow the real
+  // profile-confirmation control before the analyze button becomes visible.
   const toAnalyzeStep = realLekta.locator('#stepToAnalyze')
   await toAnalyzeStep.waitFor({ state: 'visible', timeout: 20_000 })
   await toAnalyzeStep.click()
