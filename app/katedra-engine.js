@@ -377,6 +377,15 @@ function applyScreen(id){
   if(SCREENS.indexOf(id) > SCREENS.indexOf(seen)) lsSet('rp_screen_max', id);
   if(typeof renderBoardHi === 'function') renderBoardHi();
 }
+// Gdje docekati korisnika koji se vraca. Kad su pripremne faze 0–2 gotove,
+// checklist je odrađen i sljedeći je potez pisanje — Indeks bi tada bio popis
+// koji si već ispunio. Izričit izbor nekog drugog taba se poštuje.
+function landingScreen(){
+  const t = lsGet('rp_tab');
+  if(t && t !== 'check') return 'ploca';
+  try{ if(nextStepText().ready) return 'chat'; }catch(e){}
+  return 'ploca';
+}
 function setScreen(id, tab){
   if(!SCREENS.includes(id) || !screenAvailable(id)) return;
   applyScreen(id);                       // prvo atributi, pa tek onda setTab —
@@ -2399,7 +2408,12 @@ function renderReturn(gapMs){
   $('retHi').innerHTML = greetHtml().replace(/^👋 /, '');
   $('retLine').innerHTML = ns.html;
   const go = $('retGo');
-  if(go) go.onclick = () => { setScreen('ploca'); goToNextStep(ns.pos); };
+  // Isto pravilo kao pri ulasku: spreman za pisanje ide u Start, ostali na
+  // fazu na kojoj su stali.
+  if(go) go.onclick = () => {
+    if(ns.ready && !ns.allDone) setScreen('chat');
+    else { setScreen('ploca'); goToNextStep(ns.pos); }
+  };
 }
 
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
@@ -2567,10 +2581,13 @@ handlePaymentReturn();
     renderReturn(gap); setScreen('povratak'); return;
   }
   const s = lsGet('rp_screen');
-  if(s && SCREENS.includes(s) && screenAvailable(s) && s !== 'povratak'){ setScreen(s); return; }
-  // Bez spremljenog ekrana: tko je već prošao lijevak ide ravno na ploču,
-  // ostali kreću od prvog pitanja.
-  setScreen(lsGet('rp_onb') === '1' ? 'ploca' : 'tip');
+  if(s && SCREENS.includes(s) && screenAvailable(s) && s !== 'povratak'){
+    // Spremljena ploča ustupa mjesto Startu čim je priprema gotova.
+    setScreen(s === 'ploca' ? landingScreen() : s); return;
+  }
+  // Bez spremljenog ekrana: tko je već prošao lijevak ide na ploču (ili Start
+  // ako je spreman za pisanje), ostali kreću od prvog pitanja.
+  setScreen(lsGet('rp_onb') === '1' ? landingScreen() : 'tip');
 })();
 
 /* ---------- PWA / INSTALACIJA / VERZIJA ---------- */
