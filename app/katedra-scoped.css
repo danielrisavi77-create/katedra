@@ -595,8 +595,11 @@
   .katedra-page #view-check .phase.done{opacity:.6;transform:scale(.985) rotate(-.3deg)}
   .katedra-page #view-check .phase.ahead{opacity:.52}
   .katedra-page #view-check .phase.ahead:hover{opacity:.8}
-  .katedra-page #view-check .phase.now{transform:scale(1.012);border-color:var(--stamp);
-    box-shadow:0 12px 30px rgba(var(--shadow-rgb),.2);position:relative;z-index:2}
+  /* "Povučena prema tebi" je podignuta i osjenčana, ne uvećana: skaliranje ju
+     je činilo širom od stupca i od zaglavlja iznad, što izgleda kao greška u
+     poravnanju, a ne kao naglasak. */
+  .katedra-page #view-check .phase.now{transform:translateY(-3px);border-color:var(--stamp);
+    border-width:2px;box-shadow:0 14px 34px rgba(var(--shadow-rgb),.26);position:relative;z-index:2}
   .katedra-page #view-check .phase.now .ph-tit h3::after{content:'ovo sad';margin-left:9px;font-size:9px;
     font-weight:800;letter-spacing:.9px;text-transform:uppercase;background:var(--stamp);color:var(--paper);
     border-radius:99px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
@@ -700,6 +703,14 @@
      grid-column:2 na panelima guralo faze u četvrti red i ostavilo rupu. */
   /* Pozdrav i podaci o radu su bili dva odvojena pojasa jedan ispod drugog;
      sad su jedno zaglavlje — tekst lijevo, Rad i Rok desno. */
+  /* Na uskom ekranu je naslov faze bio stisnut u tri retka jer su brojač,
+     traka i žig ostajali u istom redu. Meta se prelama ispod. */
+  @media(max-width:620px){
+    .katedra-page .ph-head{flex-wrap:wrap;row-gap:10px;padding:13px 14px}
+    .katedra-page .ph-tit{flex:1 1 0;min-width:0}
+    .katedra-page .ph-meta{flex:1 1 100%;justify-content:flex-end}
+    .katedra-page .ph-tit h3{font-size:14px}
+  }
   .katedra-page .board-hi{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
     flex-wrap:wrap;margin:16px 2px 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
   .katedra-page .board-hi h2{font-family:var(--serif);font-size:clamp(19px,2.5vw,25px);font-weight:800;
