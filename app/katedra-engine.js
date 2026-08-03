@@ -1,6 +1,8 @@
 /* eslint-disable react-hooks/rules-of-hooks -- this is a mounted vanilla-JS
    engine, not a React component; useSkills() below is a plain helper whose
    name only coincidentally matches the hook-naming convention. */
+import { loadProcessFacts, processFactsForUnit, AI_POLICY_LABELS, PROCESS_FACT_STATUS_BADGE } from '@/lib/academic-suite/process-facts'
+
 export function initKatedraEngine() {
   const __root = document.getElementById('katedra-root');
   if (!__root || __root.dataset.katedraInit) return;
@@ -20,7 +22,7 @@ const PHASES = [
    {t:'Službene upute fakulteta pronađene i pročitane', crit:1, types:'szd',
     d:'Pravilnik o pisanju radova + predložak — provjeri web fakulteta i repozitorij. Ako fakultet <b>nema propisani stil</b> (često na veleučilištima), stil de facto određuje mentor — ključni kriterij tada je <b>dosljednost</b>.'},
    {t:'Pravila fakulteta o korištenju AI alata provjerena', types:'szd',
-    d:'Sve više fakulteta ima pravilnik o AI alatima (dopušteno uz navođenje / ograničeno / zabranjeno) — i to se često potpisuje u izjavi o akademskoj čestitosti. Znaj gdje stojiš PRIJE nego počneš.'},
+    d:'Sve više fakulteta ima pravilnik o AI alatima (dopušteno uz navođenje / ograničeno / zabranjeno) — i to se često potpisuje u izjavi o akademskoj čestitosti. Znaj gdje stojiš PRIJE nego počneš. Ako je tvoj fakultet verificiran, provjerena AI politika (s izvorom) prikazuje se uz njegov profil u Generatoru.'},
    {t:'Word predložak fakulteta skinut', types:'szd',
     d:'Naslovnica, margine, font, prored, zaglavlja. Pisati u tuđem predlošku od prve stranice = nula sati prebacivanja na kraju.'},
    {t:'Zadani opseg poznat (stranice / riječi)', crit:1, types:'szd',
@@ -239,6 +241,7 @@ function togglePhase(id){
   document.getElementById('ph-'+id).classList.toggle('open');
 }
 
+const PLAN_APPROVED_KEY = 'f2:PLAN I PROGRAM izrađen i ODOBREN prije prvog poglavlja';
 function toggleCheck(el){
   const item = el.closest('.item');
   const key = item.dataset.key;
@@ -246,6 +249,7 @@ function toggleCheck(el){
   item.classList.toggle('ck', state.checks[key]);
   refreshProgress();
   if(typeof saveState === 'function') saveState();
+  if(key === PLAN_APPROVED_KEY && state.checks[key]) emitSuiteEvent('katedra_plan_completed', { workType: state.tip });
 }
 
 function refreshProgress(){
@@ -357,9 +361,9 @@ const TABS = ['chat','check','help','cheat','auto','gen'];
 // koja je korisnik već vidio pri odabiru profila, pa bi zaključavanje unatrag
 // djelovalo kao kvar, a ne kao vođenje.
 const LOCKED_TABS = ['auto','gen'];
-const SCREENS = ['tip','gdje','pitanja','fakultet','ploca','chat','povratak'];
+const SCREENS = ['tip','gdje','pitanja','fakultet','ploca','chat','povratak','scan'];
 const SCREEN_CHROME = { tip:'funnel', gdje:'funnel', pitanja:'funnel',
-                        fakultet:'fak', ploca:'board', chat:'board', povratak:'funnel' };
+                        fakultet:'fak', ploca:'board', chat:'board', povratak:'funnel', scan:'funnel' };
 let curScreen = 'ploca';
 // Ekrani se dodaju po fazama; spremljeni rp_screen ne smije pokazivati na
 // ekran koji u ovom buildu još ne postoji.
@@ -458,6 +462,27 @@ function gatherGen(){
 function saveState(){
   lsSet('rp_state', JSON.stringify({tip: state.tip, checks: state.checks, gen: gatherGen()}));
   syncServerDebounced();
+}
+/* ---------- SUITE ANALYTICS (priprema za Layer E — completion outcome data) ----------
+   Već definirani SharedAnalyticsEvent/AcademicSuiteEventName tipovi
+   (lib/academic-suite/contracts.ts) dosad se nigdje nisu emitirali. Backend
+   sink (Supabase tablica) još ne postoji — nova tablica ide kroz Lekta
+   migraciju prvo (CLAUDE.md "Database authority rule"), izvan opsega ove
+   promjene. Zato eventi za sada idu u lokalni capped log, istim patternom
+   kao rp_log/rp_logf — inspektabilno odmah, trivijalno zamjenjivo pravim
+   POST-om čim backend tablica postoji, bez ponovne instrumentacije mjesta poziva. */
+function emitSuiteEvent(eventName, properties){
+  try{
+    const m = getManifest();
+    const event = {
+      eventName, occurredAt: new Date().toISOString(),
+      projectId: m ? m.projectId : undefined,
+      app: 'katedra', properties: properties || {}
+    };
+    const log = JSON.parse(lsGet('rp_suite_events') || '[]');
+    log.push(event);
+    lsSet('rp_suite_events', JSON.stringify(log.slice(-200)));
+  }catch(e){}
 }
 function loadState(){
   try{
@@ -566,6 +591,10 @@ function buildSkinPicker(){
 const LEKTA_URL = 'https://lektahr.netlify.app';
 let LEKTA_PACK = null, lektaPackPromise = null;
 const LP_BY_ID = {};
+// Katedra-owned AI-policy/process facts — odvojeno od Lekta document-rules packa
+// (v. lib/academic-suite/process-facts.ts). Prazno dok se ne popuni verificiranim
+// izvorima; lpRender() se nosi s time (nema badge = nema tvrdnje).
+let PROCESS_FACTS = null;
 async function loadLektaPack(){
   if(LEKTA_PACK) return LEKTA_PACK;
   if(!lektaPackPromise) lektaPackPromise = fetch('/katedra-pack.json').then(r => r.ok ? r.json() : null).catch(() => null);
@@ -599,8 +628,11 @@ function getManifest(){
 function saveManifest(m){ lsSet('rp_manifest', JSON.stringify(m)); syncServerNow(); }
 function ensureManifest(){
   let m = getManifest();
+  const isNew = !m;
   if(!m) m = { v:1, projectId: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-               createdAt: Date.now(), lektaIssues: [], lektaScore: null, lektaCheckedAt: '', lektaFixedTotal: 0 };
+               createdAt: Date.now(), lektaIssues: [], lektaScore: null, lektaCheckedAt: '', lektaFixedTotal: 0, mentorComments: [] };
+  if(!Array.isArray(m.mentorComments)) m.mentorComments = [];
+  if(isNew) emitSuiteEvent('project_created', { workType: state.tip });
   m.unitId = lsGet('rp_unit') || m.unitId || '';
   m.profileId = lsGet('rp_profile') || m.profileId || '';
   m.workType = state.tip;
@@ -624,6 +656,7 @@ function gatherServerState(){
     topic: m.topic || '', deadline: m.deadline || '', rulesetVersion: m.rulesetVersion || '',
     lektaScore: m.lektaScore, lektaCheckedAt: m.lektaCheckedAt || '',
     lektaIssues: m.lektaIssues || [], lektaFixedTotal: m.lektaFixedTotal || 0,
+    mentorComments: m.mentorComments || [],
     checks: state.checks, gen: gatherGen(),
     hist: getHist(), log: getLog(), logf: (() => { try{ return JSON.parse(lsGet('rp_logf')||'[]'); }catch(e){ return []; } })(),
   };
@@ -654,13 +687,19 @@ function applyServerState(d){
   if(d.logf) lsSet('rp_logf', JSON.stringify(d.logf));
   if(d.unitId){ lsSet('rp_unit', d.unitId); const lpSel = $('lpUnit'); if(lpSel) lpSel.value = d.unitId; }
   if(d.profileId){ lsSet('rp_profile', d.profileId); lpLevel = null; }   // razina se izvede iz profila
+  // mentorComments NEMA stupac u katedra_projects (WRITABLE_FIELDS ga svjesno
+  // izostavlja — nova kolona ide kroz Lekta migraciju prvo, v. CLAUDE.md
+  // "Database authority rule"). d.mentorComments je zato uvijek undefined;
+  // čuvamo postojeći lokalni popis umjesto da ga server-reconcile obriše.
+  const prevM = getManifest();
   const m = {
     v:1, projectId: d.guestProjectId || ('k'+Date.now().toString(36)),
     createdAt: Date.now(),
     unitId: d.unitId||'', profileId: d.profileId||'', workType: d.workType||state.tip,
     topic: d.topic||'', deadline: d.deadline||'', rulesetVersion: d.rulesetVersion||'',
     lektaScore: d.lektaScore ?? null, lektaCheckedAt: d.lektaCheckedAt||'',
-    lektaIssues: d.lektaIssues||[], lektaFixedTotal: d.lektaFixedTotal||0
+    lektaIssues: d.lektaIssues||[], lektaFixedTotal: d.lektaFixedTotal||0,
+    mentorComments: d.mentorComments || (prevM && prevM.mentorComments) || []
   };
   // izravno u localStorage — ne kroz saveManifest()/saveState() da ne okineš sync natrag
   lsSet('rp_manifest', JSON.stringify(m));
@@ -752,20 +791,28 @@ function lpProfileFor(unitId){
 }
 async function lpInit(){
   const sel = $('lpUnit'); if(!sel || sel.options.length) return;
-  const pack = await loadLektaPack();
+  const [pack] = await Promise.all([
+    loadLektaPack(),
+    loadProcessFacts().then(f => { PROCESS_FACTS = f; }),
+  ]);
   if(!pack){
     const box = $('lpCard');
     if(box) box.innerHTML = '<p style="font-size:12.5px;color:var(--mut)">Pravila fakulteta trenutno nisu dostupna — pokušaj kasnije ili otvori <a href="'+LEKTA_URL+'" target="_blank" rel="noopener" style="color:var(--acc)">Lektu</a> izravno.</p>';
     return;
   }
+  // scanUnit (Completion Scan) dijeli isti popis — samostalan <select>, ne
+  // skriven kaskadni poput #lpUnit, pa se puni istim petljom uz drugi host.
+  const scanSel = $('scanUnit');
   pack.units.slice().sort((a,b) => a.name.localeCompare(b.name, 'hr')).forEach(u => {
-    const o = document.createElement('option'); o.value = u.id;
-    o.textContent = u.name + (u.inst ? ' — ' + u.inst : '');
+    const label = u.name + (u.inst ? ' — ' + u.inst : '');
+    const o = document.createElement('option'); o.value = u.id; o.textContent = label;
     sel.appendChild(o);
+    if(scanSel){ const o2 = document.createElement('option'); o2.value = u.id; o2.textContent = label; scanSel.appendChild(o2); }
   });
   sel.value = lsGet('rp_unit') || 'fpzg';
   if(!sel.value) sel.selectedIndex = 0;
   sel.onchange = () => { lsSet('rp_unit', sel.value); lpRenderCascade(); };
+  if(scanSel) scanSel.value = lsGet('rp_unit') || '';
   const metaEl = $('lpMetaCount');
   const metaTxt = pack.meta.counts.profiles + ' profila / ' + pack.meta.counts.units + ' fakulteta · generirano ' + pack.meta.generatedAt;
   if(metaEl) metaEl.textContent = metaTxt;
@@ -890,6 +937,19 @@ function lpRender(){
   if(fm.length) h += '<div style="font-size:12px;color:var(--mut2);margin-top:6px">'+escA(fm.join(' · '))+'</div>';
   if(p.manualChecks) h += '<div style="font-size:11.5px;color:var(--mut);margin-top:7px"><b style="color:var(--ink)">Ručne provjere:</b> '+escA(p.manualChecks.slice(0,3).join(' '))+'</div>';
   if(p.sources) h += '<div style="font-size:11px;margin-top:7px">'+p.sources.slice(0,3).map(s => '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(s.t)+'</a>').join(' · ')+'</div>';
+  // AI-policy proof-layer badge — isti vizualni jezik kao gornji citation/format
+  // badge, ali odvojen izvor podataka (Katedra process-facts, ne Lekta pack).
+  // Nema zapisa za ovaj unit = nema badgea (bez nagađanja, v. process-facts.ts).
+  const pf = processFactsForUnit(PROCESS_FACTS, u.id)[0];
+  if(pf){
+    const pfBadge = (PROCESS_FACT_STATUS_BADGE[pf.status] || '⚪') + ' ' + escA(AI_POLICY_LABELS[pf.aiPolicy] || pf.aiPolicy);
+    h += '<div style="font-size:11.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--pline)">'
+       + '<b style="color:var(--ink)">AI politika' + (pf.scopeLabel ? ' ('+escA(pf.scopeLabel)+')' : '') + ':</b> ' + pfBadge
+       + (pf.verifiedDate ? ' · provjereno '+escA(pf.verifiedDate) : '')
+       + (pf.source ? ' · <a href="'+escA(pf.source.u)+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(pf.source.t)+'</a>' : '')
+       + (pf.note ? '<div style="color:var(--mut);margin-top:3px">'+escA(pf.note)+'</div>' : '')
+       + '</div>';
+  }
   h += '<div class="final-actions"><button class="att-btn" onclick="lpToGen()">→ U Generator</button>'+lekta+'</div></div>';
   box.innerHTML = h;
 }
@@ -970,6 +1030,63 @@ function nextStepText(){
     html: allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
                   : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
     label: LIN_ST[pos]
+  };
+}
+/* ---------- COMPLETION SCAN — samostalan pre-onboarding entry point ----------
+   Ne uvodi novu računicu: čita isti PHASES/state.checks izvor istine kao
+   linePos()/nextStepText(). Za posve novog posjetitelja (state.checks prazan)
+   iskreno prikazuje SVE kritične stavke odabranog tipa rada kao otvorene —
+   ništa se ne pretpostavlja gotovim. Ne troši AI kredite. */
+function scanCriticalItems(){
+  const risks = [];
+  PHASES.forEach(ph => {
+    visibleItems(ph).forEach(it => {
+      if(it.crit && !state.checks[ph.id + ':' + it.t]) risks.push({ phase: ph.tit, text: it.t });
+    });
+  });
+  return risks;
+}
+function renderCompletionScan(){
+  const host = $('scanResult'); if(!host) return;
+  const risks = scanCriticalItems();
+  const unitSel = $('scanUnit');
+  const unitId = unitSel ? unitSel.value : '';
+  const u = (unitId && LEKTA_PACK) ? LEKTA_PACK.units.find(x => x.id === unitId) : null;
+  const rokVal = $('scanRok') ? $('scanRok').value : '';
+  let rokLine = '';
+  if(rokVal){
+    const d = Math.ceil((new Date(rokVal+'T12:00:00') - new Date()) / 86400000);
+    rokLine = d >= 0 ? ('Do roka: <b>' + d + (d === 1 ? ' dan' : ' dana') + '</b>.')
+                      : ('<b style="color:var(--bad)">⚠ rok je već prošao (' + (-d) + ' d)</b>.');
+  }
+  const headline = risks.length
+    ? '<b>' + risks.length + '</b> ' + (risks.length === 1 ? 'kritična stavka' : 'kritičnih stavki') + ' još stoji između ovog rada i sigurne predaje.'
+    : '✅ Nema otvorenih kritičnih stavki iz Katedrinog checklista za ' + TIP_LABEL[state.tip].toLowerCase() + '.';
+  host.style.display = 'block';
+  host.innerHTML =
+    '<div class="scan-head"><b>📋 Rezultat provjere</b>' + (u ? '<span>' + escA(u.name) + '</span>' : '') + '</div>' +
+    '<p style="font-size:13.3px;margin:8px 0 4px">' + headline + (rokLine ? ' ' + rokLine : '') + '</p>' +
+    (risks.length ? '<ul class="scan-risks">' + risks.slice(0,6).map(r => '<li>' + escA(r.text) + '</li>').join('') + '</ul>'
+                    + (risks.length > 6 ? '<p class="scan-more">+ još ' + (risks.length - 6) + ' kritičnih stavki niže u Indeksu</p>' : '') : '') +
+    '<div class="final-actions" style="margin-top:12px;flex-wrap:wrap">' +
+      '<button type="button" class="onb-go" id="scanContinue">Nastavi u Katedri →</button>' +
+      (u ? '<a class="att-btn" style="text-decoration:none" href="' + LEKTA_URL + '/?unit=' + encodeURIComponent(u.id) + '" target="_blank" rel="noopener">✅ Već imam draft — Lekta check ↗</a>' : '') +
+      (risks.length ? '<button type="button" class="att-btn" id="scanActivate">Vodi me do predaje →</button>' : '') +
+    '</div>';
+  const contBtn = $('scanContinue');
+  if(contBtn) contBtn.onclick = () => {
+    if(unitId){ lsSet('rp_unit', unitId); const sel = $('lpUnit'); if(sel) sel.value = unitId; }
+    if(rokVal){ const el = $('dl_rok'); if(el) el.value = rokVal; }
+    funnelFinish();
+  };
+  const activateBtn = $('scanActivate');
+  if(activateBtn) activateBtn.onclick = async () => {
+    if(unitId){ lsSet('rp_unit', unitId); const sel = $('lpUnit'); if(sel) sel.value = unitId; }
+    if(rokVal){ const el = $('dl_rok'); if(el) el.value = rokVal; }
+    ensureManifest();
+    const loggedIn = await refreshAuthAndCredits();
+    if(!loggedIn) return goToLogin();
+    startCheckout(PKG_BY_TIP[state.tip] || 'diplomski');
   };
 }
 function renderLine(){
@@ -1933,7 +2050,7 @@ function chatFinal(){
   live.onclick = async () => {
     const loggedIn = await refreshAuthAndCredits();
     if(!loggedIn) return goToLogin();
-    if(katedraKnownLow) return showPaywall();
+    if(katedraNeedsPass) return showPaywall();
     liveBegin(prompt);
   };
   acts.appendChild(live);
@@ -2056,7 +2173,7 @@ async function liveStream(){
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messages: chat.msgs })
+      body: JSON.stringify({ messages: chat.msgs, projectId: (getManifest() || {}).projectId || '' })
     });
     if(resp.status === 401){ d.remove(); chatBusy(false); goToLogin(); return; }
     if(resp.status === 402){ d.remove(); chatBusy(false); showPaywall(); return; }
@@ -2098,6 +2215,56 @@ async function liveStream(){
 function renderIndeksHead(){
   const r = $('ihRad'); if(r) r.textContent = val('a_tema') || '— upiši temu u Startu —';
   const k = $('ihRok'); if(k){ const rv = val('dl_rok'); k.textContent = rv ? new Date(rv+'T12:00:00').toLocaleDateString('hr-HR') : 'nije postavljen'; }
+  renderMentorComments();
+}
+/* ---------- MENTOR KOMENTARI (minimalna verzija) ----------
+   Namjerno plitko: { id, text, status, createdAt } lista na manifestu,
+   isti "klik = toggle" pattern kao PHASES stavke. Bez automatizacije
+   revizija/verzija na komentar — to je sljedeći korak, ne ovaj. */
+function ensureMentorManifest(){
+  const m = ensureManifest();
+  if(!Array.isArray(m.mentorComments)) m.mentorComments = [];
+  return m;
+}
+function addMentorComment(text){
+  text = (text || '').trim();
+  if(!text) return;
+  const m = ensureMentorManifest();
+  m.mentorComments.push({
+    id: 'mc' + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+    text, status: 'open', createdAt: Date.now()
+  });
+  saveManifest(m);
+  renderMentorComments();
+}
+function toggleMentorComment(id){
+  const m = ensureMentorManifest();
+  const c = m.mentorComments.find(x => x.id === id);
+  if(!c) return;
+  c.status = c.status === 'open' ? 'addressed' : 'open';
+  saveManifest(m);
+  renderMentorComments();
+}
+function deleteMentorComment(id){
+  const m = ensureMentorManifest();
+  m.mentorComments = m.mentorComments.filter(x => x.id !== id);
+  saveManifest(m);
+  renderMentorComments();
+}
+function renderMentorComments(){
+  const host = $('mcList'); if(!host) return;
+  const m = getManifest();
+  const list = (m && m.mentorComments) || [];
+  if(!list.length){ host.innerHTML = '<p class="mc-empty">Još nema zabilježenih mentorovih komentara.</p>'; return; }
+  host.innerHTML = list.slice().reverse().map(c =>
+    '<div class="mc-item' + (c.status === 'addressed' ? ' done' : '') + '">'
+    + '<input type="checkbox" data-mc-toggle="' + c.id + '"' + (c.status === 'addressed' ? ' checked' : '') + '>'
+    + '<span>' + escA(c.text) + '</span>'
+    + '<button type="button" data-mc-del="' + c.id + '" title="Ukloni">✕</button>'
+    + '</div>'
+  ).join('');
+  host.querySelectorAll('[data-mc-toggle]').forEach(el => { el.onchange = () => toggleMentorComment(el.dataset.mcToggle); });
+  host.querySelectorAll('[data-mc-del]').forEach(el => { el.onclick = () => deleteMentorComment(el.dataset.mcDel); });
 }
 function updatePaper(){
   if(!$('kpaper')) return;
@@ -2163,41 +2330,48 @@ const KATEDRA_PACKAGES = [
   ['zavrsni', 'Završni Pass', '79,90 €', '~1 završni + recenzija'],
   ['diplomski', 'Diplomski Pass', '129,90 €', 'diplomski rad'],
 ];
-let katedraKnownLow = false; // zadnje poznato stanje — da paywall ne čeka na 402
+const PKG_BY_TIP = { s: 'seminarski', z: 'zavrsni', d: 'diplomski' };
+let katedraNeedsPass = false; // zadnje poznato stanje — da paywall ne čeka na 402
 function goToLogin(){
   location.href = '/prijava?redirect=' + encodeURIComponent('/');
 }
-function renderAuthHeader(loggedIn, balance, low){
+function renderAuthHeader(loggedIn, hasPass){
   const el = document.getElementById('katedraAuth'); if(!el) return;
   if(!loggedIn){
     el.innerHTML = '<button class="jump" id="katedraLoginBtn">Prijavi se</button>';
     const b = document.getElementById('katedraLoginBtn'); if(b) b.onclick = goToLogin;
     return;
   }
-  el.innerHTML = '<span title="Krediti za &quot;Piši ovdje&quot;">💳 ' + Number(balance||0).toLocaleString('hr-HR') + ' kredita</span>' +
-    (low ? ' <button class="jump" id="katedraTopupBtn">Dokupi</button>' : '');
+  const tip = TIP_LABEL[state.tip].charAt(0) + TIP_LABEL[state.tip].slice(1).toLowerCase();
+  el.innerHTML = hasPass
+    ? '<span title="Pass otključava Katedru i Lektu za ovaj rad">✅ ' + tip + ' Pass · aktivan</span>'
+    : '<button class="jump" id="katedraTopupBtn">Aktiviraj Pass</button>';
   const t = document.getElementById('katedraTopupBtn'); if(t) t.onclick = showPaywall;
 }
 async function refreshAuthAndCredits(){
   try{
-    const resp = await fetch('/api/balance');
-    if(resp.status === 401){ katedraKnownLow = false; katedraLoggedIn = false; renderAuthHeader(false, 0, false); return false; }
+    const projectId = (getManifest() || {}).projectId || '';
+    const resp = await fetch('/api/balance?projectId=' + encodeURIComponent(projectId));
+    if(resp.status === 401){ katedraNeedsPass = false; katedraLoggedIn = false; renderAuthHeader(false, false); return false; }
     if(!resp.ok){ return false; }
     const data = await resp.json();
-    katedraKnownLow = !!data.low;
+    katedraNeedsPass = !data.hasPass && !!data.low;
     katedraLoggedIn = true;
-    renderAuthHeader(true, data.balance, data.low);
+    renderAuthHeader(true, data.hasPass);
     if(!katedraStateReconciled){ katedraStateReconciled = true; reconcileServerState(); }
     return true;
   }catch(e){ return false; }
 }
 function showPaywall(){
   if(document.getElementById('katedraPaywall')) return;
+  const pkgKey = PKG_BY_TIP[state.tip] || 'diplomski';
+  emitSuiteEvent('paywall_shown', { package: pkgKey });
+  const [, name, price] = KATEDRA_PACKAGES.find(([key]) => key === pkgKey) || KATEDRA_PACKAGES[2];
   const ov = document.createElement('div'); ov.className = 'onb'; ov.id = 'katedraPaywall';
   ov.innerHTML = '<div class="onb-card">' +
-    '<div class="logo-badge" style="margin:0 auto">💳</div>' +
-    '<h2>Nedovoljno kredita</h2>' +
-    '<p class="onb-sub">Wizard i generiranje prompta ostaju besplatni — krediti se troše samo na „Piši ovdje” u aplikaciji.</p>' +
+    '<div class="logo-badge" style="margin:0 auto">📘</div>' +
+    '<h2>Vodi ovaj rad do kraja</h2>' +
+    '<p class="onb-sub">Pass otključava Katedra plan, AI pomoć, mentor feedback i Lekta provjere za ovaj rad — do predaje.</p>' +
     '<div class="onb-steps" id="paywallPkgs"></div>' +
     '<button class="onb-go" id="paywallClose" style="background:var(--card2);color:var(--txt);box-shadow:none;margin-top:6px">Zatvori</button>' +
     '</div>';
@@ -2205,20 +2379,20 @@ function showPaywall(){
   // document.body.appendChild ovdje ne bi pokupio nijedan .onb/.onb-card stil.
   __root.appendChild(ov);
   const host = ov.querySelector('#paywallPkgs');
-  KATEDRA_PACKAGES.forEach(([key, name, price, desc]) => {
-    const row = document.createElement('button');
-    row.className = 'onb-go'; row.style.marginBottom = '8px'; row.title = desc;
-    row.textContent = name + ' — ' + price;
-    row.onclick = () => startCheckout(key);
-    host.appendChild(row);
-  });
+  const row = document.createElement('button');
+  row.className = 'onb-go'; row.style.marginBottom = '8px';
+  row.textContent = 'Aktiviraj ' + name + ' — ' + price;
+  row.onclick = () => startCheckout(pkgKey);
+  host.appendChild(row);
   ov.querySelector('#paywallClose').onclick = () => ov.remove();
 }
 async function startCheckout(pkgKey){
+  emitSuiteEvent('pass_purchase_started', { package: pkgKey });
   try{
+    const projectId = (getManifest() || {}).projectId || '';
     const resp = await fetch('/api/checkout', {
       method: 'POST', headers: {'content-type':'application/json'},
-      body: JSON.stringify({ package: pkgKey })
+      body: JSON.stringify({ package: pkgKey, projectId })
     });
     const data = await resp.json();
     if(data.url) location.href = data.url;
@@ -2228,7 +2402,7 @@ async function startCheckout(pkgKey){
 function handlePaymentReturn(){
   const qs = new URLSearchParams(location.search);
   const placeno = qs.get('placeno');
-  if(placeno === '1'){ toast('✅ Uplata uspješna — krediti dodani'); refreshAuthAndCredits(); history.replaceState(null, '', '/'); }
+  if(placeno === '1'){ toast('✅ Pass aktiviran za ovaj rad'); refreshAuthAndCredits(); history.replaceState(null, '', '/'); }
   else if(placeno === '0'){ toast('Plaćanje otkazano'); history.replaceState(null, '', '/'); }
 }
 
@@ -2272,6 +2446,10 @@ $('view-auto').addEventListener('change', () => { buildAuto(); saveState(); });
 $('copyBtn').onclick = copyPrompt;
 $('autoCopy').onclick = () => copyText($('autoOut').textContent, $('autoCopy'), val('a_tema') ? [] : ['tema']);
 $('dl_rok').addEventListener('input', () => { renderDeadlines(); renderLine(); renderIndeksHead(); updatePaper(); saveState(); if(getManifest()) ensureManifest(); });
+const mcAddBtnEl = $('mcAddBtn'), mcInputEl = $('mcInput');
+function mcSubmit(){ if(!mcInputEl) return; addMentorComment(mcInputEl.value); mcInputEl.value = ''; mcInputEl.focus(); }
+if(mcAddBtnEl) mcAddBtnEl.onclick = mcSubmit;
+if(mcInputEl) mcInputEl.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); mcSubmit(); } });
 $('wc_total').addEventListener('input', () => { renderWC(); saveState(); });
 $('wc_unit').addEventListener('change', () => { renderWC(); saveState(); });
 $('btnDnevnik').onclick = exportDnevnik;
@@ -2399,6 +2577,13 @@ document.querySelectorAll('#scr-gdje [data-gdje]').forEach(b => {
 document.querySelectorAll('[data-back]').forEach(b => {
   b.onclick = () => setScreen(b.dataset.back);
 });
+// Completion Scan — alternativni ulaz sa scr-tip, mimo lijevka. Ne postavlja
+// funPending: tko dođe ovuda još nije birao "gdje si s radom", pa
+// funnelFinish() (pozvan iz renderCompletionScan()) pada na FUN_MODES.write.
+const scanEntryEl = $('scanEntryBtn');
+if(scanEntryEl) scanEntryEl.onclick = () => setScreen('scan');
+const scanGoEl = $('scanGo');
+if(scanGoEl) scanGoEl.onclick = renderCompletionScan;
 const funBackEl = $('funBack');
 if(funBackEl) funBackEl.onclick = () => {
   if(funStep > 0){ funStep--; funnelRender(); } else setScreen('gdje');
@@ -2482,6 +2667,7 @@ function lkStart(raw){
   m.lektaIssues = res.issues;
   m.lektaFixedTotal = (m.lektaFixedTotal || 0) + fixed.length;
   saveManifest(m);
+  emitSuiteEvent('lekta_result_handoff_to_katedra', { score: res.score, issueCount: res.issues.length, fixedCount: fixed.length });
   renderLine();
   lkq.list = res.issues; lkq.i = 0;
   const crit = res.issues.filter(i => i.severity === 'critical').length;

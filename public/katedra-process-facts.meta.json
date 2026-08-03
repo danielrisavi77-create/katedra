@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "0.1",
+  "artifact": "katedra-process-facts.json",
+  "sourceProduct": "katedra",
+  "generatedAt": "2026-08-03",
+  "status": "seed-empty",
+  "note": "Katedra-owned institutional policy/process facts (AI-usage policy, submission procedure) — distinct from the Lekta-authored document-compliance rules in katedra-pack.json. Intentionally shipped with zero entries: every entry must be sourced against a real, current, verifiable institutional document before it is added, the same way katedra-pack profiles were verified. Do not seed this file with plausible-sounding but unverified claims — a wrong 'faculty X requires Y' claim is a trust failure, not a missing feature. Add entries only for units that already carry a Lekta `verified` status in katedra-pack.json (see VIZIJA.md: few faculties, very deep, not many faculties, shallow)."
+}
