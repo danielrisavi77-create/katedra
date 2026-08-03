@@ -15,16 +15,27 @@ export default function KatedraPage() {
     // engine reads/writes its manifest.
     ensureGuestProjectIdentity()
 
-    // Shared LektaResult v0.1 is the transport contract. Reconciliation runs
-    // before the current vanilla engine consumes its compatibility payload.
-    normalizeLektaHandoffHashForLegacyEngine()
+    // Register BEFORE initKatedraEngine(): its legacy hashchange listener must
+    // never see a shared LektaResult before this bridge has reconciled and
+    // converted it to the legacy internal shape. This also supports Katedra
+    // already being open when a #lekta= fragment arrives in the same tab.
+    const normalizeIncomingLektaHash = () => {
+      normalizeLektaHandoffHashForLegacyEngine()
+    }
+    window.addEventListener('hashchange', normalizeIncomingLektaHash)
+    normalizeIncomingLektaHash()
 
     initKatedraEngine()
 
     // USER_CHANGED becomes RECHECK_REQUIRED only when the user actually leaves
     // for a project-bound Lekta re-check. The incoming result then either
     // verifies disappearance or reopens the still-present finding.
-    return installLektaRecheckLifecycle()
+    const removeRecheckLifecycle = installLektaRecheckLifecycle()
+
+    return () => {
+      window.removeEventListener('hashchange', normalizeIncomingLektaHash)
+      removeRecheckLifecycle()
+    }
   }, [])
 
   return (
