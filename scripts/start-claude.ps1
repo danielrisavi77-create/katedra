@@ -10,6 +10,30 @@ function Stop-WithMessage([string]$Message) {
   exit 1
 }
 
+function Start-NewClaudeBranch {
+  Write-Host ''
+  Write-Host 'Sinkroniziram master s GitHubom...' -ForegroundColor Green
+
+  git switch master
+  if ($LASTEXITCODE -ne 0) {
+    Stop-WithMessage 'Ne mogu se prebaciti na master.'
+  }
+
+  git pull --ff-only origin master
+  if ($LASTEXITCODE -ne 0) {
+    Stop-WithMessage 'Master se ne može sigurno fast-forwardati. Pokreni dev-doctor prije nastavka.'
+  }
+
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $newBranch = "claude/session-$stamp"
+  git switch -c $newBranch
+  if ($LASTEXITCODE -ne 0) {
+    Stop-WithMessage "Nisam uspio napraviti branch $newBranch."
+  }
+
+  return $newBranch
+}
+
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $repo
 
@@ -29,7 +53,7 @@ if ($LASTEXITCODE -ne 0 -or -not $origin) {
 
 Write-Host "Origin: $origin"
 
-# Uvijek osvježi remote reference, ali nikad ne prepisuj lokalni rad.
+# Osvježi remote reference, ali nikad ne prepisuj lokalni rad.
 git fetch origin
 if ($LASTEXITCODE -ne 0) {
   Stop-WithMessage 'git fetch origin nije uspio.'
@@ -39,30 +63,45 @@ $branch = (git branch --show-current).Trim()
 $dirty = [bool](git status --porcelain)
 
 if ($dirty) {
+  if ($branch -eq 'master') {
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $rescueBranch = "claude/rescue-$stamp"
+
+    Write-Host ''
+    Write-Host 'Na masteru postoje lokalne promjene.' -ForegroundColor Yellow
+    Write-Host "Automatski ih spašavam na: $rescueBranch"
+
+    git switch -c $rescueBranch
+    if ($LASTEXITCODE -ne 0) {
+      Stop-WithMessage 'Nisam uspio napraviti rescue branch. Lokalne promjene nisu dirane.'
+    }
+    $branch = $rescueBranch
+  }
+
   Write-Host ''
   Write-Host "Nastavljam postojeći rad na branchu: $branch" -ForegroundColor Yellow
   Write-Host 'Lokalne promjene se NE diraju i NE pullaju automatski.'
 }
 elseif ($branch -eq 'master') {
-  Write-Host ''
-  Write-Host 'Master je čist. Sinkroniziram ga s GitHubom...' -ForegroundColor Green
-  git pull --ff-only origin master
-  if ($LASTEXITCODE -ne 0) {
-    Stop-WithMessage 'Master se ne može sigurno fast-forwardati. Pokreni dev-doctor ili riješi divergirano stanje prije nastavka.'
-  }
-
-  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-  $newBranch = "claude/session-$stamp"
-  git switch -c $newBranch
-  if ($LASTEXITCODE -ne 0) {
-    Stop-WithMessage "Nisam uspio napraviti branch $newBranch."
-  }
-  $branch = $newBranch
+  $branch = Start-NewClaudeBranch
   Write-Host "Napravljen novi sigurni branch: $branch" -ForegroundColor Green
 }
 else {
-  Write-Host ''
-  Write-Host "Nastavljam postojeći čisti branch: $branch" -ForegroundColor Green
+  # Ako je trenutni čisti branch već dio origin/mastera, posao je završen:
+  # automatski kreni iz svježeg mastera u novoj sesiji.
+  git merge-base --is-ancestor HEAD origin/master 2>$null
+  $alreadyMerged = ($LASTEXITCODE -eq 0)
+
+  if ($alreadyMerged) {
+    Write-Host ''
+    Write-Host "Branch '$branch' je već mergean u master." -ForegroundColor Green
+    $branch = Start-NewClaudeBranch
+    Write-Host "Napravljen novi sigurni branch: $branch" -ForegroundColor Green
+  }
+  else {
+    Write-Host ''
+    Write-Host "Nastavljam postojeći čisti branch: $branch" -ForegroundColor Green
+  }
 }
 
 if (Test-Path '.\scripts\dev-doctor.ps1') {
