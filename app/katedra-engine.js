@@ -2751,9 +2751,13 @@ function renderAuthHeader(loggedIn, hasPass){
     return;
   }
   const tip = TIP_LABEL[state.tip].charAt(0) + TIP_LABEL[state.tip].slice(1).toLowerCase();
-  el.innerHTML = hasPass
+  // "Račun" link mora biti vidljiv za sve prijavljene, ne samo one s Passom —
+  // pravo na jednostrani raskid postoji neovisno o tome je li Pass aktivan
+  // (ZZP čl. 81.a, v. app/racun). Ne skrivati iza uvjetne grane.
+  el.innerHTML = (hasPass
     ? '<span title="Pass otključava Katedru i Lektu za ovaj rad">✅ ' + tip + ' Pass · aktivan</span>'
-    : '<button class="jump" id="katedraTopupBtn">Aktiviraj Pass</button>';
+    : '<button class="jump" id="katedraTopupBtn">Aktiviraj Pass</button>')
+    + ' <a href="/racun" style="color:var(--mut);font-size:12px;text-decoration:underline">Račun</a>';
   const t = document.getElementById('katedraTopupBtn'); if(t) t.onclick = showPaywall;
 }
 async function refreshAuthAndCredits(){
