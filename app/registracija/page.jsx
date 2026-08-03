@@ -25,6 +25,15 @@ export default function RegistracijaPage() {
         options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       })
       if (error) { setError(error.message || 'Registracija nije uspjela.'); return }
+
+      // Supabase intentionally obscures whether a confirmed account already exists:
+      // repeated signup can return HTTP 200 with a user object but no identities/session.
+      // Do not tell the user to wait for a confirmation email that will never be sent.
+      if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setError('Račun s ovom e-mail adresom već postoji. Prijavi se ili zatraži novu lozinku.')
+        return
+      }
+
       if (data.session) { window.location.href = '/'; return }
       setDone(true)
     } catch {
@@ -69,6 +78,8 @@ export default function RegistracijaPage() {
         </form>
         <p className="onb-note">
           Već imaš račun? <Link href="/prijava" style={{ color: 'var(--acc)' }}>Prijavi se</Link>
+          <br />
+          <Link href="/zaboravljena-lozinka" style={{ color: 'var(--acc)' }}>Zaboravljena lozinka?</Link>
         </p>
       </div>
     </div>
