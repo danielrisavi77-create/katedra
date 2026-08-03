@@ -378,6 +378,75 @@ function exportDnevnik(){
   toast('🗂️ Dnevnik procesa spremljen (.md)');
 }
 
+/* ---------- KOŽE (izgled aplikacije) ---------- */
+// Sve boje idu kroz CSS tokene (v. katedra-scoped.css → blok KOŽE), pa je koža
+// samo data-skin na #katedra-root. Zadana ("kreda") je već u page.jsx da nema
+// bljeska pri učitavanju — ovdje se primjenjuje samo korisnikov spremljeni izbor.
+// Izbor je namjerno lokalan: /api/state validira {tip, checks, gen} i dodavanje
+// polja bi mu razbilo PUT. Prijenos na server ide uz sljedeću migraciju stanja.
+const SKINS = [
+  ['kreda',       'Ploča i kreda',   'predavaonica, kreda na tamnoj ploči', '#1e3a2f', '#e8c468'],
+  ['papir',       'Papir i tinta',   'klasični izgled Katedre',             '#ece5d3', '#2c5fa8'],
+  ['filatelija',  'Filatelija',      'poštanski žigovi za dovršene faze',   '#e7dcbf', '#a13327'],
+  ['katalog',     'Katalog kartica', 'knjižnični katalog, smeđa tinta',     '#f9f7ee', '#5b4a2f'],
+  ['ploca',       'Oglasna ploča',   'pluto ploča s pribadačama',           '#a97a44', '#c73b3b'],
+  ['razglednica', 'Razglednica',     'putopisni ton, plava tinta',          '#eee5d2', '#3d6b8a'],
+  ['karta',       'Karta potrage',   'kartografski nacrt puta',             '#e6dbbc', '#8a3b2f'],
+  ['novine',      'Novine',          'naslovnica, oštri bridovi',           '#f2f0e8', '#7a1f1f']
+];
+const SKIN_DEFAULT = 'kreda';
+function getSkin(){
+  const s = lsGet('rp_skin');
+  return SKINS.some(k => k[0] === s) ? s : SKIN_DEFAULT;
+}
+function applySkin(id){
+  // "papir" je bazna paleta iz CSS-a — nema vlastiti blok, pa se atribut skida
+  if(id === 'papir') __root.removeAttribute('data-skin');
+  else __root.setAttribute('data-skin', id);
+  __root.querySelectorAll('.skin-item').forEach(el => el.classList.toggle('on', el.dataset.skin === id));
+}
+function setSkin(id){
+  lsSet('rp_skin', id);
+  applySkin(id);
+  const s = SKINS.find(k => k[0] === id);
+  toast('🎨 Izgled: ' + (s ? s[1] : id));
+}
+function buildSkinPicker(){
+  const header = __root.querySelector('header');
+  if(!header || header.querySelector('.skin-wrap')) return;
+  const cur = getSkin();
+  const wrap = document.createElement('div');
+  wrap.className = 'skin-wrap';
+  wrap.innerHTML =
+    '<button class="skin-open" type="button" aria-expanded="false" aria-haspopup="true">' +
+      '<span class="sw"></span><span class="lbl">Izgled</span></button>' +
+    '<div class="skin-menu" role="menu"><h5>Izgled aplikacije</h5>' +
+      SKINS.map(([id, nm, desc, c1, c2]) =>
+        '<button type="button" role="menuitem" class="skin-item' + (id === cur ? ' on' : '') + '" data-skin="' + id + '">' +
+          '<span class="chip"><i style="background:' + c1 + '"></i><i style="background:' + c2 + '"></i></span>' +
+          '<span class="nm">' + nm + '<small>' + desc + '</small></span>' +
+          '<span class="tick">✓</span>' +
+        '</button>').join('') +
+      '<div class="skin-note">Mijenja samo izgled — rad, plan i pravila ostaju isti.</div>' +
+    '</div>';
+  const auth = header.querySelector('#katedraAuth');
+  if(auth) header.insertBefore(wrap, auth); else header.appendChild(wrap);
+
+  const btn = wrap.querySelector('.skin-open');
+  const menu = wrap.querySelector('.skin-menu');
+  const close = () => { menu.classList.remove('on'); btn.setAttribute('aria-expanded', 'false'); };
+  btn.onclick = e => {
+    e.stopPropagation();
+    const open = menu.classList.toggle('on');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  wrap.querySelectorAll('.skin-item').forEach(it => {
+    it.onclick = e => { e.stopPropagation(); setSkin(it.dataset.skin); close(); };
+  });
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') close(); });
+}
+
 /* ---------- LEKTA RULES — source of truth: katedra-pack (dohvaća se s /katedra-pack.json) ---------- */
 const LEKTA_URL = 'https://lektahr.netlify.app';
 let LEKTA_PACK = null, lektaPackPromise = null;
@@ -1835,6 +1904,8 @@ $('advBtn').onclick = () => {
   toast(isAdv() ? '⚙️ Napredni mod — Autopilot, Generator, Pravila i tip rada otključani' : '✨ Jednostavni mod — samo ono bitno');
 };
 applyAdv();
+applySkin(getSkin());
+buildSkinPicker();
 document.querySelectorAll('#tipSeg button').forEach(b => b.onclick = () => setTip(b.dataset.tip));
 document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { state.mode = b.dataset.mode; applyMode(); });
 $('view-gen').addEventListener('input', () => { buildPrompt(); saveState(); });

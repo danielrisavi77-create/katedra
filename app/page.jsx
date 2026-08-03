@@ -14,6 +14,9 @@ export default function KatedraPage() {
     <div
       id="katedra-root"
       className="katedra-page"
+      // Zadana koža. Stoji već u serverskom HTML-u da nema bljeska stare
+      // palete prije nego engine primijeni korisnikov spremljeni izbor.
+      data-skin="kreda"
       dangerouslySetInnerHTML={{ __html: KATEDRA_BODY_HTML }}
     />
   )
