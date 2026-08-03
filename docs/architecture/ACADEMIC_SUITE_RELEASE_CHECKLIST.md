@@ -9,59 +9,170 @@ Paired PRs:
 - Lekta PR #25
 - Katedra PR #1
 
-Authoritative migrations:
+## 0. Current release status — 2026-08-03
+
+The shared database phase is **COMPLETE on the live Lekta Supabase project**.
+
+Applied authoritative migrations:
 
 1. `Lekta/supabase/migrations/0035_academic_suite_foundation.sql`
 2. `Lekta/supabase/migrations/0036_academic_suite_rls_hardening.sql`
+3. `Lekta/supabase/migrations/0037_academic_suite_api_grants.sql`
+4. `Lekta/supabase/migrations/0038_academic_suite_least_privilege_grants.sql`
+5. `Lekta/supabase/migrations/0039_academic_suite_permanent_account_gate.sql`
+6. `Lekta/supabase/migrations/0040_academic_suite_performance_indexes.sql`
 
 Katedra-side migration files are not production authority.
 
-## 0. Release invariant
+Live verification completed:
 
-Do not point the production Katedra deployment at Lekta Supabase until both migrations are applied and verified.
+- existing Lekta commerce survived unchanged;
+- shared/Katedra tables exist;
+- `entitlements` and `document_slots` were extended, not replaced;
+- RLS is enabled on all new private tables;
+- browser roles use least-privilege table grants;
+- `katedra_consume` / `katedra_grant` are service-role-only;
+- ownership validation triggers are installed;
+- forbidden document-content columns are absent;
+- rollback-only live mirror smoke passed and left zero test rows;
+- Supabase TypeScript type generation succeeds against the live schema;
+- the only new unindexed-FK advisor finding was fixed by `0040`.
 
-Do not create a second `entitlements` or `products` model. The existing Lekta commerce tables remain authoritative.
+The remaining release blockers are **application/runtime configuration**, not database DDL:
 
-## 1. Preflight on Lekta Supabase
+1. point the Katedra deployment environment at the Lekta Supabase project;
+2. add Katedra callback/production URLs to the Lekta Supabase Auth redirect allowlist;
+3. confirm final current-head CI for both PRs;
+4. coordinated merge/deploy;
+5. one manual non-sensitive production DOCX round-trip.
 
-Run against project `zrrjttizjyfcxmcpgzml`.
+---
 
-### Existing commerce exists
+## 1. Canonical backend model
 
-```sql
-select to_regclass('public.products'),
-       to_regclass('public.entitlements'),
-       to_regclass('public.document_slots');
+```text
+Lekta Supabase
+│
+├── auth.users                       shared identity
+├── academic_projects                shared academic project identity
+├── katedra_project_state            Katedra workflow state
+├── lekta_checks                     sanitized deterministic history
+├── entitlements                     existing Lekta commerce authority
+├── document_slots                   existing Lekta document binding
+├── products                         existing Lekta product catalog
+├── katedra_wallets                  Katedra AI-credit accounting
+├── katedra_topups
+├── katedra_usage
+└── katedra_projects                 temporary Katedra v1 compatibility path
 ```
 
-Expected: all non-null.
+There is no second Katedra Supabase project in the target architecture.
 
-### No conflicting Academic Suite tables
+Raw `.docx` files and document body text are not part of this shared backend foundation.
 
-```sql
-select table_name
-from information_schema.tables
-where table_schema = 'public'
-  and table_name in (
-    'academic_projects','katedra_project_state','lekta_checks',
-    'katedra_projects','katedra_wallets','katedra_topups','katedra_usage'
-  );
+---
+
+## 2. Database migration record — COMPLETE
+
+### `0035_academic_suite_foundation`
+
+Creates shared project identity, Katedra state/accounting, sanitized Lekta check history, and the temporary Katedra compatibility path. Extends the existing Lekta `entitlements` and `document_slots` with optional `academic_project_id` links.
+
+### `0036_academic_suite_rls_hardening`
+
+Narrows existing private Lekta commerce read policies to the authenticated role while preserving owner predicates.
+
+### `0037_academic_suite_api_grants`
+
+Introduces explicit Data API intent for Academic Suite surfaces.
+
+### `0038_academic_suite_least_privilege_grants`
+
+Resets inherited/default table privileges and grants only what browser roles actually need. Anonymous users have no table privileges on private Academic Suite/account tables. Authenticated users have:
+
+- owner CRUD on project/state compatibility surfaces;
+- SELECT-only on deterministic history, wallet/accounting, entitlements, and document slots.
+
+### `0039_academic_suite_permanent_account_gate`
+
+Lekta intentionally uses Supabase anonymous Auth for repair flows. Anonymous Auth users still carry the PostgreSQL `authenticated` role, so the new Katedra/shared project/account surfaces additionally use a restrictive `is_anonymous = false` gate.
+
+This gate applies only to new Academic Suite/Katedra account data. Existing Lekta anonymous-repair semantics remain intact.
+
+Supabase Advisor may still report `auth_allow_anonymous_sign_ins` for these new tables because it sees policies targeting the `authenticated` role; the migration smoke explicitly executes both `is_anonymous=true` and `is_anonymous=false` JWT cases and verifies the restrictive policy semantics.
+
+### `0040_academic_suite_performance_indexes`
+
+Adds the covering ownership/time index for `katedra_topups.user_id`, removing the only new unindexed-FK advisor finding introduced by this foundation.
+
+---
+
+## 3. Live post-migration evidence — COMPLETE
+
+Confirmed on `zrrjttizjyfcxmcpgzml`:
+
+- `academic_projects` exists;
+- `katedra_project_state` exists;
+- `lekta_checks` exists;
+- `katedra_projects` exists;
+- `katedra_wallets`, `katedra_topups`, `katedra_usage` exist;
+- `entitlements.academic_project_id` exists;
+- `document_slots.academic_project_id` exists;
+- all new private tables have RLS enabled;
+- `katedra_consume` and `katedra_grant` are executable only by `service_role`;
+- owner validation triggers exist on Lekta checks, entitlements, document slots, and Katedra compatibility writes;
+- privacy-column query returns zero prohibited document-content columns.
+
+A rollback-only live transaction inserted a disposable Katedra project for an existing permanent user, verified that `academic_projects` and `katedra_project_state` mirrors were created, then rolled back. Post-rollback row counts for the test ID were zero.
+
+---
+
+## 4. Katedra runtime cutover — PENDING
+
+The Katedra deployment environment must point to the **same Lekta Supabase project**:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=https://zrrjttizjyfcxmcpgzml.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<active Lekta publishable/compatible client key>
+SUPABASE_SERVICE_ROLE_KEY=<Lekta service-role secret, server-only>
 ```
 
-Before first rollout, expected: zero rows.
+Do not paste or commit the service-role key. Set it only in the hosting provider's protected environment/secret store.
 
-### Record current counts
+Katedra `.env.example` is pinned to the Lekta project URL and contains placeholders only.
 
-```sql
-select
-  (select count(*) from auth.users) as auth_users,
-  (select count(*) from public.entitlements) as entitlements,
-  (select count(*) from public.document_slots) as document_slots;
+Also verify existing Katedra config:
+
+```text
+ANTHROPIC_API_KEY
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+NEXT_PUBLIC_APP_URL
 ```
 
-Record values for comparison after migration.
+Katedra's Stripe wallet remains independent AI-compute accounting. Lekta `products/entitlements/document_slots` remain the cross-product purchase/Pass authority.
 
-## 2. CI gates before production DDL
+---
+
+## 5. Auth redirect configuration — PENDING
+
+Because Katedra now authenticates against Lekta Auth, add the actual Katedra production URL and callback URL to the **Lekta Supabase Auth redirect allowlist**.
+
+At minimum verify the callback used by Katedra:
+
+```text
+https://<katedra-production-domain>/auth/callback
+```
+
+and the production application origin used by login/reset flows.
+
+Do not disable Lekta anonymous Auth globally: Lekta intentionally uses anonymous users for its repair/storage lifecycle. New Katedra/shared project data is protected separately by the permanent-account RLS gate.
+
+Separate root domains still require a later SSO/session-exchange layer for seamless cross-domain login. Sharing the same Supabase Auth user store is already in place.
+
+---
+
+## 6. Required current-head CI before merge
 
 ### Lekta PR #25
 
@@ -73,7 +184,7 @@ Required green:
 - conformance
 - DOCX smoke
 - security audit
-- Netlify preview
+- Netlify deploy preview
 
 ### Katedra PR #1
 
@@ -83,148 +194,27 @@ Required green:
 - DB authority guard
 - Academic Suite real-DOCX browser E2E
 
-## 3. Apply database migrations
+---
 
-Apply `0035` then `0036` to the **Lekta Supabase** migration history.
+## 7. Coordinated promotion order
 
-Do not paste or edit a divergent copy from Katedra.
+After runtime env and Auth redirects are configured:
 
-## 4. Post-migration hard gates
+1. Confirm Lekta PR #25 current-head CI is all green.
+2. Confirm Katedra PR #1 current-head CI is all green.
+3. Merge/deploy Lekta PR #25.
+4. Merge/deploy Katedra PR #1 immediately after.
+5. Verify Katedra production uses project ref `zrrjttizjyfcxmcpgzml`.
+6. Run one non-sensitive real-DOCX production smoke.
 
-### Shared tables exist
+Do not create a second entitlement/product authority during or after promotion.
 
-```sql
-select
-  to_regclass('public.academic_projects') as academic_projects,
-  to_regclass('public.katedra_project_state') as katedra_project_state,
-  to_regclass('public.lekta_checks') as lekta_checks,
-  to_regclass('public.katedra_projects') as katedra_projects,
-  to_regclass('public.katedra_wallets') as katedra_wallets,
-  to_regclass('public.katedra_topups') as katedra_topups,
-  to_regclass('public.katedra_usage') as katedra_usage;
-```
-
-Expected: all non-null.
-
-### Existing Lekta commerce survived
-
-```sql
-select count(*) from public.products;
-select count(*) from public.entitlements;
-select count(*) from public.document_slots;
-```
-
-Existing rows must not disappear.
-
-### Project-aware commerce columns exist
-
-```sql
-select table_name, column_name
-from information_schema.columns
-where table_schema = 'public'
-  and (
-    (table_name = 'entitlements' and column_name = 'academic_project_id') or
-    (table_name = 'document_slots' and column_name = 'academic_project_id')
-  )
-order by table_name;
-```
-
-Expected: two rows.
-
-### RLS enabled on new private tables
-
-```sql
-select relname, relrowsecurity
-from pg_class
-where oid in (
-  'public.academic_projects'::regclass,
-  'public.katedra_project_state'::regclass,
-  'public.lekta_checks'::regclass,
-  'public.katedra_projects'::regclass,
-  'public.katedra_wallets'::regclass,
-  'public.katedra_topups'::regclass,
-  'public.katedra_usage'::regclass
-)
-order by relname;
-```
-
-Expected: `true` for every row.
-
-### Commerce policies target authenticated
-
-```sql
-select tablename, policyname, roles
-from pg_policies
-where schemaname = 'public'
-  and tablename in ('entitlements','document_slots')
-  and policyname in ('entitlements_select_own','document_slots_select_own')
-order by tablename;
-```
-
-Expected role array: `{authenticated}`.
-
-### Privacy invariant
-
-```sql
-select table_name, column_name
-from information_schema.columns
-where table_schema = 'public'
-  and table_name in ('academic_projects','katedra_project_state','lekta_checks')
-  and column_name in (
-    'docx','document','document_text','document_content','raw_document',
-    'issue_detail','issue_location','mentor_comments','source_passages'
-  );
-```
-
-Expected: zero rows.
-
-### Run Supabase advisors
-
-Run both security and performance advisors after the DDL. New WARN/ERROR findings caused by these migrations are release blockers.
-
-## 5. Katedra runtime cutover
-
-Update the Katedra deployment environment so these values point to the **Lekta Supabase** project:
-
-```text
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY (or compatible publishable key when client migration is done)
-SUPABASE_SERVICE_ROLE_KEY
-```
-
-The service-role key remains server-only and must never be committed to GitHub.
-
-Also verify:
-
-```text
-ANTHROPIC_API_KEY
-STRIPE_SECRET_KEY
-STRIPE_WEBHOOK_SECRET
-NEXT_PUBLIC_APP_URL
-```
-
-Katedra's Stripe wallet remains independent AI-credit accounting; Lekta `products/entitlements/document_slots` remain purchase/Pass authority.
-
-## 6. Auth configuration
-
-Because Katedra now uses Lekta Auth, add/verify Katedra production and callback URLs in the Lekta Supabase Auth redirect allowlist before production signup/login testing.
-
-Separate root domains still require a future SSO/session-exchange layer for seamless cross-domain login.
-
-## 7. Coordinated application promotion
-
-1. DB migrations `0035` + `0036` applied and postchecks green.
-2. Lekta PR #25 current-head CI green.
-3. Katedra PR #1 current-head CI green.
-4. Configure Katedra production env for Lekta Supabase.
-5. Deploy/merge Lekta changes.
-6. Deploy/merge Katedra changes immediately after.
-7. Run one non-sensitive real-DOCX smoke.
+---
 
 ## 8. Manual post-deploy smoke
 
-1. Create/sign into one account through Lekta Supabase Auth.
-2. Open Katedra with the same account.
+1. Create/sign into one **permanent** account through Lekta Supabase Auth.
+2. Open Katedra using the same account backend.
 3. Create a guest-first UUID project and save it after login.
 4. Verify matching rows in `katedra_projects`, `academic_projects`, and `katedra_project_state`.
 5. Open Lekta from Katedra with project/unit/work context.
@@ -233,22 +223,38 @@ Separate root domains still require a future SSO/session-exchange layer for seam
 8. Return to Katedra and verify stable finding IDs.
 9. Mark one finding changed and re-check without fixing: it must reopen.
 10. Fix it and re-check: disappearance may become `VERIFIED_FIXED`.
-11. Confirm no raw document text crossed into shared Supabase.
+11. Confirm no raw document body text is stored in the new shared tables.
 
-## 9. Rollback principle
+---
 
-The shared migration is additive. If an application deploy fails, roll back application code first; do not drop shared tables or existing Lekta commerce.
+## 9. Existing Lekta advisor backlog
 
-Do not reverse or truncate `products`, `entitlements`, `document_slots`, or existing Lekta production data as part of an app rollback.
+The live Lekta Supabase already had advisor findings before Academic Suite rollout, including older unindexed foreign keys, RLS init-plan warnings, some public/security-definer function warnings, `pg_net` in `public`, and leaked-password protection disabled.
 
-## 10. Foundation complete
+Those are existing Lekta security/performance backlog items and are not silently folded into this foundation release. They should be handled in focused follow-up migrations/audits rather than widening the Katedra integration release scope.
+
+---
+
+## 10. Rollback principle
+
+The Academic Suite database migrations are additive. If an application deployment fails, roll back application code first; do not drop the shared tables or mutate existing Lekta commerce data.
+
+Do not reverse or truncate `products`, `entitlements`, `document_slots`, or existing Lekta production data as part of an application rollback.
+
+---
+
+## 11. Foundation complete
 
 Foundation v0.1 is production-complete when:
 
-- Lekta Supabase contains the shared project/Katedra tables;
-- existing Lekta commerce remains intact;
-- both CI suites are green;
-- Katedra uses Lekta Supabase env values;
-- Auth redirects are configured;
-- one real browser/DOCX round-trip passes in production;
-- security advisors show no new blocker from the foundation migrations.
+- [x] Lekta Supabase contains the shared project/Katedra tables;
+- [x] existing Lekta commerce remains intact;
+- [x] live DB migration history contains `0035` through `0040`;
+- [x] live rollback-only project mirror smoke passes;
+- [x] least-privilege table grants and service-role-only Katedra RPCs are verified;
+- [x] privacy schema invariant passes;
+- [ ] both PR final-head CI suites are green;
+- [ ] Katedra production environment points to Lekta Supabase;
+- [ ] Katedra URLs are in Lekta Auth redirect allowlist;
+- [ ] paired production deployment is complete;
+- [ ] one real production browser/DOCX round-trip passes.
