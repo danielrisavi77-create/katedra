@@ -487,6 +487,7 @@ function ensureManifest(){
   if(!m) m = { v:1, projectId: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
                createdAt: Date.now(), lektaIssues: [], lektaScore: null, lektaCheckedAt: '', lektaFixedTotal: 0 };
   m.unitId = lsGet('rp_unit') || m.unitId || '';
+  m.profileId = lsGet('rp_profile') || m.profileId || '';
   m.workType = state.tip;
   const t = val('a_tema') || val('f_tema'); if(t) m.topic = t;
   const r = val('dl_rok'); if(r) m.deadline = r;
@@ -504,7 +505,7 @@ function gatherServerState(){
     lektaIssues:[], lektaScore:null, lektaCheckedAt:'', lektaFixedTotal:0 };
   return {
     guestProjectId: m.projectId,
-    unitId: m.unitId || lsGet('rp_unit') || '', profileId: m.profileId || '', workType: state.tip,
+    unitId: m.unitId || lsGet('rp_unit') || '', profileId: m.profileId || lsGet('rp_profile') || '', workType: state.tip,
     topic: m.topic || '', deadline: m.deadline || '', rulesetVersion: m.rulesetVersion || '',
     lektaScore: m.lektaScore, lektaCheckedAt: m.lektaCheckedAt || '',
     lektaIssues: m.lektaIssues || [], lektaFixedTotal: m.lektaFixedTotal || 0,
@@ -537,6 +538,7 @@ function applyServerState(d){
   if(d.log) lsSet('rp_log', JSON.stringify(d.log));
   if(d.logf) lsSet('rp_logf', JSON.stringify(d.logf));
   if(d.unitId){ lsSet('rp_unit', d.unitId); const lpSel = $('lpUnit'); if(lpSel) lpSel.value = d.unitId; }
+  if(d.profileId){ lsSet('rp_profile', d.profileId); lpLevel = null; }   // razina se izvede iz profila
   const m = {
     v:1, projectId: d.guestProjectId || ('k'+Date.now().toString(36)),
     createdAt: Date.now(),
@@ -566,14 +568,71 @@ async function reconcileServerState(){
   applyServerState(data);
   document.querySelectorAll('#tipSeg button').forEach(b => b.classList.toggle('on', b.dataset.tip === state.tip));
   applyTipPlaceholders(); renderPhases(); applyMode(); buildAuto(); renderDeadlines(); renderWC();
-  renderLine(); renderIndeksHead(); updatePaper(); lpRender();
+  renderLine(); renderIndeksHead(); updatePaper(); lpRenderCascade();
 }
 
 function lpUnitObj(){ if(!LEKTA_PACK) return null; const s = $('lpUnit'); return LEKTA_PACK.units.find(x => x.id === (s ? s.value : '')) || null; }
+
+/* Razine studija — profil se svrstava po prvom workType-u koji se poklopi.
+   'diplomski' je jedan zalutali zapis u packu, 'project'/'article' idu uz seminar. */
+const LP_LEVELS = [
+  ['final',      'Prijediplomski',      ['final']],
+  ['graduate',   'Diplomski',           ['graduate', 'diplomski']],
+  ['specialist', 'Specijalistički',     ['specialist']],
+  ['doctoral',   'Doktorski',           ['doctoral']],
+  ['seminar',    'Seminarski i ostalo', ['seminar', 'project', 'article']]
+];
+function lpLevelOf(p){
+  const wt = p.workTypes || [];
+  const hit = LP_LEVELS.find(l => l[2].some(w => wt.includes(w)));
+  return hit ? hit[0] : 'seminar';
+}
+function lpUnitProfiles(unitId){
+  const u = LEKTA_PACK && LEKTA_PACK.units.find(x => x.id === unitId);
+  return ((u && u.profiles) || []).map(i => LP_BY_ID[i]).filter(Boolean);
+}
+
+/* Naziv smjera se izvodi iz p.label jer pack nema zasebno polje. Dva formata:
+   "FPZG · Politologija · diplomski rad" i "Filozofski fakultet (Odsjek za
+   psihologiju), diplomski rad". Skida se sastavnica s početka i naziv tipa rada
+   s kraja; ako ne ostane ništa, fakultet nema podjelu po smjeru. Provjereno na
+   svih 395 profila iz packa. */
+const LP_DEACC = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').toLowerCase().trim();
+const LP_TYPE_RE = /^((zavr[sš]ni|diplomski|doktorski|specijalisti[cč]ki|stru[cč]ni|sveu[cč]ili[sš]ni|poslijediplomski)\s+)*(zavr[sš]ni|diplomski|doktorski|specijalisti[cč]ki)\s+(rad|thesis)$|^disertacija$|^master'?s thesis$/i;
+function lpSmjerName(u, p){
+  let s = String(p.label || '');
+  if(s.includes('·')){
+    const parts = s.split('·').map(x => x.trim()).filter(Boolean);
+    parts.shift();                                    // prvi dio je sastavnica
+    s = parts.filter(x => !LP_TYPE_RE.test(LP_DEACC(x).replace(/\s+/g, ' '))).join(' · ');
+  } else {
+    const ci = s.lastIndexOf(',');
+    let head = ci > 0 ? s.slice(0, ci).trim() : s;
+    const tail = ci > 0 ? s.slice(ci + 1).trim() : '';
+    for(const n of [u.name, u.inst].filter(Boolean)){
+      if(LP_DEACC(head).startsWith(LP_DEACC(n))){ head = head.slice(n.length).trim(); break; }
+    }
+    head = head.replace(/^[([\-–—,\s]+/, '').replace(/[)\]\s]+$/, '').trim();
+    const mv = tail.match(/\(([^)]+)\)\s*$/);
+    s = [head, mv ? mv[1].trim() : ''].filter(Boolean).join(' · ');
+  }
+  return s.replace(/\s{2,}/g, ' ').trim() || 'svi smjerovi';
+}
+
+function lpChosen(){ const id = lsGet('rp_profile'); return (id && LP_BY_ID[id]) || null; }
+function lpSetChosen(id){
+  lsSet('rp_profile', id || '');
+  const m = getManifest();
+  if(m){ m.profileId = id || ''; saveManifest(m); }
+}
 function lpProfileFor(unitId){
   if(!LEKTA_PACK) return null;
-  const u = LEKTA_PACK.units.find(x => x.id === unitId);
-  const profs = ((u && u.profiles) || []).map(i => LP_BY_ID[i]).filter(Boolean);
+  // Izričit izbor smjera ima prednost. Bez njega se pogađalo po tipu rada, pa je
+  // fakultet s više smjerova (FPZG: Politologija, Novinarstvo, Nac. sigurnost)
+  // dobivao pravila prvog profila u nizu — moguće krivog.
+  const chosen = lpChosen();
+  if(chosen && chosen.unitId === unitId) return chosen;
+  const profs = lpUnitProfiles(unitId);
   return profs.find(p => (p.workTypes || []).includes(LP_WT[state.tip])) || profs[0] || null;
 }
 async function lpInit(){
@@ -586,17 +645,101 @@ async function lpInit(){
   }
   pack.units.slice().sort((a,b) => a.name.localeCompare(b.name, 'hr')).forEach(u => {
     const o = document.createElement('option'); o.value = u.id;
-    // VIZIJA.md: šira lista (sve fakultete), ali jasno označeno verified vs
-    // partial — ne skrivamo 120 partial jedinica, ne pretvaramo se da su verified.
-    const hasVerified = (u.profiles || []).some(pid => LP_BY_ID[pid] && LP_BY_ID[pid].status === 'verified');
-    o.textContent = (hasVerified ? '✅ ' : '🟡 ') + u.name + (u.inst ? ' — ' + u.inst : '');
+    o.textContent = u.name + (u.inst ? ' — ' + u.inst : '');
     sel.appendChild(o);
   });
   sel.value = lsGet('rp_unit') || 'fpzg';
   if(!sel.value) sel.selectedIndex = 0;
-  sel.onchange = () => { lsSet('rp_unit', sel.value); lpRender(); };
+  sel.onchange = () => { lsSet('rp_unit', sel.value); lpRenderCascade(); };
   const metaEl = $('lpMetaCount');
   if(metaEl) metaEl.textContent = pack.meta.counts.profiles + ' profila / ' + pack.meta.counts.units + ' fakulteta · generirano ' + pack.meta.generatedAt;
+  const search = $('lpSearch');
+  if(search) search.oninput = () => lpRenderUnits(search.value);
+  lpRenderCascade();
+}
+
+/* ---------- KASKADA: fakultet → studij → smjer ---------- */
+let lpLevel = null;
+function lpRow(txt, sub, status, sel, onPick){
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'lp-row' + (sel ? ' on' : '');
+  let h = '<span class="lp-nm">' + escA(txt) + (sub ? '<small>' + escA(sub) + '</small>' : '') + '</span>';
+  if(status) h += '<span class="lp-st ' + (status === 'verified' ? 'v' : 'p') + '">'
+                + (status === 'verified' ? 'potvrđen' : 'tehnički') + '</span>';
+  b.innerHTML = h; b.onclick = onPick;
+  return b;
+}
+function lpRenderUnits(filter){
+  const host = $('lpUnits'); if(!host || !LEKTA_PACK) return;
+  const q = LP_DEACC(filter || '');
+  const cur = $('lpUnit') ? $('lpUnit').value : '';
+  const units = LEKTA_PACK.units.slice().sort((a,b) => a.name.localeCompare(b.name, 'hr'))
+    .filter(u => !q || LP_DEACC(u.name).includes(q) || LP_DEACC(u.inst).includes(q) || LP_DEACC(u.id).includes(q));
+  host.innerHTML = '';
+  if(!units.length){ host.innerHTML = '<p class="lp-empty">Nema fakulteta za „' + escA(filter) + '”.</p>'; return; }
+  units.forEach(u => {
+    // VIZIJA.md: nudimo sve sastavnice, ali status je vidljiv na svakom retku —
+    // ne skrivamo profile koji imaju samo tehničke provjere.
+    const verified = (u.profiles || []).some(pid => LP_BY_ID[pid] && LP_BY_ID[pid].status === 'verified');
+    host.appendChild(lpRow(u.name, u.inst || '', verified ? 'verified' : 'partial', u.id === cur, () => {
+      const sel = $('lpUnit'); if(sel) sel.value = u.id;
+      lsSet('rp_unit', u.id);
+      lpSetChosen('');            // smjer s prethodnog fakulteta više ne vrijedi
+      lpLevel = null;
+      lpRenderCascade();
+      if(getManifest()) ensureManifest();
+    }));
+  });
+  const selRow = host.querySelector('.lp-row.on');
+  if(selRow) selRow.scrollIntoView({ block: 'nearest' });
+}
+function lpRenderLevels(){
+  const host = $('lpLevels'); if(!host) return;
+  const u = lpUnitObj();
+  host.innerHTML = '';
+  if(!u){ host.innerHTML = '<p class="lp-empty">Prvo odaberi fakultet.</p>'; return; }
+  const profs = lpUnitProfiles(u.id);
+  const have = LP_LEVELS.filter(l => profs.some(p => lpLevelOf(p) === l[0]));
+  if(!have.length){ host.innerHTML = '<p class="lp-empty">Za ovaj fakultet pack nema profile.</p>'; return; }
+  // Predodabir: razina koja odgovara odabranom tipu rada, inače prva dostupna.
+  if(!have.some(l => l[0] === lpLevel)){
+    const wt = LP_WT[state.tip];
+    const byTip = have.find(l => l[2].includes(wt));
+    lpLevel = (byTip || have[0])[0];
+  }
+  have.forEach(l => {
+    const n = profs.filter(p => lpLevelOf(p) === l[0]).length;
+    host.appendChild(lpRow(l[1], n === 1 ? '1 profil' : n + ' profila', '', l[0] === lpLevel, () => {
+      lpLevel = l[0]; lpSetChosen(''); lpRenderCascade();
+    }));
+  });
+}
+function lpRenderProfiles(){
+  const host = $('lpProfs'); if(!host) return;
+  const u = lpUnitObj();
+  host.innerHTML = '';
+  if(!u || !lpLevel){ host.innerHTML = '<p class="lp-empty">Zatim razinu studija.</p>'; return; }
+  const profs = lpUnitProfiles(u.id).filter(p => lpLevelOf(p) === lpLevel);
+  if(!profs.length){ host.innerHTML = '<p class="lp-empty">Nema profila za ovu razinu.</p>'; return; }
+  // Jedini profil znači da fakultet nema podjelu — odaberi ga sam, bez suvišnog klika.
+  if(profs.length === 1 && !lpChosen()) lpSetChosen(profs[0].id);
+  const cur = lpChosen();
+  profs.forEach(p => {
+    host.appendChild(lpRow(lpSmjerName(u, p), '', p.status, !!cur && cur.id === p.id, () => {
+      lpSetChosen(p.id); lpRenderCascade();
+      if(getManifest()) ensureManifest();
+    }));
+  });
+}
+function lpRenderCascade(){
+  if(!$('lpUnits')) { lpRender(); return; }
+  lpRenderUnits($('lpSearch') ? $('lpSearch').value : '');
+  lpRenderLevels();
+  lpRenderProfiles();
+  ['lpColU','lpColL','lpColP'].forEach((id, i) => {
+    const el = $(id); if(!el) return;
+    el.classList.toggle('ready', i === 0 ? !!lpUnitObj() : i === 1 ? !!lpLevel : !!lpChosen());
+  });
   lpRender();
 }
 function lpRender(){
@@ -618,7 +761,8 @@ function lpRender(){
   if(p.wordMin && p.wordMax) fm.push(p.wordMin.toLocaleString('hr-HR')+'–'+p.wordMax.toLocaleString('hr-HR')+' riječi');
   if(p.pageMin && p.pageMax) fm.push(p.pageMin+'–'+p.pageMax+' str.');
   if(p.minReferences) fm.push('min. '+p.minReferences+' izvora');
-  if(p.citation) fm.push('citiranje: '+p.citation);
+  // LP_CIT ima čitljiv naziv; bez njega bi ovdje pisao sirovi ključ ("fpzg").
+  if(p.citation) fm.push('citiranje: ' + (LP_CIT[p.citation] || p.citation).split(/\s*[—(]/)[0].trim());
   if(fm.length) h += '<div style="font-size:12px;color:var(--mut2);margin-top:6px">'+escA(fm.join(' · '))+'</div>';
   if(p.manualChecks) h += '<div style="font-size:11.5px;color:var(--mut);margin-top:7px"><b style="color:var(--ink)">Ručne provjere:</b> '+escA(p.manualChecks.slice(0,3).join(' '))+'</div>';
   if(p.sources) h += '<div style="font-size:11px;margin-top:7px">'+p.sources.slice(0,3).map(s => '<a href="'+s.u+'" target="_blank" rel="noopener" style="color:var(--acc)">'+escA(s.t)+'</a>').join(' · ')+'</div>';
@@ -1101,7 +1245,22 @@ $('cheatRoot').innerHTML = `
 <div class="cs full" id="fakCard">
   <h3><em>🏛️</em> Pravila fakulteta — izvor: Lekta</h3>
   <p style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Verificirana pravila iz <a href="https://lektahr.netlify.app" target="_blank" rel="noopener" style="color:var(--acc);font-weight:700">Lekta baze</a> (<span id="lpMetaCount">učitavam…</span>) — svako bodovano pravilo sljedivo je do službenog izvora fakulteta. Katedra ih koristi za plan i prompt; <b>mjerodavnu provjeru dokumenta radi Lekta</b>.</p>
-  <select id="lpUnit" style="width:100%;background:#fffdf6;border:1px solid var(--line2);border-radius:9px;color:var(--txt);padding:10px 12px;font-family:inherit;font-size:13.5px;outline:none;margin-bottom:10px"></select>
+  <select id="lpUnit" style="display:none" aria-hidden="true" tabindex="-1"></select>
+  <div class="lp-cascade">
+    <div class="lp-col" id="lpColU">
+      <h5><em>1</em>Fakultet</h5>
+      <input id="lpSearch" class="lp-search" type="search" placeholder="Traži fakultet…" aria-label="Traži fakultet">
+      <div class="lp-list" id="lpUnits"></div>
+    </div>
+    <div class="lp-col" id="lpColL">
+      <h5><em>2</em>Studij</h5>
+      <div class="lp-list" id="lpLevels"><p class="lp-empty">Prvo odaberi fakultet.</p></div>
+    </div>
+    <div class="lp-col" id="lpColP">
+      <h5><em>3</em>Smjer</h5>
+      <div class="lp-list" id="lpProfs"><p class="lp-empty">Zatim razinu studija.</p></div>
+    </div>
+  </div>
   <div id="lpCard"></div>
 </div>
 </div>
@@ -1781,7 +1940,7 @@ function updatePaper(){
   if(chat.files.length){
     kf.innerHTML = chat.files.slice(0,6).map(f => '<div>· ' + escA(f.name) + '</div>').join('') +
       (chat.files.length > 6 ? '<div>+ još ' + (chat.files.length - 6) + '</div>' : '');
-  } else kf.innerHTML = '<div style="border:0;color:#b9bcc4;font-style:italic">— još nema priloga —</div>';
+  } else kf.innerHTML = '<div style="border:0;color:var(--pl-ph);font-style:italic">— još nema priloga —</div>';
   const rv = val('dl_rok');
   $('kpRok').textContent = rv ? new Date(rv+'T12:00:00').toLocaleDateString('hr-HR', {day:'numeric', month:'long', year:'numeric'}) : 'nije postavljen';
 }
@@ -2110,7 +2269,7 @@ try{
   const man = {
     name:'Katedra — kopilot za radove', short_name:'Katedra',
     start_url: location.href, display:'standalone',
-    background_color:'#07080d', theme_color:'#07080d',
+    background_color:'#1e3a2f', theme_color:'#1e3a2f',
     icons:[{src: new URL('katedra-icon.png', location.href).href, sizes:'512x512', type:'image/png'}]
   };
   const l = document.createElement('link'); l.rel = 'manifest';
