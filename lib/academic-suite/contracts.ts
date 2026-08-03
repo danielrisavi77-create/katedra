@@ -262,6 +262,22 @@ export interface LektaResult {
 
 // ---------------------------------------------------------------------------
 // Commerce: access rights are separate from Katedra AI-cost accounting
+//
+// IMPORTANT (verified 2026-08 directly against the Lekta repo): this
+// Entitlement/EntitlementScope/PASS_CAPABILITIES shape mirrors
+// src/integration/academic-suite-contracts.ts on the Lekta side faithfully
+// — but it is a DESIGNED FUTURE CONTRACT, not the live `entitlements` SQL
+// table. The actual deployed schema (Lekta supabase/migrations/0001, 0002,
+// 0035) still has the pre-Academic-Suite commerce shape: user_id, work_type,
+// slots_total, status, order_id, provider, purchase_expires_at, product_id,
+// academic_project_id — no scope/capabilities/sourceProductId columns exist
+// in the database. Writing an insert shaped like this interface directly
+// against `entitlements` will fail (NOT NULL violations on the real
+// required columns, unknown-column errors on scope/capabilities). Until a
+// coordinated Lekta-side migration actually adds these columns, code that
+// grants entitlements (e.g. app/api/webhook/route.js) must target the real
+// column list, not this interface. Treat this file as the target shape to
+// migrate TOWARD, not as documentation of what exists today.
 // ---------------------------------------------------------------------------
 
 export type EntitlementScope =

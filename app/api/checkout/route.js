@@ -7,14 +7,28 @@
 // metadata jer webhook i dalje puni katedra_wallets kao INTERNI spend-guard
 // (vidi app/api/webhook/route.js) — ali projectId/product_key su primarni
 // commercial signal, ne tokens/amount_eur.
+//
+// Faza 1 stavka 3 (verificirano izravno protiv Lekta repozitorija, ne
+// pretpostavljeno): stvarna `entitlements` shema (Lekta migracije 0001, 0002,
+// 0035 — supabase/migrations/) NEMA `scope`/`capabilities` kolone, a `status`
+// default je 'active' bez pretpostavke. Query dolje sad koristi STVARNE
+// kolone (`academic_project_id`, ne `project_id`; nema `scope` filtera).
+// Isto vrijedi za webhook insert — v. app/api/webhook/route.js.
 // ============================================================
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // tokens = obračunski tokeni (input + 5×output) za interni wallet hard cap,
 // NEPROMIJENJENI od prije repricinga — VIZIJA.md: "cijena mora signalizirati
 // vrijednost, ne jeftinoću", ne cost-plus. Cijene su charter-ove
 // ("Monetizacija" §, donja granica nikad ispod 19/49/99 €).
+//
+// entitlementWorkType koristi ISTI rječnik kao Lekta entitlements.work_type
+// CHECK constraint ('seminarski'|'zavrsni'|'diplomski'|'doktorski') — pkgKey
+// se poklapa 1:1, bez mapiranja. workType (englesko: seminar/final/graduate)
+// je zaseban rječnik za academic_projects.work_type/work_type_canonical.
 const PACKAGES = {
   seminarski: { eur: 29.9, tokens: 1_500_000, name: 'Katedra Seminarski Pass', workType: 'seminar' },
   zavrsni: { eur: 79.9, tokens: 4_500_000, name: 'Katedra Završni Pass', workType: 'final' },
@@ -52,16 +66,21 @@ export async function POST(req) {
     return Response.json({ error: 'Vrsta rada u projektu ne odgovara odabranom paketu.' }, { status: 400 })
   }
 
-  // NOTE: column list kept minimal/confirmed (user_id, project_id, scope) per
-  // scripts/foundation-db-smoke.sql — `status` presence/default is assumed from
-  // lib/academic-suite/contracts.ts's EntitlementStatus and must be verified
-  // against the live Lekta schema before this ships (see plan Faza 1 note).
+  // entitlements.academic_project_id je uuid FK na academic_projects.id (Lekta
+  // migracija 0035) — mora biti pravi UUID, ne legacy "k..." alias. Katedra
+  // trigger (sync_katedra_project_to_academic_suite) prepisuje project_id na
+  // kanonski UUID nakon prvog /api/state sync-a; ako to još nije stiglo,
+  // odbij kupnju ranije umjesto da webhook kasnije tiho ne poveže Pass s
+  // projektom.
+  if (!UUID_RE.test(project.project_id)) {
+    return Response.json({ error: 'Projekt još nije sinkroniziran s računom — pričekaj trenutak i pokušaj ponovno.' }, { status: 409 })
+  }
+
   const { data: existing, error: existingError } = await supabase
     .from('entitlements')
-    .select('user_id')
+    .select('id')
     .eq('user_id', user.id)
-    .eq('project_id', projectId)
-    .eq('scope', 'academic-pass')
+    .eq('academic_project_id', project.project_id)
     .eq('status', 'active')
     .maybeSingle()
   if (existingError) return Response.json({ error: 'Provjera postojećeg Passa nije uspjela.' }, { status: 500 })
@@ -84,7 +103,7 @@ export async function POST(req) {
       }],
       metadata: {
         user_id: user.id,
-        academic_project_id: projectId,
+        academic_project_id: project.project_id,
         product_key: pkgKey,
         tokens: String(pkg.tokens),
         amount_eur: String(pkg.eur),
