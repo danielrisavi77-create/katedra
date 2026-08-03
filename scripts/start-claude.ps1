@@ -10,7 +10,7 @@ function Stop-WithMessage([string]$Message) {
   exit 1
 }
 
-function Start-NewClaudeBranch {
+function Sync-MasterSafely {
   Write-Host ''
   Write-Host 'Sinkroniziram master s GitHubom...' -ForegroundColor Green
 
@@ -19,10 +19,50 @@ function Start-NewClaudeBranch {
     Stop-WithMessage 'Ne mogu se prebaciti na master.'
   }
 
-  git pull --ff-only origin master
-  if ($LASTEXITCODE -ne 0) {
-    Stop-WithMessage 'Master se ne može sigurno fast-forwardati. Pokreni dev-doctor prije nastavka.'
+  # Radni tree u ovu funkciju ulazi čist. Ako lokalni master ima commitove
+  # kojih nema na GitHubu, prvo ih čuvamo na rescue branchu pa tek onda
+  # poravnamo master s origin/master. Tako se ništa ne gubi.
+  $counts = (git rev-list --left-right --count master...origin/master).Trim() -split '\s+'
+  if ($LASTEXITCODE -ne 0 -or $counts.Count -lt 2) {
+    Stop-WithMessage 'Ne mogu odrediti odnos lokalnog i udaljenog mastera.'
   }
+
+  $ahead = [int]$counts[0]
+  $behind = [int]$counts[1]
+
+  if ($ahead -gt 0) {
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $rescueBranch = "claude/rescue-master-$stamp"
+
+    Write-Host ''
+    Write-Host "Lokalni master ima $ahead commit(a) kojih nema na GitHubu." -ForegroundColor Yellow
+    Write-Host "Čuvam ih na rescue branchu: $rescueBranch"
+
+    git branch $rescueBranch master
+    if ($LASTEXITCODE -ne 0) {
+      Stop-WithMessage 'Nisam uspio napraviti rescue branch za lokalni master.'
+    }
+
+    git reset --hard origin/master
+    if ($LASTEXITCODE -ne 0) {
+      Stop-WithMessage "Rescue branch postoji ($rescueBranch), ali master nisam uspio poravnati s origin/master."
+    }
+
+    Write-Host 'Master je sigurno poravnat s GitHubom.' -ForegroundColor Green
+  }
+  elseif ($behind -gt 0) {
+    git pull --ff-only origin master
+    if ($LASTEXITCODE -ne 0) {
+      Stop-WithMessage 'Master se ne može sigurno fast-forwardati.'
+    }
+  }
+  else {
+    Write-Host 'Master je već usklađen s GitHubom.' -ForegroundColor Green
+  }
+}
+
+function Start-NewClaudeBranch {
+  Sync-MasterSafely
 
   $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $newBranch = "claude/session-$stamp"
