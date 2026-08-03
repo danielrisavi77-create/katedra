@@ -6,11 +6,13 @@ Paired changes:
 
 - Katedra PR #1
 - Lekta PR #25
-- shared Supabase migration: `supabase/migrations/20260805000000_academic_suite_foundation.sql`
+- shared Supabase migrations, in order:
+  1. `supabase/migrations/20260805000000_academic_suite_foundation.sql`
+  2. `supabase/migrations/20260805010000_academic_suite_foundation_hardening.sql`
 
 The target architecture is one Supabase project shared by both products. Katedra's existing Supabase becomes the Academic Suite identity/data backbone.
 
-The migration creates the canonical shared model:
+The migrations create the canonical shared model:
 
 ```text
 auth.users
@@ -28,9 +30,9 @@ Raw thesis/DOCX content must never be introduced into the shared database as par
 
 ## 0. Release invariant
 
-Do not deploy Katedra foundation code before the DB migration is applied and all postchecks pass.
+Do not deploy Katedra foundation code before **both** DB migrations are applied in order and every postcheck passes.
 
-Do not manually modify the SQL while pasting it into production. Any change must first be committed and pass the PostgreSQL migration CI gate.
+Do not manually modify SQL while pasting it into production. Any change must first be committed and pass the PostgreSQL migration CI gate.
 
 ---
 
@@ -71,8 +73,6 @@ Expected: zero rows.
 
 ### 1.4 UUID-shaped guest IDs are globally unique
 
-New Katedra clients already generate UUIDs before login. These become the shared canonical project ID exactly.
-
 ```sql
 select guest_project_id, count(*)
 from public.katedra_projects
@@ -110,18 +110,21 @@ Record this number as `N`.
 
 ---
 
-## 2. Apply migration
+## 2. Apply migrations
 
-Apply exactly:
+Apply **both** committed files in this exact order:
 
 ```text
 supabase/migrations/20260805000000_academic_suite_foundation.sql
+supabase/migrations/20260805010000_academic_suite_foundation_hardening.sql
 ```
 
 Preferred methods:
 
-1. Supabase SQL editor using the exact committed file; or
+1. Supabase SQL editor, executing each exact committed file in order; or
 2. `supabase db push` only if the CLI is already linked to the correct production project.
+
+The second migration is not optional. It adds DB-level protection against cross-user project ownership takeover and prevents project-scoped entitlements from referencing a project owned by a different user.
 
 ---
 
@@ -226,21 +229,21 @@ where ks.project_id is null;
 
 Expected immediately after migration: `0`.
 
-### 3.9 Compatibility mirror trigger exists
+### 3.9 Compatibility and ownership triggers exist
 
 ```sql
-select tgname
+select tgrelid::regclass as table_name, tgname
 from pg_trigger
-where tgrelid = 'public.katedra_projects'::regclass
-  and not tgisinternal
+where not tgisinternal
   and tgname in (
     'katedra_project_shared_mirror',
-    'katedra_project_shared_delete'
+    'katedra_project_shared_delete',
+    'entitlements_validate_project_owner'
   )
 order by tgname;
 ```
 
-Expected: both trigger names.
+Expected: all three trigger names.
 
 ### 3.10 RLS enabled on every shared table
 
@@ -330,7 +333,7 @@ Required green:
 Required green:
 
 - Foundation check (`tsc`, lint, production build)
-- Foundation DB migration (PostgreSQL 16)
+- Foundation DB migration (PostgreSQL 16), including ownership hardening smoke
 - Academic Suite browser E2E including the real-DOCX segment
 
 ---
@@ -373,7 +376,7 @@ Use a disposable project and a non-sensitive Word document.
 
 ## 8. Rollback principle
 
-The migration is additive. Application rollback normally means reverting application deployment while leaving shared tables and compatibility columns/triggers in place.
+Both migrations are additive. Application rollback normally means reverting application deployment while leaving shared tables and compatibility columns/triggers in place.
 
 Do **not** drop `academic_projects`, `katedra_project_state`, `lekta_checks`, or `entitlements` during an emergency app rollback without a separate reviewed data migration.
 
@@ -385,12 +388,12 @@ Because Katedra continues writing the legacy compatibility table in v0.1, rollba
 
 Foundation v0.1 is production-complete only when:
 
-- shared Supabase migration applied;
+- both shared Supabase migrations applied in order;
 - all post-migration SQL gates pass;
 - both PR CI sets are green;
 - paired production deployment completed;
 - one manual non-sensitive DOCX round-trip passes;
 - shared project mirror is observed working in production;
-- no privacy invariant is weakened.
+- no privacy or ownership invariant is weakened.
 
 After that, the next database milestone is to move Katedra `/api/state` from the compatibility table to direct `academic_projects + katedra_project_state` writes, then eventually retire `katedra_projects` after an observation window.
