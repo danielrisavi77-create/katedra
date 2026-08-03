@@ -251,6 +251,23 @@
   .katedra-page .dl-row b{color:var(--txt);font-weight:700}
   .katedra-page .dl-row .date{font-weight:800;color:var(--acc2);white-space:nowrap}
   .katedra-page .dl-row.past .date{color:var(--bad)}
+  .katedra-page .mentor-add{display:flex;gap:8px;flex-basis:100%}
+  .katedra-page .mentor-add input{flex:1;min-width:0}
+  .katedra-page .mentor-add button{border:1px solid var(--line2);background:var(--bg2);color:var(--txt);
+    font-weight:700;font-size:12.5px;padding:8px 12px;border-radius:9px;cursor:pointer;font-family:inherit;
+    white-space:nowrap;transition:.15s}
+  .katedra-page .mentor-add button:hover{border-color:var(--acc);color:var(--acc)}
+  .katedra-page .mentor-list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .katedra-page .mentor-empty{font-size:12.5px;color:var(--mut2);font-style:italic;margin-top:8px}
+  .katedra-page .mentor-item{display:flex;align-items:flex-start;gap:9px;padding:2px 0}
+  .katedra-page .mentor-item.done .cb{background:var(--grad);border-color:transparent}
+  .katedra-page .mentor-item.done .cb svg{opacity:1;transform:scale(1)}
+  .katedra-page .mentor-item.done .mentor-txt{color:var(--mut2);text-decoration:line-through}
+  .katedra-page .mentor-txt{flex:1;font-size:13px;color:var(--txt);cursor:pointer;padding-top:2px}
+  .katedra-page .mentor-del{border:0;background:transparent;color:var(--mut2);font-size:13px;cursor:pointer;
+    padding:2px 6px;line-height:1;flex-shrink:0}
+  .katedra-page .mentor-del:hover{color:var(--bad)}
+  .katedra-page .scan-mentor{font-size:12.5px;color:var(--mut);margin-top:8px}
 
   /* ---------- CHAT ---------- */
   .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:auto;min-height:210px;max-height:min(78vh,900px);overflow:hidden}
@@ -378,7 +395,10 @@
   .katedra-page .kp-chap.live .sk i{transform:scaleX(1);background:var(--pl-skel2)}
   .katedra-page .kp-files{font-size:10.5px;color:var(--ink2)}
   .katedra-page .kp-files div{padding:2px 0;border-bottom:1px dotted var(--pline)}
-  .katedra-page .kp-pct{position:absolute;top:9px;right:9px;font-size:9.5px;font-weight:800;background:var(--ink);color:var(--paper);border-radius:99px;padding:3px 9px}
+  .katedra-page .kp-file-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .katedra-page .kp-file-del{cursor:pointer;font-style:normal;opacity:.6;padding:0 4px}
+  .katedra-page .kp-file-del:hover{opacity:1;color:var(--bad)}
+  .katedra-page .kp-pct{position:absolute;top:9px;right:9px;left:60px;font-size:9.5px;font-weight:800;background:var(--ink);color:var(--paper);border-radius:99px;padding:3px 9px;max-width:calc(100% - 69px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:right}
   .katedra-page .kp-rok{font-size:10.5px;color:var(--stamp);font-weight:700}
 
   /* chat kao marginalije */
@@ -750,6 +770,20 @@
     color:var(--mut2);justify-self:start}
   .katedra-page .board-meta b{color:var(--txt);font-weight:600;font-style:italic;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .katedra-page .scan-summary{margin:0 2px 16px}
+  .katedra-page .scan-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .katedra-page .scan-head b{font-size:14.5px}
+  .katedra-page .scan-head span{font-size:12px;color:var(--mut)}
+  .katedra-page .scan-row{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;margin-bottom:12px}
+  .katedra-page .scan-stat{display:flex;flex-direction:column;gap:2px}
+  .katedra-page .scan-stat b{font-size:21px;font-weight:800;color:var(--txt)}
+  .katedra-page .scan-stat span{font-size:10.5px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px}
+  .katedra-page .scan-line{font-size:13px;color:var(--mut);flex:1;min-width:220px;align-self:center}
+  .katedra-page .scan-risk-head{font-size:12.5px;font-weight:700;color:var(--bad);margin-bottom:6px}
+  .katedra-page .scan-risk-head.ok{color:var(--ok)}
+  .katedra-page .scan-risks{margin:0;padding-left:18px;font-size:13px;color:var(--txt)}
+  .katedra-page .scan-risks li{margin-bottom:4px}
+  .katedra-page .scan-more{font-size:12px;color:var(--mut);font-style:italic;margin-top:6px}
   .katedra-page .board-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
   /* Stupci se dodjeljuju izričito jer .board-side u DOM-u dolazi PRVI —
      tako na uskom ekranu rok i opseg ostanu iznad faza, bez order trika. */
