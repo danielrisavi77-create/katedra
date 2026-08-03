@@ -6,6 +6,7 @@ import { KATEDRA_BODY_HTML } from './katedra-body'
 import { ensureGuestProjectIdentity } from '@/lib/academic-suite/guest-project'
 import { normalizeLektaHandoffHashForLegacyEngine } from '@/lib/academic-suite/handoff'
 import { installLektaRecheckLifecycle } from '@/lib/academic-suite/reconciliation'
+import { installKatedraProductBoundary } from '@/lib/academic-suite/product-boundary'
 import './katedra-scoped.css'
 
 const LEKTA_PRODUCTION_ORIGIN = 'https://lektahr.netlify.app'
@@ -100,6 +101,11 @@ export default function KatedraPage() {
 
     initKatedraEngine()
 
+    // Hard product boundary: Katedra is a content/process copilot. It must not
+    // present LLM judgment as technical DOCX verification or formal compliance;
+    // those surfaces are redirected to Lekta.
+    const removeProductBoundary = installKatedraProductBoundary()
+
     if (hadIncomingLektaHandoff) {
       // initKatedraEngine() consumes the normalized hash synchronously and
       // writes rp_manifest. Persist that exact result immediately, independent
@@ -131,6 +137,7 @@ export default function KatedraPage() {
     return () => {
       window.removeEventListener('hashchange', normalizeIncomingLektaHash)
       removeRecheckLifecycle()
+      removeProductBoundary()
       lektaLinkObserver?.disconnect()
       if (isPairedPreview) window.open = originalOpen
     }
