@@ -36,7 +36,7 @@ const PHASES = [
   ]},
 
 { id:'f1', grp:'pre', ico:'📚', tit:'FAZA 1 — Građa i izvori',
-  sub:'Sve što Claude treba vidjeti, skupi PRIJE prvog prompta',
+  sub:'Sve što Katedra treba vidjeti, skupi PRIJE pisanja',
   intro:'Pravilo iz audita: <b>izvor istine &gt; dojam</b>. Svaka brojka i tvrdnja u radu mora postojati u građi — zato građa ide prva.',
   items:[
    {t:'SVA izvorna građa na jednom mjestu', crit:1, types:'zd',
@@ -52,7 +52,7 @@ const PHASES = [
    {t:'Skenirani / loši PDF-ovi provjereni', types:'zd',
     d:'Ako PDF ima oštećen tekstualni sloj (sken, loš font), brojke se moraju potvrđivati vizualno po stranicama — označi takve datoteke u promptu.'},
    {t:'Istraživačko pitanje formulirano u JEDNOJ rečenici', crit:1, types:'szd',
-    d:'Zaključak rada mora biti <b>direktan odgovor</b> na ovo pitanje. Ako ga ne znaš napisati — u redu, generator ima opciju da Claude prvo predloži 3 varijante.'},
+    d:'Zaključak rada mora biti <b>direktan odgovor</b> na ovo pitanje. Ako ga ne znaš napisati — u redu, generator ima opciju da prvo dobiješ 3 varijante.'},
    {t:'Radni outline poglavlja skiciran', types:'szd',
     d:'2–4 poglavlja razrade (seminarski); diplomski + metodološki odjeljak. Idealno: pošalji mentoru na kratku potvrdu <b>prije pisanja</b> — 5 minuta njegova čitanja štedi tjedne tvoga prepravljanja.'}
   ]},
@@ -64,9 +64,9 @@ const PHASES = [
    {t:'Novi zaseban chat / projekt otvoren samo za ovaj rad', types:'szd',
     d:'Bez miješanja tema — kontekst rada mora ostati čist kroz sve iteracije.'},
    {t:'Sva građa i literatura priložene u chat', crit:1, types:'szd',
-    d:'PDF-ovi, DOCX, upute fakulteta. Claude ne smije pisati „napamet" — piše iz priložene građe.'},
+    d:'PDF-ovi, DOCX, upute fakulteta. Ne smije se pisati „napamet" — piše se iz priložene građe.'},
    {t:'Prompt složen kroz Autopilot ili Generator — bez rupa', crit:1, types:'szd', jump:1,
-    d:'<b>Autopilot</b>: zadaješ samo temu, Claude vodi sve (defaulti ugrađeni). <b>Generator</b>: puna kontrola nad svakim parametrom. U oba slučaja — nijedno polje se ne zaboravlja.'},
+    d:'<b>Autopilot</b>: zadaješ samo temu, Katedra vodi sve (defaulti ugrađeni). <b>Generator</b>: puna kontrola nad svakim parametrom. U oba slučaja — nijedno polje se ne zaboravlja.'},
    {t:'U promptu: prva isporuka = PLAN I PROGRAM, ne tekst rada', crit:1, types:'szd',
     d:'<b>Nikad „napiši cijeli rad odjednom”.</b> Prvi korak svakog rada je Plan i program (sekcije 0–11: formalna pravila fakulteta, teza, budžet stranica, program pisanja, verificirana literatura, hodogram…). Ugrađeno u Autopilot i Generator prompte — v. Pravila → Plan i program.'},
    {t:'Anti-halucinacija pravilo u promptu', crit:1, types:'szd',
@@ -87,7 +87,7 @@ const PHASES = [
     d:'Provjeri u svakom paragrafu: tematska rečenica → objašnjenje → primjer → referenca → mini zaključak/prijelaz.'},
    {t:'Svaki citat uz tvrdnju, s TOČNOM stranicom', crit:1, types:'szd',
     d:'(Lindblom, 1959, <b>str. 81</b>) — ne samo (Lindblom, 1959). Citat ide odmah uz tvrdnju, ne na kraj paragrafa. Bez „ibid." u tekstu.'},
-   {t:'Svaki izvor koji Claude navede PROVJEREN da postoji', crit:1, types:'szd',
+   {t:'Svaki navedeni izvor PROVJEREN da postoji', crit:1, types:'szd',
     d:'Google Scholar / HRČAK / DOI provjera — <b>AI zna halucinirati izvore</b>. 2 minute provjere po izvoru &lt; pad rada zbog izmišljene reference.'},
    {t:'Teorija povezana s analizom', types:'szd',
     d:'Nijedno poglavlje ne smije samo prepričavati teoriju — uvijek: implikacije, ograničenja, kritički osvrt, veza s tvojim slučajem.'},
@@ -438,6 +438,11 @@ function useSkills(){ const e = $('u_skills'); return !!(e && e.checked); }
 
 /* ---------- KONFIG (promijeni pri hostanju) ---------- */
 const RP_VER = '10.3';
+// Ime dobavljaca se u sucelju NE spominje. Ostaje samo ovdje, u izjavi o
+// koristenju AI alata koju student predaje fakultetu — ondje je nenavodenje
+// alata neposteno prema mentoru, a i fakulteti ga sve cesce izricito traze.
+// Promjena dobavljaca = izmjena ove jedne linije.
+const AI_PROVIDER = 'Claude (Anthropic)';
 const RP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://katedra.hr'; // VIZIJA.md: domena je katedra.hr
 const EMAIL_URL = '';                            /* ← Tally/Google Form URL; prazno = mailto fallback */
 const RP_TAG = '\n\n—\nGenerirano s Katedra · ' + RP_URL.replace('https://','');
@@ -480,7 +485,7 @@ function exportDnevnik(){
   md += 'Izvezeno: ' + fmt(Date.now()) + ' (Katedra)\n\n';
   md += '## Kronologija (automatski bilježeno u alatu)\n\n| Datum i vrijeme | Događaj |\n|---|---|\n';
   md += (l.length ? l.map(e => '| ' + fmt(e.t) + ' | ' + String(e.txt).replace(/\|/g,'/') + ' |').join('\n') : '| — | (još nema zabilježenih događaja) |');
-  md += '\n\n## Napomena\n\nPotpuni dokaz procesa izrade čine i: transkripti razgovora s AI alatom (izvoz iz Claude chata), sačuvane verzije dokumenta i komunikacija s mentorom. U Claudeu možeš zatražiti i detaljan dnevnik iz samog razgovora (Katedra → 🧩 Brzi prompti → Dnevnik procesa).\n';
+  md += '\n\n## Napomena\n\nPotpuni dokaz procesa izrade čine i: transkripti razgovora (izvoz dnevnika iz Katedre), sačuvane verzije dokumenta i komunikacija s mentorom.\n';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'}));
   a.download = 'dnevnik-procesa.md';
@@ -1155,7 +1160,7 @@ async function copyText(s, btn, miss){
   if(ok){
     const orig = btn.textContent;
     btn.classList.add('ok'); btn.textContent = '✓ Kopirano';
-    toast(miss && miss.length ? '⚠ Kopirano, ali nedostaje: '+miss.join(', ') : '✓ Prompt kopiran — zalijepi u novi Claude chat');
+    toast(miss && miss.length ? '⚠ Kopirano, ali nedostaje: '+miss.join(', ') : '✓ Prompt kopiran — zalijepi u svoj AI alat');
     setTimeout(()=>{ btn.classList.remove('ok'); btn.textContent = orig; }, 1800);
   } else {
     toast('Kopiranje blokirano — označi tekst ručno i Ctrl+C');
@@ -1466,10 +1471,10 @@ const IZJ_LVL = {
 const TIP_UI = {s:'Seminarski', z:'Završni', d:'Diplomski'};
 const CHAT_ATT = {
  write:[
-  {ic:'📜', nm:'Upute fakulteta za pisanje radova', d:'PDF s pravilima formatiranja i citiranja. Nemaš? Claude ih nađe web searchom.', req:0},
+  {ic:'📜', nm:'Upute fakulteta za pisanje radova', d:'PDF s pravilima formatiranja i citiranja. Nemaš? Katedra ih nađe pretragom.', req:0},
   {ic:'📄', nm:'Word predložak / naslovnica fakulteta', d:'Da rad od prve stranice bude u točnom formatu.', req:0},
   {ic:'🗂️', nm:'Postojeći sadržaj, draft ili bilješke', d:'Ako postoji — Plan i program dobiva gap-analizu.', req:0},
-  {ic:'📚', nm:'Literatura koju već imaš (PDF-ovi)', d:'Claude citira iz stvarnog teksta → točne stranice, bez [PROVJERI STR.].', req:0},
+  {ic:'📚', nm:'Literatura koju već imaš (PDF-ovi)', d:'Citira se iz stvarnog teksta → točne stranice, bez [PROVJERI STR.].', req:0},
   {ic:'📊', nm:'Izvorna građa: izvješća, projekti, podaci', d:'Sve na što će se rad pozivati — izvor istine.', req:0},
   {ic:'📝', nm:'Prošli rad s komentarima mentora', d:'Da se iste zamjerke ne ponove.', req:0}
  ],
@@ -1479,7 +1484,7 @@ const CHAT_ATT = {
   {ic:'📜', nm:'Upute fakulteta', d:'Za provjeru formata i citatnog stila.', req:0}
  ],
  improve:[
-  {ic:'📄', nm:'Tekst / draft koji se poboljšava', d:'.docx — ili ćeš tekst zalijepiti izravno u Claude chat.', req:1},
+  {ic:'📄', nm:'Tekst / draft koji se poboljšava', d:'.docx — ili tekst zalijepi izravno u polje za pisanje.', req:1},
   {ic:'📝', nm:'Komentari mentora', d:'Da poboljšanje cilja točno ono što je zamjereno.', req:0},
   {ic:'📜', nm:'Upute fakulteta', d:'Format i citatni stil.', req:0}
  ],
@@ -1499,7 +1504,7 @@ const MICRO = [
   p:'Prilažem rad i komentare mentora (mail / datoteka / zalijepljeno dolje).\n1. Izlistaj SVAKI mentorov komentar kao numeriranu stavku + tvoj plan izmjene za svaku (što, gdje, koliko teksta).\n2. ČEKAJ moju potvrdu plana.\n3. Zatim primijeni izmjene — NE diraj ništa što mentor nije tražio: u nepromijenjenim dijelovima identičan skup citata i brojki.\n4. Na kraju: popis svih izmjena + mini provjera (citati, brojke, polja, sadržaj).'},
  {ic:'⏭️', t:'Nastavi rad u NOVOM chatu', d:'Kad je stari razgovor postao predug',
   p:'Nastavljamo pisanje rada. Prilažem: dosad napisani rad + Plan i program (+ literaturu).\n1. Pročitaj priloženo i kratko sažmi gdje smo stali (dovršena poglavlja, otvorene stavke).\n2. Nastavi od poglavlja [UPIŠI BROJ] STROGO po programu pisanja iz plana — isti stil, isti citatni format, ne mijenjaj postojeći tekst.\n3. Poglavlje po poglavlje — nakon svakog stani i čekaj moju potvrdu.'},
- {ic:'⏸️', t:'Claude je stao usred odgovora', d:'Nastavak bez ponavljanja i mijenjanja',
+ {ic:'⏸️', t:'Odgovor je stao usred rečenice', d:'Nastavak bez ponavljanja i mijenjanja',
   p:'Stao si usred odgovora. Nastavi TOČNO gdje si stao — od zadnje potpune rečenice, bez ponavljanja već napisanog i bez mijenjanja prethodnog teksta. Ako je poglavlje dovršeno, prijeđi na sljedeće po planu.'},
  {ic:'🔍', t:'Provjeri literaturu (postoji li svaki izvor)', d:'Anti-halucinacija provjera prije predaje',
   p:'Provjeri popis literature (prilažem / zalijepljen dolje). Za SVAKI izvor:\n1. Potvrdi da stvarno postoji — web search, nađi DOI ili link.\n2. Provjeri podatke: autori, godina, naslov, časopis/izdavač, vol./br./stranice.\n3. Označi: ✅ potvrđeno (s linkom) · ✏️ ispravak (navedi što je krivo) · ⚠ NEPOTVRĐENO — kandidat za izbacivanje.\nNišta ne izmišljaj. Na kraju: tablica statusa + ispravljeni popis u istom citatnom stilu.'},
@@ -1509,7 +1514,7 @@ const MICRO = [
   p:'Iz priloženog rada generiraj:\n1. 5 opcija naslova — precizno, akademski, bez senzacionalizma (+ kraća varijanta svakog)\n2. Sažetak 150–250 riječi: problem → cilj i pitanje → metoda → glavni nalazi → doprinos\n3. Abstract — prijevod sažetka na engleski (akademski registar)\n4. 5–6 ključnih riječi na hrvatskom i engleskom\nSve isključivo iz sadržaja rada — bez novih tvrdnji.'},
  {ic:'📚', t:'Predloži dodatnu literaturu', d:'5–8 stvarnih izvora s DOI, mapirano po poglavljima',
   p:'Prilažem rad i trenutni popis literature. Predloži 5–8 DODATNIH relevantnih izvora:\n- samo stvarni i provjerljivi (uz svaki DOI ili link — provjeri web searchom)\n- za svaki: 1 rečenica što pokriva + u koje poglavlje ide\n- ništa što već imam; prednost recenziranim radovima i službenim izvorima\nFormat: gotove bibliografske jedinice u mom citatnom stilu [UPIŠI STIL].'},
- {ic:'🗂️', t:'Dnevnik procesa (dokaz autorstva)', d:'Generira kronologiju iz Claude razgovora',
+ {ic:'🗂️', t:'Dnevnik procesa (dokaz autorstva)', d:'Generira kronologiju iz razgovora',
   p:'Iz CIJELOG ovog razgovora generiraj DNEVNIK PROCESA IZRADE RADA (dokaz mog autorstva za mentora):\n1. Kronološka tablica: faza → što je napravljeno → moja odluka/doprinos → AI doprinos\n2. Popis svih mojih odobrenja i traženih izmjena (plan, poglavlja, revizije)\n3. Kratki narativ (pola stranice) kako je rad nastajao\nTočno i bez uljepšavanja — služi kao transparentan dokaz procesa izrade.'}
 ];
 
@@ -1610,7 +1615,7 @@ function chatStart(isInitial){
     ]);
     setComposer('…ili upiši poruku');
   } else {
-    pushA('Bok! 👋 Ja sam <b>Katedra</b> — kopilot za seminarski, završni i diplomski.<br>Odgovoriš na par pitanja → dobiješ <b>gotovu uputu za Claude</b> + popis datoteka koje priložiti. Ništa se ne zaboravlja, ništa se ne izmišlja.<br><br><b>Što danas radimo?</b>');
+    pushA('Bok! 👋 Ja sam <b>Katedra</b> — kopilot za seminarski, završni i diplomski.<br>Odgovoriš na par pitanja → krećemo pisati ovdje, po pravilima tvog fakulteta. Ništa se ne zaboravlja, ništa se ne izmišlja.<br><br><b>Što danas radimo?</b>');
     chatModeChips();
     setComposer('…ili odmah upiši temu rada svojim riječima');
   }
@@ -1694,7 +1699,7 @@ function chatMicro(){
 }
 function chatExplain(tiho){
   if(!tiho) pushU('❓ Kako ovo radi?');
-  pushA('Jednostavno, 3 koraka:<br>1️⃣ <b>Odgovoriš na par pitanja</b> — vodim te korak po korak, ništa ne moraš znati unaprijed.<br>2️⃣ <b>Dodaš datoteke</b> — kažem ti točno što pomaže (upute fakulteta, literatura, draft…). Nemaš? Preskočiš.<br>3️⃣ <b>Dobiješ gotovu uputu (prompt)</b> — kopiraš je u <b>Claude</b> (claude.ai, besplatan račun), priložiš iste datoteke i pošalješ. Claude prvo napravi detaljan <b>plan rada</b>, pa piše poglavlje po poglavlje uz tvoje odobrenje.<br><br>Detalji u tabu <b>❓ Kako radi</b>. Idemo?');
+  pushA('Jednostavno, 3 koraka:<br>1️⃣ <b>Odgovoriš na par pitanja</b> — vodim te korak po korak, ništa ne moraš znati unaprijed.<br>2️⃣ <b>Dodaš datoteke</b> — kažem ti točno što pomaže (upute fakulteta, literatura, draft…). Nemaš? Preskočiš.<br>3️⃣ <b>Pišemo ovdje</b> — Katedra prvo napravi detaljan <b>plan rada</b> po pravilima tvog fakulteta, pa piše poglavlje po poglavlje uz tvoje odobrenje. Radije u vlastitom AI alatu? Gotovu uputu možeš kopirati.<br><br>Detalji u tabu <b>❓ Kako radi</b>. Idemo?');
   chatModeChips();
 }
 function chatMode(m, tiho){
@@ -1758,7 +1763,7 @@ function izjavaFinal(mentor){
   t += sel.length ? 'koristio/la alate umjetne inteligencije transparentno i u skladu sa smjernicama ustanove, kako slijedi:\n\n'
                   : 'postupao/la u skladu sa smjernicama ustanove o umjetnoj inteligenciji.\n\n';
   if(sel.length){
-    t += 'Alat: Claude (Anthropic)\n';
+    t += 'Alat: ' + AI_PROVIDER + '\n';
     t += 'Svrhe i faze korištenja:\n' + sel.map(s => '· ' + s).join('\n') + '\n\n';
   } else {
     t += 'Alati umjetne inteligencije nisu korišteni u izradi ovog rada.\n\n';
@@ -1771,7 +1776,7 @@ function izjavaFinal(mentor){
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = t; bub.appendChild(out);
   const note = document.createElement('div'); note.style.cssText = 'margin-top:9px;font-size:12.5px;color:var(--warn)';
-  note.textContent = '⚠ Spremi i transkripte razgovora s Claudeom (izvoz chata) — FPZG ih smije zatražiti.';
+  note.textContent = '⚠ Spremi i dnevnik procesa iz Katedre (izvoz) — FPZG ga smije zatražiti.';
   bub.appendChild(note);
   const acts = document.createElement('div'); acts.className = 'final-actions';
   const cp = document.createElement('button'); cp.className = 'fa p'; cp.textContent = '📋 Kopiraj izjavu';
@@ -1910,12 +1915,12 @@ function chatFinal(){
     prompt = buildPrompt();
   }
   setStep(5);
-  const d = pushA('<b>✅ Gotovo — tvoja uputa (prompt) je spremna.</b><br>Najbrže: <b>▶ Piši ovdje</b> — kreće odmah, bez copy-pastea, s automatskim praćenjem napretka i Lekta provjerom. Imaš već svoj Claude? Kopiraj prompt dolje i nastavi ručno.');
+  const d = pushA('<b>✅ Gotovo — tvoja uputa (prompt) je spremna.</b><br>Najbrže: <b>▶ Piši ovdje</b> — kreće odmah, s automatskim praćenjem napretka i Lekta provjerom. Radije u vlastitom AI alatu? Kopiraj uputu dolje.');
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = prompt; bub.appendChild(out);
   if(chat.files.length){
     const rem = document.createElement('div'); rem.style.cssText = 'margin-top:10px;font-size:12.8px;color:var(--mut)';
-    rem.innerHTML = '<b style="color:var(--ok)">📎 Privuci u Claude chat:</b><br>' + chat.files.map(f => '· '+f.name).join('<br>');
+    rem.innerHTML = '<b style="color:var(--ok)">📎 Priloži uz uputu:</b><br>' + chat.files.map(f => '· '+f.name).join('<br>');
     bub.appendChild(rem);
   }
   if(chat.reqMissing.length){
@@ -1948,12 +1953,11 @@ function chatFinal(){
   // ne na ravnopravnu opciju. "Piši ovdje" gore ostaje jedini 'fa p' gumb.
   const manual = document.createElement('div');
   manual.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)';
-  manual.innerHTML = '<div style="font-size:11.5px;color:var(--mut2);margin-bottom:6px">Imaš već svoj Claude Pro?</div>';
+  manual.innerHTML = '<div style="font-size:11.5px;color:var(--mut2);margin-bottom:6px">Radije u vlastitom AI alatu?</div>';
   const manualActs = document.createElement('div'); manualActs.className = 'final-actions';
   const cp = document.createElement('button'); cp.className = 'fa s'; cp.textContent = '📋 Kopiraj prompt';
   cp.onclick = () => copyText(prompt, cp, []);
-  const open = document.createElement('a'); open.className = 'fa s'; open.href = 'https://claude.ai/new'; open.target = '_blank'; open.rel = 'noopener'; open.textContent = 'Otvori Claude ↗';
-  manualActs.append(cp, open);
+  manualActs.append(cp);   // bez poveznice na dobavljaca — uputa se kopira, alat bira korisnik
   manual.appendChild(manualActs);
   const manualNote = document.createElement('div');
   manualNote.style.cssText = 'font-size:11px;color:var(--mut2);margin-top:6px';
@@ -2036,8 +2040,8 @@ async function liveBegin(promptText){
   if(skipped.length) text += '\n\n[NAPOMENA: ove datoteke nisam mogao priložiti izravno (podržani su PDF i slike): ' + skipped.join(', ') + '. Reci mi ako ti trebaju pa ću sadržaj zalijepiti kao tekst.]';
   blocks.push({type:'text', text});
   chat.msgs.push({role:'user', content: blocks});
-  pushA('▶ <b>Pišemo ovdje.</b> Uputa i datoteke poslane su Claudeu — odgovaraj dolje u polju kao u običnom chatu.');
-  setComposer('Odgovori Claudeu… (npr. „odobravam plan")');
+  pushA('▶ <b>Pišemo ovdje.</b> Uputa i datoteke su poslane — odgovaraj dolje u polju kao u običnom razgovoru.');
+  setComposer('Odgovori… (npr. „odobravam plan")');
   await liveStream();
 }
 async function liveSend(v){
@@ -2082,7 +2086,7 @@ async function liveStream(){
     const cp = document.createElement('button'); cp.className = 'att-btn'; cp.style.marginTop = '8px'; cp.textContent = 'Kopiraj odgovor';
     cp.onclick = () => copyText(full, cp, []);
     bub.appendChild(cp);
-    rpLog('Claude odgovor u aplikaciji (' + (full.length > 60 ? full.slice(0,60) + '…' : full).replace(/\n/g,' ') + ')');
+    rpLog('AI odgovor u aplikaciji (' + (full.length > 60 ? full.slice(0,60) + '…' : full).replace(/\n/g,' ') + ')');
     refreshAuthAndCredits();
   }catch(e){
     bub.innerHTML = '⚠ <b>Greška:</b> ' + escA(String(e.message || e)) + '<br><span style="font-size:12px;color:var(--mut)">Pokušaj ponovno za koju sekundu.</span>';
@@ -2142,14 +2146,14 @@ function chatSend(){
   const v = $('chatInput').value.trim(); if(!v) return;
   $('chatInput').value = '';
   if(chat.step === 'live'){
-    if(chat.busy){ toast('⏳ Pričekaj da Claude dovrši odgovor'); return; }
+    if(chat.busy){ toast('⏳ Pričekaj da se odgovor dovrši'); return; }
     pushU(v); liveSend(v); return;
   }
   if(chat.step === 'mode'){ chat.pendingTema = v; pushU(v); chatMode('write'); pushA('Shvaćam to kao <b>temu novog rada</b> 👍'); return; }
   if(chat.step === 'tema') return chatTema(v);
   if(chat.step === 'izj_naslov'){ chat.izjNaslov = v; pushU(v); return izjavaUses(); }
   if(chat.step === 'notes'){ chat.notes = (chat.notes ? chat.notes+'\n' : '') + v; pushU(v); return chatFinal(); }
-  if(chat.step === 'done'){ pushU(v); pushA('Za novi prompt klikni <b>🔁 Ispočetka</b> — ili ovu napomenu dodaj ručno u Claude chat.'); return; }
+  if(chat.step === 'done'){ pushU(v); pushA('Za novu uputu klikni <b>🔁 Ispočetka</b> — ili ovu napomenu dodaj ručno u razgovor.'); return; }
   chat.notes = (chat.notes ? chat.notes+'\n' : '') + v; pushU(v); pushA('Zabilježio sam ✔ — ući će u prompt kao napomena.');
 }
 
@@ -2527,7 +2531,7 @@ function lkExplain(it){
     + '2. KAKO ga ispravim u Wordu — konkretni koraci, izbornik po izbornik\n'
     + '3. NA ŠTO paziti da se ne vrati\n'
     + 'NE mijenjaj sadržaj mojih rečenica — ovo je formatna/tehnička stavka.';
-  const d = pushA('<b>Uputa za Claude</b> — kopiraj u claude.ai ili pitaj odmah ovdje:');
+  const d = pushA('<b>Gotova uputa</b> — pitaj odmah ovdje ili kopiraj u vlastiti alat:');
   const bub = d.querySelector('.bub');
   const out = document.createElement('div'); out.className = 'prompt-out'; out.textContent = p; bub.appendChild(out);
   const cp = document.createElement('button'); cp.className = 'copy-btn'; cp.textContent = '📋 Kopiraj';
