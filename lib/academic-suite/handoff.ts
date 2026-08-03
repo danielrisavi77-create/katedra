@@ -1,18 +1,44 @@
 import type { LektaResult } from './contracts'
 import { prepareManifestForIncomingLektaResult } from './reconciliation'
 
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value)
+  return Uint8Array.from(binary, ch => ch.charCodeAt(0))
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+/**
+ * Decode a fragment value without relying on the legacy escape/decodeURIComponent
+ * UTF-8 trick. URL fragments may arrive percent-encoded or already decoded,
+ * depending on how the browser/navigation constructed the URL, so try both.
+ */
 function decodeUtf8Base64(value: string): unknown {
-  const binary = atob(decodeURIComponent(value))
-  const escaped = Array.from(binary, ch => `%${ch.charCodeAt(0).toString(16).padStart(2, '0')}`).join('')
-  return JSON.parse(decodeURIComponent(escaped))
+  const candidates = [value]
+  try {
+    const decoded = decodeURIComponent(value)
+    if (decoded !== value) candidates.unshift(decoded)
+  } catch {}
+
+  let lastError: unknown = null
+  for (const candidate of candidates) {
+    try {
+      const json = new TextDecoder().decode(base64ToBytes(candidate))
+      return JSON.parse(json)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError || new Error('Unreadable Lekta handoff')
 }
 
 function encodeUtf8Base64(value: unknown): string {
-  const json = JSON.stringify(value)
-  const encoded = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, hex) =>
-    String.fromCharCode(Number.parseInt(hex, 16)),
-  )
-  return encodeURIComponent(btoa(encoded))
+  const bytes = new TextEncoder().encode(JSON.stringify(value))
+  return encodeURIComponent(bytesToBase64(bytes))
 }
 
 function isSharedLektaResult(value: any): value is LektaResult {
@@ -68,8 +94,7 @@ export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
   if (!hash.startsWith('#lekta=')) return false
 
   try {
-    const raw = hash.slice('#lekta='.length)
-    const decoded = decodeUtf8Base64(raw)
+    const decoded = decodeUtf8Base64(hash.slice('#lekta='.length))
     if (!isSharedLektaResult(decoded)) return false
 
     // This intentionally runs before the legacy engine's `lkStart()`. It makes
