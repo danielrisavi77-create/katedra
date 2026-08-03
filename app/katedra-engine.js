@@ -291,9 +291,17 @@ function refreshProgress(){
   if(typeof renderIndeksHead === 'function') renderIndeksHead();
   if(typeof updatePaper === 'function') updatePaper();
   if(typeof renderBoardHi === 'function') renderBoardHi();
-  /* banner — spreman za pisanje? */
-  const b = $('banner'), go = $('bGo');
+  /* Semafor na tabovima: nedostupno je vidljivo, ali zaključano. Uvjet je
+     pravilo same aplikacije — faze 0–2 na 100 % prije prvog prompta. */
   const preP = totPre ? ckPre/totPre : 0;
+  LOCKED_TABS.forEach(v => {
+    const t = document.querySelector('#tabs button[data-view="' + v + '"]');
+    if(t) t.classList.toggle('locked', preP < 1);
+  });
+  /* banner — spreman za pisanje? (skriven CSS-om, v. .katedra-page #banner;
+     tekst se i dalje računa jer refreshProgress nema guardove i pisanje u
+     njega je najjeftiniji način da se ne dira 19 redaka na svaku kvačicu) */
+  const b = $('banner'), go = $('bGo');
   b.className = 'banner';
   if(preP >= 1){
     b.classList.add('yes'); $('bIco').textContent = '🟢';
@@ -333,6 +341,10 @@ const TABS = ['chat','check','help','cheat','auto','gen'];
 /* ---------- LINEARNI TOK EKRANA ----------
    Ekran je vanjski okvir, tab je unutarnja ploha radne ploče. setTab() i dalje
    jedini dira .view/.on; setScreen() dira samo atribute na #katedra-root. */
+// Tabovi koje semafor zaključava. 'cheat' namjerno izostaje — to su pravila
+// koja je korisnik već vidio pri odabiru profila, pa bi zaključavanje unatrag
+// djelovalo kao kvar, a ne kao vođenje.
+const LOCKED_TABS = ['auto','gen'];
 const SCREENS = ['tip','gdje','pitanja','fakultet','ploca','chat','povratak'];
 const SCREEN_CHROME = { tip:'funnel', gdje:'funnel', pitanja:'funnel',
                         fakultet:'fak', ploca:'board', chat:'board', povratak:'funnel' };
@@ -914,7 +926,7 @@ function nextStepText(){
   const ready = pre.t && pre.c === pre.t;
   const status = allDone ? '' : ready ? '🟢 Spreman za pisanje · ' : '🔴 ' + (pre.t - pre.c) + ' koraka do pisanja · ';
   return {
-    pos, allDone,
+    pos, allDone, ready, left: pre.t - pre.c,   // ready/left koristi semafor na tabovima
     html: allDone ? '🎉 Krajnja stanica: <b>OBRANA</b>. Hvala što ste putovali Katedrom.'
                   : status + 'Sljedeća stanica: <b>'+LIN_ST[pos]+'</b>'+rokTxt,
     label: LIN_ST[pos]
@@ -2163,7 +2175,17 @@ function handlePaymentReturn(){
 // onclick="fn()" atributima — browser te uvijek traži u window scopeu, ne u
 // lokalnom scopeu ove funkcije. Bez ovoga svaki takav gumb baca "fn is not defined".
 Object.assign(window, { toggleCheck, goAuto, goGen, togglePhase, lpToGen, pickFor, skipAtt });
-document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => setTab(b.dataset.view));
+document.querySelectorAll('#tabs button[data-view]').forEach(b => b.onclick = () => {
+  // Brava koja pokazuje put unutra. Mrtav klik na zaključan tab je
+  // najfrustrantniji mogući ishod — korisnik ne zna ni zašto ni što dalje.
+  if(b.classList.contains('locked')){
+    const ns = nextStepText();
+    toast('🔒 Faze 0–2 moraju biti gotove — ostalo je ' + ns.left + (ns.left === 1 ? ' stavka' : ' stavki'));
+    goToNextStep(ns.pos);
+    return;
+  }
+  setTab(b.dataset.view);
+});
 function isAdv(){ return lsGet('rp_adv') === '1'; }
 function applyAdv(){
   // CSS je skopiran na .katedra-page (vidi katedra-scoped.css) — "simple" klasa
@@ -2201,7 +2223,13 @@ $('btnExport').onclick = exportState;
 $('btnImport').onclick = () => $('fileImp').click();
 $('fileImp').onchange = e => { if(e.target.files[0]) importState(e.target.files[0]); e.target.value=''; };
 $('btnReset').onclick = resetAll;
-$('nextBarBtn').onclick = () => goToNextStep(nextStepText().pos);
+$('nextBarBtn').onclick = () => {
+  const ns = nextStepText();
+  // Preuzima ulogu zelenog gumba iz #banner-a, koji je sad skriven: kad su
+  // faze 0–2 gotove, sljedeći potez više nije kvačica nego pisanje.
+  if(ns.ready && !ns.allDone) setScreen('chat');
+  else goToNextStep(ns.pos);
+};
 
 /* ---------- ONBOARDING — jedno pitanje umjesto opisa (F7) ---------- */
 // Preskoči odmah ako je već zatvoreno u prošloj posjeti — nema treptaja, nema
