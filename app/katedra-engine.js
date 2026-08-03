@@ -1830,22 +1830,51 @@ function chatAttach(){
 }
 function pickFor(i){ currentCat = i; $('chatFilePick').click(); }
 function skipAtt(i){ chat.skipped.add(i); const c = $('attC'+i); if(c) c.classList.add('skipped'); }
-function addChatFiles(fileList){
-  Array.from(fileList).forEach(f => {
-    chat.files.push({name: f.name, cat: currentCat, file: f});
-    const host = $(currentCat >= 0 ? 'attF'+currentCat : 'attFx');
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+function isDocxFile(f){ return f.type === DOCX_MIME || /\.docx$/i.test(f.name); }
+async function parseDocxFile(f){
+  const fd = new FormData(); fd.append('file', f);
+  const resp = await fetch('/api/parse-docx', { method: 'POST', body: fd });
+  const data = await resp.json().catch(() => ({}));
+  if(!resp.ok || !data.text) throw new Error(data.error || 'nije uspjelo čitanje');
+  return data.text;
+}
+async function addChatFiles(fileList){
+  const cat = currentCat;
+  for(const f of Array.from(fileList)){
+    const cf = {name: f.name, cat, file: f};
+    chat.files.push(cf);
+    const host = $(cat >= 0 ? 'attF'+cat : 'attFx');
+    let label = null;
     if(host){
-      const sp = document.createElement('span'); sp.textContent = '✓ '+f.name;
+      const sp = document.createElement('span');
+      label = document.createElement('span'); label.textContent = (isDocxFile(f) ? '⏳ ' : '✓ ') + f.name;
       const x = document.createElement('i'); x.textContent = ' ×';
-      x.onclick = () => { chat.files = chat.files.filter(cf => !(cf.name===f.name)); sp.remove(); updatePaper(); };
-      sp.appendChild(x); host.appendChild(sp);
+      x.onclick = () => { chat.files = chat.files.filter(cff => cff !== cf); sp.remove(); updatePaper(); };
+      sp.appendChild(label); sp.appendChild(x); host.appendChild(sp);
     }
-    const c = currentCat >= 0 ? $('attC'+currentCat) : null; if(c) c.classList.remove('skipped');
-    if(currentCat >= 0) chat.skipped.delete(currentCat);
-  });
+    const c = cat >= 0 ? $('attC'+cat) : null; if(c) c.classList.remove('skipped');
+    if(cat >= 0) chat.skipped.delete(cat);
+    // .docx se parsira ODMAH — student mora vidjeti je li stvarno pročitan,
+    // ne tek posredno u promptu koji nikad ne vidi (v. audit nalaz P0).
+    if(isDocxFile(f) && f.size < 20*1024*1024){
+      try{
+        cf.docxText = await parseDocxFile(f);
+        if(label) label.textContent = '✓ ' + f.name + ' (pročitano)';
+      }catch(e){
+        cf.docxFailed = true;
+        if(label) label.textContent = '⚠ ' + f.name + ' — nisam uspio pročitati';
+      }
+    } else if(isDocxFile(f)){
+      cf.docxFailed = true;
+      if(label) label.textContent = '⚠ ' + f.name + ' — prevelika (max 20 MB)';
+    }
+  }
   updatePaper();
   if(chat.step !== 'files' && fileList.length){
-    pushA('📎 Zabilježio sam: <b>'+Array.from(fileList).map(f=>f.name).join('</b>, <b>')+'</b> — ući će u prompt i podsjetnik za upload.');
+    const names = Array.from(fileList).map(f=>f.name);
+    const anyDocx = Array.from(fileList).some(isDocxFile);
+    pushA('📎 Zabilježio sam: <b>'+names.join('</b>, <b>')+'</b> — ući će u prompt.'+(anyDocx ? ' Sadržaj .docx datoteka je pročitan.' : ''));
   }
   chatScroll();
 }
@@ -2024,8 +2053,10 @@ function fileB64(f){
 }
 async function liveBegin(promptText){
   chat.live = true; chat.step = 'live'; chat.msgs = []; chatBusy(false); chatClockMount();
-  const blocks = [], skipped = [];
+  const blocks = [], skipped = [], docxFailed = [];
   for(const cf of chat.files){
+    if(cf.docxText){ blocks.push({type:'text', text:'[Prilog „'+cf.name+'" — sadržaj Word dokumenta:]\n\n'+cf.docxText}); continue; }
+    if(cf.docxFailed){ docxFailed.push(cf.name); continue; }
     const f = cf.file;
     if(!f){ skipped.push(cf.name); continue; }
     try{
@@ -2037,7 +2068,8 @@ async function liveBegin(promptText){
     }catch(e){ skipped.push(cf.name); }
   }
   let text = promptText;
-  if(skipped.length) text += '\n\n[NAPOMENA: ove datoteke nisam mogao priložiti izravno (podržani su PDF i slike): ' + skipped.join(', ') + '. Reci mi ako ti trebaju pa ću sadržaj zalijepiti kao tekst.]';
+  if(skipped.length) text += '\n\n[NAPOMENA: ove datoteke nisam mogao priložiti izravno (podržani su PDF, slike i .docx): ' + skipped.join(', ') + '. Reci mi ako ti trebaju pa ću sadržaj zalijepiti kao tekst.]';
+  if(docxFailed.length) text += '\n\n[NAPOMENA: sadržaj ovih Word datoteka nisam uspio pročitati: ' + docxFailed.join(', ') + '. Zalijepi sadržaj kao tekst ili pokušaj ponovno priložiti.]';
   blocks.push({type:'text', text});
   chat.msgs.push({role:'user', content: blocks});
   pushA('▶ <b>Pišemo ovdje.</b> Uputa i datoteke su poslane — odgovaraj dolje u polju kao u običnom razgovoru.');
