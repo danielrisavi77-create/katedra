@@ -29,17 +29,8 @@ function New-KatedraShortcut(
   return $shortcutPath
 }
 
-$startPath = New-KatedraShortcut \
-  -Name 'Katedra - Claude' \
-  -Target $startLauncher \
-  -Description 'Pokreni sigurnu Katedra razvojnu sesiju u Claude Codeu' \
-  -IconIndex 220
-
-$finishPath = New-KatedraShortcut \
-  -Name 'Katedra - Zavrsi' \
-  -Target $finishLauncher \
-  -Description 'Provjeri, commitaj i pushaj Katedra Claude sesiju te otvori draft PR' \
-  -IconIndex 167
+$startPath = New-KatedraShortcut -Name 'Katedra - Claude' -Target $startLauncher -Description 'Pokreni sigurnu Katedra razvojnu sesiju u Claude Codeu' -IconIndex 220
+$finishPath = New-KatedraShortcut -Name 'Katedra - Zavrsi' -Target $finishLauncher -Description 'Provjeri, commitaj i pushaj Katedra Claude sesiju te otvori draft PR' -IconIndex 167
 
 Write-Host ''
 Write-Host 'Desktop shortcuti su instalirani:' -ForegroundColor Green
