@@ -2346,6 +2346,26 @@ if(funBackEl) funBackEl.onclick = () => {
 const fakNextEl = $('fakNext');
 if(fakNextEl) fakNextEl.onclick = () => setScreen('ploca');
 
+/* ---------- EKRAN 7: POVRATAK ----------
+   Doček nakon pauze: jedna rečenica, jedan gumb, ništa se ne traži ručno.
+   Tekst dolazi iz nextStepText(), istog izvora koji puni liniju i traku —
+   da se poruka o sljedećem koraku ne može razići na tri mjesta. */
+const RETURN_AFTER = 4 * 3600e3;   // ispod ovoga povratak nije "povratak"
+function retGapText(ms){
+  const h = Math.floor(ms / 3600e3), dn = Math.floor(h / 24);
+  if(dn >= 1) return 'Vraćaš se nakon ' + dn + (dn === 1 ? ' dana' : ' dana');
+  return 'Vraćaš se nakon ' + h + (h === 1 ? ' sata' : ' sati');
+}
+function renderReturn(gapMs){
+  if(!$('retLine')) return;
+  const ns = nextStepText();
+  $('retGap').textContent = gapMs ? retGapText(gapMs) : 'Nastavimo gdje smo stali';
+  $('retHi').innerHTML = greetHtml().replace(/^👋 /, '');
+  $('retLine').innerHTML = ns.html;
+  const go = $('retGo');
+  if(go) go.onclick = () => { setScreen('ploca'); goToNextStep(ns.pos); };
+}
+
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
 const lkq = { list: [], i: 0 };
 function lkNorm(res){
@@ -2503,8 +2523,15 @@ handlePaymentReturn();
 // Vrati zadnji ekran (i s njim tab). Prije se svaki reload vraćao na chat, pa
 // si nakon osvježavanja gubio mjesto na kojem si radio.
 (() => {
+  const last = +(lsGet('rp_seen') || 0), gap = Date.now() - last;
+  lsSet('rp_seen', String(Date.now()));
+  // Dovoljno duga pauza uz stvarni napredak nadjačava zapamćeni ekran —
+  // tada je pravi doček "nastavimo gdje smo stali", a ne ploča usred posla.
+  if(last && gap > RETURN_AFTER && hasRealProgress() && screenAvailable('povratak')){
+    renderReturn(gap); setScreen('povratak'); return;
+  }
   const s = lsGet('rp_screen');
-  if(s && SCREENS.includes(s) && screenAvailable(s)) { setScreen(s); return; }
+  if(s && SCREENS.includes(s) && screenAvailable(s) && s !== 'povratak'){ setScreen(s); return; }
   // Bez spremljenog ekrana: tko je već prošao lijevak ide ravno na ploču,
   // ostali kreću od prvog pitanja.
   setScreen(lsGet('rp_onb') === '1' ? 'ploca' : 'tip');

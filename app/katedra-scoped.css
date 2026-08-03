@@ -708,7 +708,10 @@
      ".katedra-page[data-chrome=…] .view.on" ima (0,3,1) i pobjeđuje čisto.
      Ne "popravljati" ovo s !important — time pucaju ekrani 4–6.
      ══════════════════════════════════════════════════════════════════ */
-  .katedra-page .screen{display:none;padding:34px 0 60px}
+  /* Animacija stoji na .screen, a ne na ID pravilima ispod: inače bi je
+     reduced-motion blok (0,2,0) morao nadjačati protiv ID selektora (1,2,0),
+     što bez !important nije moguće. */
+  .katedra-page .screen{display:none;padding:34px 0 60px;animation:katedra-fade .25s ease}
   /* Kartica lijevka posuđuje .onb-card iz nekadašnjeg overlaya — isti vizualni
      rječnik, samo šira jer sad stoji na stranici, a ne iznad nje. */
   .katedra-page .scr-card{max-width:600px;margin:0 auto}
@@ -731,10 +734,22 @@
   .katedra-page .scr-head p{font-size:13px;color:var(--mut);margin:6px auto 0;max-width:62ch}
   .katedra-page .scr-foot{display:flex;align-items:center;justify-content:center;gap:12px;padding:18px 2px 40px}
   .katedra-page .scr-foot .onb-go{width:auto;min-width:190px}
+  /* ekran povratka — jedna uputa, jedan gumb */
+  .katedra-page .ret-one{background:var(--bg2);border:1.5px solid var(--acc);border-radius:14px;
+    padding:16px 18px;display:flex;flex-direction:column;gap:11px;align-items:center;margin:16px 0 4px}
+  .katedra-page .ret-lbl{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut2)}
+  .katedra-page .ret-one b{font-size:13.5px;font-weight:600;line-height:1.5;color:var(--txt)}
+  .katedra-page .ret-one .onb-go{width:auto;min-width:170px}
   .katedra-page[data-screen="tip"] #scr-tip,
   .katedra-page[data-screen="gdje"] #scr-gdje,
   .katedra-page[data-screen="pitanja"] #scr-pitanja,
-  .katedra-page[data-screen="povratak"] #scr-povratak{display:block;animation:katedra-fade .25s ease}
+  .katedra-page[data-screen="povratak"] #scr-povratak{display:block}
+  /* Prijelaz ekrana i viewova je jedina animacija koju korisnik vidi na svaku
+     navigaciju — postojeći reduced-motion blokovi pokrivaju samo pojedine
+     elemente (glow, puls, nagib faza), ne i ovo. */
+  @media(prefers-reduced-motion:reduce){
+    .katedra-page .screen,.katedra-page .view.on{animation:none}
+  }
 
   /* uvodni ekrani i ekran fakulteta gase cijelu plohu tabova */
   .katedra-page[data-chrome="funnel"] .view.on{display:none}

@@ -13,6 +13,11 @@ var r=document.getElementById('katedra-root');if(!r)return;
 var CH={tip:'funnel',gdje:'funnel',pitanja:'funnel',fakultet:'fak',ploca:'board',chat:'board',povratak:'funnel'};
 var s=localStorage.getItem('rp_screen');
 if(!s&&localStorage.getItem('rp_onb')==='1')s='ploca';
+if(s==='povratak')s='ploca';
+var last=+(localStorage.getItem('rp_seen')||0);
+if(last&&Date.now()-last>144e5){try{
+var ck=(JSON.parse(localStorage.getItem('rp_state')||'{}').checks)||{};
+if(Object.keys(ck).some(function(k){return ck[k];}))s='povratak';}catch(e){}}
 if(s&&CH[s]){r.setAttribute('data-screen',s);r.setAttribute('data-chrome',CH[s]);}
 var k=localStorage.getItem('rp_skin');
 if(k){if(k==='papir')r.removeAttribute('data-skin');else r.setAttribute('data-skin',k);}
