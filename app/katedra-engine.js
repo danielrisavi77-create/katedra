@@ -1395,6 +1395,12 @@ function goChat(){ setTab('chat'); }
 function setTip(t){
   state.tip = t;
   document.querySelectorAll('[data-tip]').forEach(x => x.classList.toggle('on', x.dataset.tip===t));
+  // Razina studija mora pratiti tip rada. lpRenderLevels() zadrži postojeći
+  // lpLevel dok je god valjan, pa bi bez ovog reseta odabir "Diplomski" na
+  // prvom ekranu ostavio kaskadu na "Prijediplomski".
+  lpLevel = null;
+  const ch = lpChosen();
+  if(ch && !(ch.workTypes || []).includes(LP_WT[t])) lpSetChosen('');
   applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRenderCascade(); saveState();
 }
 
@@ -2270,14 +2276,14 @@ const FUN_Q = [
     pick(v){ const el = $('f_mentor'); if(el && v){ el.value = v; buildPrompt(); saveState(); } } }
 ];
 
-function funnelFinish(){
+function funnelFinish(target){
   // chatStart(true) je vec napunio #chatLog prije nego je korisnik mogao
   // kliknuti; bez ciscenja izbor bi se samo NADODAO na to i nastale bi dvije
   // nesinkronizirane niti razgovora nad istim chat objektom.
   const l = $('chatLog'); if(l) l.innerHTML = '';
   (funPending || FUN_MODES.write)();
   lsSet('rp_onb', '1');
-  setScreen('ploca');
+  setScreen(target || 'fakultet');
 }
 function funnelRender(){
   if(!$('funOpts')) return;
@@ -2323,7 +2329,7 @@ document.querySelectorAll('#scr-gdje [data-gdje]').forEach(b => {
     funPending = FUN_MODES[v] || FUN_MODES.write;
     // "Kako ovo radi?" preskace pitanja — taj je korisnik dosao gledati,
     // ne postavljati rok.
-    if(v === 'help'){ funnelFinish(); setScreen('chat'); return; }
+    if(v === 'help'){ funnelFinish('chat'); return; }
     funStep = 0; setScreen('pitanja'); funnelRender();
   };
 });
@@ -2334,6 +2340,11 @@ const funBackEl = $('funBack');
 if(funBackEl) funBackEl.onclick = () => {
   if(funStep > 0){ funStep--; funnelRender(); } else setScreen('gdje');
 };
+// Ekran 4 -> ploca. Gumb je UVIJEK aktivan: lpInit() je async i ceka
+// /katedra-pack.json; padne li fetch, kaskada ostane prazna i bez ovoga bi
+// korisnik zapeo na ekranu s kojeg nema izlaza.
+const fakNextEl = $('fakNext');
+if(fakNextEl) fakNextEl.onclick = () => setScreen('ploca');
 
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
 const lkq = { list: [], i: 0 };

@@ -724,6 +724,13 @@
     border-radius:12px;color:var(--txt);font-family:inherit;font-size:14px;padding:12px 14px;outline:none}
   .katedra-page .fun-input input:focus{border-color:var(--acc)}
   .katedra-page .fun-input .onb-choice{flex:0 0 auto;padding:12px 16px}
+  /* zaglavlje i podnožje ekrana 4 — vidljivi samo dok je chrome "fak" */
+  .katedra-page .scr-head{padding:30px 2px 14px;text-align:center}
+  .katedra-page .scr-head h2{font-family:var(--serif);font-size:clamp(20px,2.6vw,26px);font-weight:800;
+    letter-spacing:-.3px;color:var(--txt)}
+  .katedra-page .scr-head p{font-size:13px;color:var(--mut);margin:6px auto 0;max-width:62ch}
+  .katedra-page .scr-foot{display:flex;align-items:center;justify-content:center;gap:12px;padding:18px 2px 40px}
+  .katedra-page .scr-foot .onb-go{width:auto;min-width:190px}
   .katedra-page[data-screen="tip"] #scr-tip,
   .katedra-page[data-screen="gdje"] #scr-gdje,
   .katedra-page[data-screen="pitanja"] #scr-pitanja,
