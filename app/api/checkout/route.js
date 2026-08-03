@@ -108,8 +108,8 @@ export async function POST(req) {
         tokens: String(pkg.tokens),
         amount_eur: String(pkg.eur),
       },
-      success_url: `${appUrl}/?placeno=1`,
-      cancel_url: `${appUrl}/?placeno=0`,
+      success_url: `${appUrl}/pisi?placeno=1`,
+      cancel_url: `${appUrl}/pisi?placeno=0`,
     })
     return Response.json({ url: session.url })
   } catch (error) {

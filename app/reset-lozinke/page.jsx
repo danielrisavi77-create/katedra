@@ -22,7 +22,7 @@ export default function ResetLozinkePage() {
       const { error } = await supabase.auth.updateUser({ password })
       if (error) { setError(error.message || 'Promjena nije uspjela.'); return }
       setDone(true)
-      setTimeout(() => router.push('/'), 1500)
+      setTimeout(() => router.push('/pisi'), 1500)
     } catch {
       setError('Promjena trenutno nije dostupna.')
     } finally {

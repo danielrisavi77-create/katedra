@@ -9,7 +9,7 @@ import '../katedra-scoped.css'
 function PrijavaForm() {
   const router = useRouter()
   const params = useSearchParams()
-  const redirect = params.get('redirect') || '/'
+  const redirect = params.get('redirect') || '/pisi'
   const callbackError = params.get('error')
 
   const [email, setEmail] = useState('')
