@@ -354,6 +354,8 @@ export type AcademicSuiteEventName =
   | 'lekta_recheck_completed'
   | 'submission_preflight_completed'
   | 'defense_stage_started'
+  | 'paywall_shown'
+  | 'pass_purchase_started'
   | 'purchase_completed';
 
 export interface SharedAnalyticsEvent<T = Record<string, unknown>> {

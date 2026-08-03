@@ -49,7 +49,20 @@ Smiju se spremati samo strukturirani workflow metapodaci: account/project ID, ru
 
 ## Akademska pravila
 
-Lekta Academic Core je jedini normative source of truth. Katedra koristi read-only coach projection (`katedra-pack` ili budući versioned export/API) i ne održava paralelnu fakultetsku rule bazu.
+Lekta Academic Core je jedini normative source of truth za **document-compliance
+pravila** (font, margine, citatna mehanika, struktura dokumenta — sve što se svodi
+na deterministički .docx check). Za tu kategoriju Katedra koristi isključivo
+read-only coach projection (`katedra-pack` ili budući versioned export/API) i ne
+održava paralelnu fakultetsku rule bazu.
+
+Institucijske **politike/procedure** koje nisu machine-checkable protiv dokumenta
+(AI-usage politika, prijava teme, rokovi referade, mentor-odobrenje) nisu "akademska
+pravila" u gornjem smislu — to je proces/sadržaj iz Katedrine nadležnosti
+(CLAUDE.md: "mentor-feedback workflows; progress, deadlines and defense
+preparation"). Katedra smije voditi tu kategoriju kao vlastitu, zasebno sourced i
+verzioniranu (`lib/academic-suite/process-facts.ts`), pod istim standardom
+dokazivosti kao katedra-pack: svaki unos ima izvor i datum provjere, prazno polje >
+nepotvrđena tvrdnja.
 
 ## Jedan account i jedan backend
 

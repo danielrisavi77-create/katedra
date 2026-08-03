@@ -6,8 +6,11 @@
 ## Jedna rečenica
 
 **Katedra je mentor koji te vodi od teme do obrane — a Lekta dokaz da je dokument
-spreman za predaju.** (Ušteda vremena, sigurnosna mreža i „AI legalno" su benefiti
-u copyju — identitet je mentor + ekosustav.)
+spreman za predaju.** (Ušteda vremena i sigurnosna mreža su benefiti u copyju —
+identitet je mentor + ekosustav. NE „AI legalno": AI politika nije binarna
+[legalno/ilegalno] nego institucija/program/kolegij-specifična — obećavamo da
+pokazujemo aktualno objavljeno pravilo tvog fakulteta i njegov izvor, ne pravnu
+ocjenu.)
 
 ## North star i 90 dana
 
@@ -72,12 +75,24 @@ prompt-modovi (jeftin port) + podsjetnici na rok (retention) + povijest verzija 
 ## Monetizacija — premium pozicioniranje
 
 Sidro nije SaaS pretplata nego **sivo tržište pisanja radova** (seminarski ~€50,
-završni ~€150, diplomski €200–300+). Mi smo **legalna, transparentna i bolja** alternativa —
-cijena mora signalizirati vrijednost, ne jeftinoću (odluka osnivača).
+završni ~€150, diplomski €200–300+). Mi smo **transparentna i bolja** alternativa —
+cijena mora signalizirati vrijednost, ne jeftinoću (odluka osnivača). Ne "legalna"
+alternativa (Audit 5): AI politika nije binarna legalno/ilegalno, pa ta riječ otvara
+pitanje "legalno prema čemu" umjesto da zatvara priču — vidi "Jedna rečenica" gore.
 
-- **Seminarski Pass ~€29 · Završni Pass ~€79 · Diplomski Pass ~€129** (A/B test nakon prvih 20 kupaca; donja granica: nikad ispod 19/49/99).
-- **Pass Plus = Pass + AutoFix (+€20).** AutoFix zasebno ~€19 za check-only korisnike.
-- **Free tier: Plan i program potpuno besplatan** + demo pisanja do **1.500 riječi** (okus, ne obrok).
+- **Seminarski Pass ~€29 · Završni Pass ~€79 · Diplomski Pass ~€129** (donja granica: nikad ispod
+  19/49/99). Prvih 20 kupaca = **price discovery cohort**, ne pravi A/B test (bilježi
+  abandonment/prigovore/cjenovne usporedbe umjesto samo konverzije) — pravi A/B tek uz dovoljno
+  prometa (Audit 4).
+- **Pass = pravo pristupa Katedri i Lekti za taj konkretan rad**, vezano uz `academic_project_id`
+  (Audit 4). Pass Plus/AutoFix **nije launch SKU** — tip ostaje modeliran
+  (`academic-pass-plus`/`lekta.fix` u `lib/academic-suite/contracts.ts`), ali se ne prodaje na
+  checkoutu dok postoji contextualni upsell nakon Lekta checka i privacy/legal review AutoFixa
+  (v1.1).
+- **Free tier: Completion Scan/Plan potpuno besplatan** (deterministički, bez AI troška) + Lekta
+  Check besplatan zauvijek + jedna kontekstualna Katedra AI intervencija po projektu (Audit 4 —
+  zamjenjuje raniju "demo pisanja do 1.500 riječi" poziciju, koja demonstrira commodity AI writing,
+  ne Katedrin proces/intelligence layer).
 - Krediti prikazani **apstraktno** („AI zadaci"), tvrdo pravilo: **AI nikad „neograničeno"**;
   Lekta re-checkovi u Passu slobodno neograničeni (deterministički, lokalni — nula troška).
 - Stripe (kartice + Apple/Google Pay). Povrat samo kod tehničkog problema. **Naplata od prvog dana rada SaaS-a.**
@@ -111,12 +126,23 @@ Full-time; budžet €500–1.500 / 6 mj; solo + Claude Code. Podrška: IG/Whats
 Analitika: vlastiti eventi u Supabase. Statični HTML ostaje (offline/PWA + demo).
 **Stop-loss:** nema profitabilnosti/korisnika, zabrana od fakulteta ili nestanak radova kao forme.
 
-## Dodatak: konkurencija (prvi scan, produbiti u tjednu 1)
+## Dodatak: konkurencija (Audit 2, 3. 8. 2026. — nadomješta prvi scan)
 
-- **Globalni AI academic-writing alati** (Jenni, Thesify, Paperpal, ThesisAI, Paperguide…):
-  engleski fokus, generička akademija — **nitko nema hrvatska fakultetska pravila,
-  deterministički .docx check, obranu, ni AI ledger.** Naša obrana: lokalizacija + loop + dokaz procesa.
-- **Domaće sivo tržište pisanja radova**: cjenovno sidro i izvor kupaca; ne konkuriramo cijenom nego legalnošću i kvalitetom.
-- Akcija: puni battlecard (tjedan 1) — značajke, cijene, pozicioniranje, poruke.
+- **Svaki pojedinačni dio već postoji kod nekog konkurenta**: Claude/ChatGPT (Projects,
+  file upload, DOCX), Jenni/Paperpal (writing + citations na ogromnoj skali), Thesify
+  (AI+Human provenance), ThesisAI (pay-per-thesis) — a **Skrivora** posebno upozorava:
+  gotovo identičan "thesis completion" UX koncept, lokaliziran za drugo tržište.
+  Trenutačni moat: **2/5**.
+- **Moat zato nije popis featurea nego akumulirani sustav**: verificirani Academic
+  Rules Graph (pravila fakulteta, s izvorom i datumom provjere) → deterministički
+  Lekta checkovi mapirani na ta pravila → project state koji zna institucionalni
+  kontekst → mentor feedback loop → completion podaci koji rastu sa svakim dovršenim
+  radom → lokalni trust/distribution. Svaki sloj konkurent mora zasebno kopirati.
+  Potencijalni moat uz svjesnu izgradnju: **4/5**.
+- **AI ledger je dio sustava, ne headline moat** — Thesify već ima provenance; ledger
+  postaje jak tek vezan uz strukturiran AI-policy podatak po instituciji.
+- **Domaće sivo tržište pisanja radova**: cjenovno sidro i izvor kupaca; ne
+  konkuriramo cijenom nego legalnošću, kvalitetom i dokazom procesa.
+- Detalji: Audit 2 (market/positioning/moat), 3. 8. 2026.
 
 *Charter v1 · 2. kolovoza 2026. · mijenja se samo svjesnom odlukom osnivača, ne usput.*
