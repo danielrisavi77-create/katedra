@@ -1,6 +1,13 @@
 import type { LektaResult } from './contracts'
 import { prepareManifestForIncomingLektaResult } from './reconciliation'
 
+const BOOTSTRAP_DIAGNOSTIC_SLOT = 'katedra.lekta-bootstrap.v0.1'
+
+function diagnostic(stage: string, detail?: string): void {
+  if (typeof sessionStorage === 'undefined') return
+  try { sessionStorage.setItem(BOOTSTRAP_DIAGNOSTIC_SLOT, JSON.stringify({ stage, detail: detail || '' })) } catch {}
+}
+
 function base64ToBytes(value: string): Uint8Array {
   const binary = atob(value)
   return Uint8Array.from(binary, ch => ch.charCodeAt(0))
@@ -91,21 +98,35 @@ export function sharedLektaResultToLegacyPayload(result: LektaResult) {
 export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
   if (typeof window === 'undefined') return false
   const hash = window.location.hash || ''
-  if (!hash.startsWith('#lekta=')) return false
+  if (!hash.startsWith('#lekta=')) {
+    diagnostic('no-lekta-hash', hash.slice(0, 40))
+    return false
+  }
 
+  diagnostic('hash-detected', hash.slice(0, 32))
   try {
     const decoded = decodeUtf8Base64(hash.slice('#lekta='.length))
-    if (!isSharedLektaResult(decoded)) return false
+    diagnostic('decoded', String((decoded as any)?.schemaVersion || 'no-schema'))
+    if (!isSharedLektaResult(decoded)) {
+      diagnostic('legacy-or-invalid', JSON.stringify({
+        schemaVersion: (decoded as any)?.schemaVersion,
+        analysisId: typeof (decoded as any)?.analysisId,
+        rulesetId: typeof (decoded as any)?.rulesetId,
+        score: typeof (decoded as any)?.score,
+        issues: Array.isArray((decoded as any)?.issues),
+      }))
+      return false
+    }
 
-    // This intentionally runs before the legacy engine's `lkStart()`. It makes
-    // the engine's existing prevIds-newIds fixed count semantically correct:
-    // only USER_CHANGED/RECHECK_REQUIRED findings with stable IDs are eligible.
     prepareManifestForIncomingLektaResult(decoded)
+    diagnostic('reconciled', decoded.analysisId)
 
     const legacy = sharedLektaResultToLegacyPayload(decoded)
     window.location.hash = `#lekta=${encodeUtf8Base64(legacy)}`
+    diagnostic('normalized', decoded.analysisId)
     return true
-  } catch {
+  } catch (error) {
+    diagnostic('error', error instanceof Error ? error.message : String(error))
     // Let the existing engine show its established unreadable-link message.
     return false
   }
