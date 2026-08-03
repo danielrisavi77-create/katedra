@@ -291,7 +291,6 @@
   .katedra-page .onb-choice span{display:block;font-size:12px;color:var(--mut);margin-top:2px;font-weight:400}
   .katedra-page .onb-choice.ghost{background:transparent;border-color:transparent}
   .katedra-page .onb-choice.ghost:hover{background:var(--card2);border-color:var(--line2)}
-  .katedra-page #onbx:checked ~ .onb{display:none!important}
   .katedra-page .onb-note{font-size:11.5px;color:var(--mut2);margin-top:12px}
 
   /* ---------- STEP BAR ---------- */
@@ -709,7 +708,22 @@
      ".katedra-page[data-chrome=…] .view.on" ima (0,3,1) i pobjeđuje čisto.
      Ne "popravljati" ovo s !important — time pucaju ekrani 4–6.
      ══════════════════════════════════════════════════════════════════ */
-  .katedra-page .screen{display:none}
+  .katedra-page .screen{display:none;padding:34px 0 60px}
+  /* Kartica lijevka posuđuje .onb-card iz nekadašnjeg overlaya — isti vizualni
+     rječnik, samo šira jer sad stoji na stranici, a ne iznad nje. */
+  .katedra-page .scr-card{max-width:600px;margin:0 auto}
+  .katedra-page .scr-card h2{margin:14px 0 6px}
+  .katedra-page .onb-choices.big{flex-direction:row;gap:10px}
+  .katedra-page .onb-choices.big .onb-choice{flex:1;text-align:center;padding:18px 12px}
+  @media(max-width:560px){.katedra-page .onb-choices.big{flex-direction:column}}
+  .katedra-page .onb-back{border:0;background:transparent;color:var(--mut2);font-size:12.5px;
+    font-family:inherit;cursor:pointer;margin-top:12px;padding:6px}
+  .katedra-page .onb-back:hover{color:var(--txt);text-decoration:underline}
+  .katedra-page .fun-input{display:flex;gap:8px;margin-bottom:9px}
+  .katedra-page .fun-input input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--line2);
+    border-radius:12px;color:var(--txt);font-family:inherit;font-size:14px;padding:12px 14px;outline:none}
+  .katedra-page .fun-input input:focus{border-color:var(--acc)}
+  .katedra-page .fun-input .onb-choice{flex:0 0 auto;padding:12px 16px}
   .katedra-page[data-screen="tip"] #scr-tip,
   .katedra-page[data-screen="gdje"] #scr-gdje,
   .katedra-page[data-screen="pitanja"] #scr-pitanja,

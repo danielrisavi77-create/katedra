@@ -651,7 +651,7 @@ async function reconcileServerState(){
   const localHasWork = Object.keys(state.checks||{}).some(k => state.checks[k]) || !!val('a_tema') || !!val('f_tema');
   if(localHasWork) return;
   applyServerState(data);
-  document.querySelectorAll('#tipSeg button').forEach(b => b.classList.toggle('on', b.dataset.tip === state.tip));
+  document.querySelectorAll('[data-tip]').forEach(b => b.classList.toggle('on', b.dataset.tip === state.tip));
   applyTipPlaceholders(); renderPhases(); applyMode(); buildAuto(); renderDeadlines(); renderWC();
   renderLine(); renderIndeksHead(); updatePaper(); lpRenderCascade();
 }
@@ -1209,7 +1209,7 @@ function importState(file){
         ['f_brutal','a_gradja','u_skills','a_learn'].forEach(k => { if($(k)) $(k).checked = !!d.gen[k]; });
         $('a_checkpoint').checked = d.gen.a_checkpoint !== false;
       }
-      document.querySelectorAll('#tipSeg button').forEach(b => b.classList.toggle('on', b.dataset.tip===state.tip));
+      document.querySelectorAll('[data-tip]').forEach(b => b.classList.toggle('on', b.dataset.tip===state.tip));
       applyTipPlaceholders(); renderPhases(); applyMode(); buildAuto(); renderDeadlines(); saveState();
       toast('📂 Napredak učitan');
     } catch(e){ toast('⚠ Neispravna datoteka'); }
@@ -1394,7 +1394,7 @@ lpInit();
 function goChat(){ setTab('chat'); }
 function setTip(t){
   state.tip = t;
-  document.querySelectorAll('#tipSeg button').forEach(x => x.classList.toggle('on', x.dataset.tip===t));
+  document.querySelectorAll('[data-tip]').forEach(x => x.classList.toggle('on', x.dataset.tip===t));
   applyTipPlaceholders(); renderPhases(); buildPrompt(); buildAuto(); renderDeadlines(); renderWC(); updatePaper(); lpRenderCascade(); saveState();
 }
 
@@ -2202,7 +2202,7 @@ $('advBtn').onclick = () => {
 applyAdv();
 applySkin(getSkin());
 buildSkinPicker();
-document.querySelectorAll('#tipSeg button').forEach(b => b.onclick = () => setTip(b.dataset.tip));
+document.querySelectorAll('[data-tip]').forEach(b => b.onclick = () => setTip(b.dataset.tip));
 document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => { state.mode = b.dataset.mode; applyMode(); });
 $('view-gen').addEventListener('input', () => { buildPrompt(); saveState(); });
 $('view-auto').addEventListener('input', () => { buildAuto(); saveState(); });
@@ -2231,93 +2231,109 @@ $('nextBarBtn').onclick = () => {
   else goToNextStep(ns.pos);
 };
 
-/* ---------- ONBOARDING — jedno pitanje umjesto opisa (F7) ---------- */
-// Preskoči odmah ako je već zatvoreno u prošloj posjeti — nema treptaja, nema
-// ponovnog pitanja. Prije je ovo bilo samo CSS (#onbx:checked), bez ikakve
-// perzistencije, pa se overlay vraćao na svaki reload.
-if(lsGet('rp_onb') === '1'){ const o0 = $('onb'); if(o0) o0.remove(); }
-else {
-  const onbxEl = $('onbx');
-  // Preglednici znaju "zapamtiti" stanje checkboxa preko reloada (bfcache/
-  // form restoration), neovisno o localStorageu — checkbox onda dođe već
-  // označen prije nego ovaj kod uopće stigne do njega, CSS ga odmah sakrije
-  // i overlay se čini kao da "nestane" trenutno. Eksplicitno ga resetiraj.
-  if(onbxEl) onbxEl.checked = false;
-  if(onbxEl) onbxEl.addEventListener('change', () => { if(onbxEl.checked) lsSet('rp_onb', '1'); });
-  // chatStart(true) je već napunio #chatLog s pozdravom + chipovima prije nego
-  // je korisnik uopće mogao kliknuti (overlay ga samo vizualno prekriva). Bez
-  // čišćenja ovdje, izbor iz onboardinga se samo NADODAJE na to — dvije žive,
-  // međusobno nesinkronizirane niti razgovora s dijeljenim chat objektom, koje
-  // izgledaju kao da je cijela stranica "zbagana" dok se ne osvježi stranica.
-  const onbPick = fn => { const l = $('chatLog'); if(l) l.innerHTML = ''; fn(); };
-  const pickWrite = $('onbPickWrite'); if(pickWrite) pickWrite.onclick = () => onbPick(() => chatMode('write'));
-  const pickDone = $('onbPickDone'); if(pickDone) pickDone.onclick = () => onbPick(chatDoneMenu);
-  const pickHelp = $('onbPickHelp'); if(pickHelp) pickHelp.onclick = () => onbPick(chatExplain);
+/* ---------- UVODNI LIJEVAK (ekrani 1-3) ----------
+   Prije je ovo bio overlay iznad aplikacije; sad su to stvarni ekrani, pa
+   chrome (tabovi, linija, traka) uopce ne postoji dok lijevak traje.
+   Svako pitanje puni pravo polje — nista se ne pita "za dojam". */
+const FUN_MODES = {
+  write: () => chatMode('write'),
+  done:  chatDoneMenu,
+  help:  chatExplain
+};
+let funPending = null;   // izbor s ekrana 2, primjenjuje se kad lijevak zavrsi
+let funStep = 0;
 
-  /* ----- Lijevak: tip rada → gdje si → rok -----
-     Bez JS-a ostaje gornji markup: jedan ekran, tri izbora, <label for="onbx">
-     ga zatvara. Kad JS postoji, isti overlay postaje lijevak od tri pitanja.
-     Svako pitanje puni pravo polje (state.tip, chat mode, #dl_rok) — ništa se
-     ne pita "za dojam". */
-  const onbCard = $('onb') && $('onb').querySelector('.onb-card');
-  const onbChoices = onbCard && onbCard.querySelector('.onb-choices');
-  if(onbCard && onbChoices){
-    const MODES = {
-      write: ['✍️ Počinjem pisati', 'Nova tema — kreni od plana i programa', () => chatMode('write'), false],
-      done:  ['📄 Imam draft ili gotov rad', 'Recenzija, poboljšanje ili priprema obrane', chatDoneMenu, false],
-      help:  ['❓ Kako ovo radi?', 'Prvo pogledaj kako funkcionira', chatExplain, true]
-    };
-    const ONB = [
-      { q:'Koji rad pišeš?', why:'Od toga ovise faze, opseg i interni rokovi.',
-        opts:[['s','Seminarski',''], ['z','Završni',''], ['d','Diplomski','']],
-        pick:v => setTip(v) },
-      { q:'Gdje si s radom?', why:'',
-        opts:Object.keys(MODES).map(k => [k, MODES[k][0], MODES[k][1]]),
-        pick:v => { onbRun = MODES[v][2]; if(MODES[v][3]) onbStep = ONB.length; } },
-      { q:'Kad je rok predaje?', why:'Iz roka Katedra računa interne rokove unatrag i postavlja vozni red.',
-        opts:[[14,'Za dva tjedna',''], [30,'Za mjesec dana',''], [90,'Za tri mjeseca',''], [0,'Još ne znam','možeš ga upisati poslije u Indeksu']],
-        pick:v => {
-          if(!v) return;
-          const el = $('dl_rok'); if(!el) return;
-          el.value = new Date(Date.now() + v * 864e5).toISOString().slice(0, 10);
-          el.dispatchEvent(new Event('input', { bubbles:true }));
-        } }
-    ];
-    let onbStep = 0, onbRun = null;
-    const onbFinish = () => {
-      lsSet('rp_onb', '1');
-      if(onbxEl) onbxEl.checked = true;
-      const o = $('onb'); if(o) o.remove();
-      onbPick(onbRun || (() => chatMode('write')));
-    };
-    const onbRender = () => {
-      if(onbStep >= ONB.length){ onbFinish(); return; }
-      const s = ONB[onbStep];
-      const h2 = onbCard.querySelector('h2');
-      const sub = onbCard.querySelector('.onb-sub');
-      let cnt = onbCard.querySelector('.onb-count');
-      if(!cnt){
-        cnt = document.createElement('div'); cnt.className = 'onb-count';
-        onbCard.insertBefore(cnt, h2);
-      }
-      cnt.innerHTML = 'Pitanje ' + (onbStep + 1) + ' od ' + ONB.length +
-        '<span class="onb-dots">' + ONB.map((_, i) => '<i' + (i <= onbStep ? ' class="on"' : '') + '></i>').join('') + '</span>';
-      if(h2) h2.textContent = s.q;
-      if(sub) sub.textContent = s.why || '';
-      if(sub) sub.style.display = s.why ? '' : 'none';
-      onbChoices.innerHTML = '';
-      s.opts.forEach(([v, label, desc]) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'onb-choice' + (v === 'help' ? ' ghost' : '');
-        b.innerHTML = '<b>' + escA(label) + '</b>' + (desc ? '<span>' + escA(desc) + '</span>' : '');
-        b.onclick = () => { s.pick(v); onbStep++; onbRender(); };
-        onbChoices.appendChild(b);
-      });
-    };
-    onbRender();
-  }
+/* Tri pitanja ekrana 3. Tip rada i "gdje si" potrosili su ekrani 1 i 2, pa
+   ovdje ide ostatak. Temu namjerno NE pitamo — chat je pita cim ga otvoris,
+   a dvostruko pitanje je upravo ono sto lijevak treba ukloniti. */
+const FUN_Q = [
+  { k:'rok', q:'Kad je rok predaje?',
+    why:'Iz roka Katedra racuna interne rokove unatrag i postavlja vozni red.',
+    o:[[14,'Za dva tjedna',''], [30,'Za mjesec dana',''], [90,'Za tri mjeseca',''],
+       [0,'Jos ne znam','mozes ga upisati poslije u Indeksu']],
+    pick(v){
+      if(!v) return;
+      const el = $('dl_rok'); if(!el) return;
+      el.value = new Date(Date.now() + v * 864e5).toISOString().slice(0, 10);
+      // ovaj dispatch okida renderDeadlines -> renderLine -> renderIndeksHead
+      // -> updatePaper; bez njega rok ostane samo u polju
+      el.dispatchEvent(new Event('input', { bubbles:true }));
+    } },
+  { k:'gradja', q:'Imas li vec gradju?',
+    why:'Ako imas, plan dobiva analizu rupa umjesto praznog starta.',
+    o:[['da','Imam biljeske ili izvore',''], ['draft','Imam draft teksta',''], ['ne','Nemam nista','']],
+    pick(v){ const el = $('a_gradja'); if(el){ el.checked = v !== 'ne'; buildAuto(); saveState(); } } },
+  { k:'mentor', q:'Tko ti je mentor?',
+    why:'Ulazi u prompt i u naslovnicu rada. Mozes preskociti ako jos ne znas.',
+    o:[['','Jos ne znam','']],
+    input:'npr. doc. dr. sc. Ime Prezime',
+    pick(v){ const el = $('f_mentor'); if(el && v){ el.value = v; buildPrompt(); saveState(); } } }
+];
+
+function funnelFinish(){
+  // chatStart(true) je vec napunio #chatLog prije nego je korisnik mogao
+  // kliknuti; bez ciscenja izbor bi se samo NADODAO na to i nastale bi dvije
+  // nesinkronizirane niti razgovora nad istim chat objektom.
+  const l = $('chatLog'); if(l) l.innerHTML = '';
+  (funPending || FUN_MODES.write)();
+  lsSet('rp_onb', '1');
+  setScreen('ploca');
 }
+function funnelRender(){
+  if(!$('funOpts')) return;
+  if(funStep < 0 || funStep >= FUN_Q.length) funStep = 0;
+  const s = FUN_Q[funStep], left = FUN_Q.length - funStep;
+  $('funCount').innerHTML = 'Jos ' + left + (left === 1 ? ' pitanje' : ' pitanja')
+    + '<span class="onb-dots">' + FUN_Q.map((_, n) => '<i' + (n <= funStep ? ' class="on"' : '') + '></i>').join('') + '</span>';
+  $('funQ').textContent = s.q;
+  $('funWhy').textContent = s.why || '';
+  const box = $('funOpts'); box.innerHTML = '';
+  if(s.input){
+    const wrap = document.createElement('div'); wrap.className = 'fun-input';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.placeholder = s.input; inp.id = 'funText';
+    const go = document.createElement('button');
+    go.type = 'button'; go.className = 'onb-choice'; go.innerHTML = '<b>Dalje \u2192</b>';
+    go.onclick = () => { s.pick(inp.value.trim()); funAdvance(); };
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter') go.click(); });
+    wrap.appendChild(inp); wrap.appendChild(go); box.appendChild(wrap);
+  }
+  s.o.forEach(([v, label, desc]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'onb-choice' + (s.input ? ' ghost' : '');
+    b.innerHTML = '<b>' + escA(label) + '</b>' + (desc ? '<span>' + escA(desc) + '</span>' : '');
+    b.onclick = () => { s.pick(v); funAdvance(); };
+    box.appendChild(b);
+  });
+}
+function funAdvance(){
+  funStep++;
+  if(funStep >= FUN_Q.length) funnelFinish();
+  else funnelRender();
+}
+
+// Ekran 1: gumbi nose data-tip, pa setTip() i sinkronizacija .on klase vec rade
+// preko zajednickog [data-tip] selektora — ovdje treba samo korak dalje.
+document.querySelectorAll('#scr-tip [data-tip]').forEach(b => {
+  b.addEventListener('click', () => setScreen('gdje'));
+});
+document.querySelectorAll('#scr-gdje [data-gdje]').forEach(b => {
+  b.onclick = () => {
+    const v = b.dataset.gdje;
+    funPending = FUN_MODES[v] || FUN_MODES.write;
+    // "Kako ovo radi?" preskace pitanja — taj je korisnik dosao gledati,
+    // ne postavljati rok.
+    if(v === 'help'){ funnelFinish(); setScreen('chat'); return; }
+    funStep = 0; setScreen('pitanja'); funnelRender();
+  };
+});
+document.querySelectorAll('[data-back]').forEach(b => {
+  b.onclick = () => setScreen(b.dataset.back);
+});
+const funBackEl = $('funBack');
+if(funBackEl) funBackEl.onclick = () => {
+  if(funStep > 0){ funStep--; funnelRender(); } else setScreen('gdje');
+};
 
 /* ---------- LEKTA HANDOFF — #lekta= prijemnik + Resolution Coach (Milestone 1) ---------- */
 const lkq = { list: [], i: 0 };
@@ -2458,7 +2474,7 @@ loadState();
 // Mentorov stol: otvorena je faza na kojoj si, ne uvijek f0. Mora prije
 // renderPhases() jer on čita openPhases pri crtanju.
 (() => { const p = PHASES[linePos()]; if(p){ openPhases.clear(); openPhases.add(p.id); } })();
-document.querySelectorAll('#tipSeg button').forEach(x => x.classList.toggle('on', x.dataset.tip === state.tip));
+document.querySelectorAll('[data-tip]').forEach(x => x.classList.toggle('on', x.dataset.tip === state.tip));
 applyTipPlaceholders();
 renderPhases();
 applyMode();
@@ -2477,7 +2493,10 @@ handlePaymentReturn();
 // si nakon osvježavanja gubio mjesto na kojem si radio.
 (() => {
   const s = lsGet('rp_screen');
-  setScreen(s && SCREENS.includes(s) && screenAvailable(s) ? s : 'ploca');
+  if(s && SCREENS.includes(s) && screenAvailable(s)) { setScreen(s); return; }
+  // Bez spremljenog ekrana: tko je već prošao lijevak ide ravno na ploču,
+  // ostali kreću od prvog pitanja.
+  setScreen(lsGet('rp_onb') === '1' ? 'ploca' : 'tip');
 })();
 
 /* ---------- PWA / INSTALACIJA / VERZIJA ---------- */
