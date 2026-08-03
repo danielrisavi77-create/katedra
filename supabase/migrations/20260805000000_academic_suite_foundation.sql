@@ -55,13 +55,22 @@ begin
 end $$;
 
 -- Legacy client IDs were historically unique only per user. Preserve that safety
--- during migration. `project_id` is opaque and guest-safe; v0.1 therefore enforces
--- uniqueness per owner rather than pretending legacy IDs are globally unique.
+-- during migration. This keeps old `k...` projects backwards-compatible.
 create unique index if not exists katedra_projects_user_project_idx
   on public.katedra_projects (user_id, project_id);
 
+-- Foundation v0.1 generates UUID project IDs before authentication. Those IDs are
+-- the canonical ecosystem identity and must be globally unique across users so a
+-- future shared project/entitlement table can safely reference `project_id` without
+-- also requiring user identity. Do not impose this retroactively on legacy `k...`
+-- aliases; enforce it only for UUID-shaped canonical IDs (including UUID fallbacks
+-- derived from the existing row primary key).
+create unique index if not exists katedra_projects_canonical_uuid_idx
+  on public.katedra_projects (project_id)
+  where project_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
+
 comment on column public.katedra_projects.project_id is
-  'Canonical Lekta×Katedra project identity. Exists before login; login attaches ownership rather than replacing project identity.';
+  'Canonical Lekta×Katedra project identity. Exists before login; login attaches ownership rather than replacing project identity. New UUID IDs are globally unique; legacy k... aliases remain per-user compatible.';
 
 comment on column public.katedra_projects.work_type_canonical is
   'Shared semantic work type. Legacy work_type s/z/d remains temporarily for Katedra v1 UI compatibility.';
