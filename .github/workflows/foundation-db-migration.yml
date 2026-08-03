@@ -54,5 +54,8 @@ jobs:
           $$;
           SQL
 
-      - name: Apply Katedra project migrations and foundation smoke
+      - name: Apply shared foundation migration smoke
         run: psql -v ON_ERROR_STOP=1 -f scripts/foundation-db-smoke.sql
+
+      - name: Apply ownership hardening migration smoke
+        run: psql -v ON_ERROR_STOP=1 -f scripts/foundation-db-hardening-smoke.sql
