@@ -13,6 +13,7 @@ jobs:
     env:
       KATEDRA_E2E_URL: http://127.0.0.1:3000
       LEKTA_PREVIEW_URL: https://deploy-preview-25--lektahr.netlify.app
+      E2E_DOCX_PATH: /tmp/academic-suite-bad-formatting.docx
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +29,88 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
+
+      - name: Generate synthetic DOCX with deterministic formatting errors
+        run: |
+          python3 - <<'PY'
+          import os
+          from zipfile import ZipFile, ZIP_DEFLATED
+          from xml.sax.saxutils import escape
+
+          path = os.environ['E2E_DOCX_PATH']
+          paragraphs = [
+              'Sveučilište u Zagrebu',
+              'Fakultet političkih znanosti',
+              'Automatizirani E2E uzorak',
+              'Diplomski rad',
+              '1. Uvod',
+              'Ovaj sintetski dokument služi isključivo automatiziranom testu tehničke provjere. ' * 4,
+              '2. Teorijski okvir',
+              'Tekst je namjerno oblikovan fontom Arial 11, jednostrukim proredom i marginama 2 cm. ' * 5,
+              '3. Metodologija',
+              'Uzorak ne predstavlja studentski rad i ne sadrži osobne podatke. ' * 5,
+              '4. Rezultati i rasprava',
+              'Cilj je provjeriti stvarni browser put DOCX → Lekta analiza → sanitizirani handoff. ' * 5,
+              '5. Zaključak',
+              'Zaključni sintetski odlomak. ' * 10,
+              'Literatura',
+              'Horvat, I. (2020). Sintetski izvor za automatizirani test. Zagreb: Test.',
+          ]
+
+          def p(text):
+              return (
+                  '<w:p><w:pPr><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>'
+                  '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
+                  '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>'
+                  f'<w:t xml:space="preserve">{escape(text)}</w:t></w:r></w:p>'
+              )
+
+          document = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:body>''' + ''.join(p(x) for x in paragraphs) + '''
+              <w:sectPr>
+                <w:pgSz w:w="11906" w:h="16838"/>
+                <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>
+              </w:sectPr>
+            </w:body>
+          </w:document>'''
+
+          styles = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+              <w:name w:val="Normal"/>
+              <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>
+              <w:pPr><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>
+            </w:style>
+          </w:styles>'''
+
+          content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+            <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+            <Default Extension="xml" ContentType="application/xml"/>
+            <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+          </Types>'''
+
+          root_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+          </Relationships>'''
+
+          document_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+          </Relationships>'''
+
+          with ZipFile(path, 'w', ZIP_DEFLATED) as z:
+              z.writestr('[Content_Types].xml', content_types)
+              z.writestr('_rels/.rels', root_rels)
+              z.writestr('word/document.xml', document)
+              z.writestr('word/styles.xml', styles)
+              z.writestr('word/_rels/document.xml.rels', document_rels)
+
+          print(f'Generated {path} ({os.path.getsize(path)} bytes)')
+          PY
 
       - name: Build Katedra
         run: npm run build
