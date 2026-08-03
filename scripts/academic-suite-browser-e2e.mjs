@@ -3,11 +3,20 @@ import { chromium } from 'playwright'
 
 const KATEDRA_URL = String(process.env.KATEDRA_E2E_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
 const LEKTA_PREVIEW_URL = String(process.env.LEKTA_PREVIEW_URL || '').replace(/\/$/, '')
+const E2E_DOCX_PATH = String(process.env.E2E_DOCX_PATH || '')
 
 if (!LEKTA_PREVIEW_URL) throw new Error('LEKTA_PREVIEW_URL is required')
+if (!E2E_DOCX_PATH) throw new Error('E2E_DOCX_PATH is required')
 
 function handoffFragment(value) {
   return `#lekta=${encodeURIComponent(Buffer.from(JSON.stringify(value), 'utf8').toString('base64'))}`
+}
+
+function decodeHandoffHref(href) {
+  const url = new URL(href)
+  if (!url.hash.startsWith('#lekta=')) throw new Error(`Missing #lekta= fragment: ${href}`)
+  const encoded = decodeURIComponent(url.hash.slice('#lekta='.length))
+  return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'))
 }
 
 function result(projectId, analysisId, issues) {
@@ -49,10 +58,7 @@ async function clickWithoutNavigation(page, locator) {
   await locator.click()
 }
 
-/**
- * Katedra onboarding is a CSS checkbox overlay: `#onbx:checked ~ .onb`
- * switches the overlay to `display:none` after the real Kreni control is used.
- */
+/** Katedra onboarding is a CSS checkbox overlay closed by the real Kreni control. */
 async function completeOnboarding(page) {
   const overlay = page.locator('#onb')
   if (!(await overlay.isVisible().catch(() => false))) return
@@ -78,7 +84,7 @@ const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
 const page = await context.newPage()
 const browserErrors = []
-page.on('pageerror', error => browserErrors.push(String(error)))
+page.on('pageerror', error => browserErrors.push(`Katedra: ${String(error)}`))
 
 try {
   // A. Real Katedra guest identity exists before auth.
@@ -95,6 +101,7 @@ try {
   // B. Real Lekta PR preview accepts Katedra routing metadata and isolates it
   // to Katedra-origin navigation in this tab.
   const lektaPage = await context.newPage()
+  lektaPage.on('pageerror', error => browserErrors.push(`Lekta routing: ${String(error)}`))
   const previewEntry = `${LEKTA_PREVIEW_URL}/?project=${encodeURIComponent(projectId)}&unit=fpzg&work=diplomski`
   await lektaPage.goto(previewEntry, { waitUntil: 'domcontentloaded' })
   await lektaPage.waitForFunction(
@@ -118,7 +125,8 @@ try {
   await lektaPage.waitForFunction(() => sessionStorage.getItem('lekta.katedra-project.v0.1') === null)
   await lektaPage.close()
 
-  // C. First canonical LektaResult arrives: OPEN.
+  // C-H. Deterministic lifecycle browser proof. The synthetic stable finding is
+  // intentionally minimal so both reconciliation outcomes are unambiguous.
   await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-1', [stableMarginIssue]))}`, {
     waitUntil: 'domcontentloaded',
   })
@@ -131,7 +139,6 @@ try {
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.checkId, 'margins')
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.ruleId, 'e2e.margins.001')
 
-  // D. Follow the real coach UX: start the round, then mark the item changed.
   await startResolutionRound(page)
   const solved = page.getByRole('button', { name: /Riješio sam/i }).first()
   await solved.waitFor({ state: 'visible' })
@@ -139,7 +146,6 @@ try {
   state = await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'USER_CHANGED', 'USER_CHANGED')
   assert.equal(state.lektaIssues[0].status, 'USER_CHANGED')
 
-  // E. Starting an actual project-bound re-check advances to RECHECK_REQUIRED.
   const recheck = page.getByRole('link', { name: /Ponovi Lekta Check/i }).first()
   await recheck.waitFor({ state: 'visible' })
   const recheckHref = await recheck.getAttribute('href')
@@ -148,7 +154,6 @@ try {
   state = await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'RECHECK_REQUIRED', 'RECHECK_REQUIRED')
   assert.equal(state.lektaIssues[0].status, 'RECHECK_REQUIRED')
 
-  // F. Finding persists in fresh analysis -> OPEN again.
   await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-2', [stableMarginIssue]))}`, {
     waitUntil: 'domcontentloaded',
   })
@@ -160,7 +165,6 @@ try {
   assert.equal(state.lektaIssues[0].id, 'rule:e2e.margins.001')
   assert.equal(state.lektaResolutionHistory?.length || 0, 0)
 
-  // G. Change again and start another re-check through the real coach UX.
   await startResolutionRound(page)
   const solvedAgain = page.getByRole('button', { name: /Riješio sam/i }).first()
   await solvedAgain.waitFor({ state: 'visible' })
@@ -170,7 +174,6 @@ try {
   await clickWithoutNavigation(page, recheckAgain)
   await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'RECHECK_REQUIRED', 'second RECHECK_REQUIRED')
 
-  // H. Same stable finding disappears in a fresh LektaResult -> VERIFIED_FIXED.
   await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-3', []))}`, {
     waitUntil: 'domcontentloaded',
   })
@@ -187,10 +190,68 @@ try {
   assert.equal(verification.analysisId, 'e2e-analysis-3')
   assert.ok((state.lektaFixedTotal || 0) >= 1)
 
+  // I. Real DOCX proof: upload an actual Word package to the deployed Lekta PR
+  // preview, run its real local analyzer, inspect the CTA's real shared result,
+  // then deliver that exact fragment into the running Katedra browser.
+  const realLekta = await context.newPage()
+  realLekta.on('pageerror', error => browserErrors.push(`Lekta DOCX: ${String(error)}`))
+  await realLekta.goto(previewEntry, { waitUntil: 'domcontentloaded' })
+  await realLekta.waitForFunction(
+    expected => sessionStorage.getItem('lekta.katedra-project.v0.1') === expected,
+    projectId,
+  )
+
+  await realLekta.locator('#fileInput').setInputFiles(E2E_DOCX_PATH)
+  const analyze = realLekta.locator('#analyzeBtn')
+  await realLekta.waitForFunction(() => {
+    const button = document.querySelector('#analyzeBtn')
+    return button && !button.disabled
+  }, null, { timeout: 20_000 })
+  await analyze.click()
+
+  const realCta = realLekta.locator('#katedraHandoffStrip [data-katedra-handoff]')
+  await realCta.waitFor({ state: 'visible', timeout: 45_000 })
+  const actualHref = await realCta.getAttribute('href')
+  assert.ok(actualHref, 'real Lekta analysis must render Katedra CTA')
+  const actualResult = decodeHandoffHref(actualHref)
+
+  assert.equal(actualResult.schemaVersion, '0.1')
+  assert.equal(actualResult.projectId, projectId)
+  assert.ok(typeof actualResult.analysisId === 'string' && actualResult.analysisId.length > 0)
+  assert.ok(Array.isArray(actualResult.issues) && actualResult.issues.length > 0, 'bad-format DOCX must produce findings')
+  for (const issue of actualResult.issues) {
+    assert.ok(typeof issue.issueKey === 'string' && (issue.issueKey.startsWith('rule:') || issue.issueKey.startsWith('check:')))
+    assert.ok(typeof issue.checkId === 'string' && issue.checkId.length > 0)
+    assert.equal(Object.hasOwn(issue, 'detail'), false, 'handoff must not contain document-derived detail')
+    assert.equal(Object.hasOwn(issue, 'location'), false, 'handoff must not contain document-derived location')
+  }
+  const actualJson = JSON.stringify(actualResult)
+  assert.equal(actualJson.includes('Ovaj sintetski dokument služi isključivo automatiziranom testu'), false)
+  assert.equal(actualJson.includes('Tekst je namjerno oblikovan fontom Arial 11'), false)
+
+  const actualHash = new URL(actualHref).hash
+  await realLekta.close()
+  await page.goto(`${KATEDRA_URL}/${actualHash}`, { waitUntil: 'domcontentloaded' })
+  const firstActualIssue = actualResult.issues[0]
+  state = await waitManifest(
+    page,
+    m => m.lektaIssues?.some(issue => issue.id === firstActualIssue.issueKey),
+    'real DOCX LektaResult ingested by Katedra',
+    20_000,
+  )
+  assert.equal(state.lektaIdentityIndex?.[firstActualIssue.issueKey]?.checkId, firstActualIssue.checkId)
+  assert.equal(state.projectId, projectId)
+
   if (browserErrors.length) throw new Error(`Browser page errors:\n${browserErrors.join('\n')}`)
 
   console.log('ACADEMIC_SUITE_BROWSER_E2E_PASS')
-  console.log(JSON.stringify({ projectId, verifiedIssue: verification.issueId }, null, 2))
+  console.log(JSON.stringify({
+    projectId,
+    verifiedIssue: verification.issueId,
+    realDocxAnalysisId: actualResult.analysisId,
+    realDocxIssueCount: actualResult.issues.length,
+    realDocxFirstIssue: firstActualIssue.issueKey,
+  }, null, 2))
 } finally {
   await browser.close()
 }
