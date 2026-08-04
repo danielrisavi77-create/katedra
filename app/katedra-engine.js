@@ -2837,8 +2837,12 @@ async function startCheckout(pkgKey){
 function handlePaymentReturn(){
   const qs = new URLSearchParams(location.search);
   const placeno = qs.get('placeno');
-  if(placeno === '1'){ toast('✅ Pass aktiviran za ovaj rad'); refreshAuthAndCredits(); history.replaceState(null, '', '/'); }
-  else if(placeno === '0'){ toast('Plaćanje otkazano'); history.replaceState(null, '', '/'); }
+  // location.pathname, ne hardkodiran '/': ova stranica sad živi na /pisi
+  // (landing na / nema ovaj wizard), pa bi tvrdi '/' nakon uspješne kupnje
+  // ostavio pogrešan URL u adresnoj traci (isti sadržaj dok se ne osvježi,
+  // a nakon osvježenja korisnik bi pao na marketing stranicu, ne wizard).
+  if(placeno === '1'){ toast('✅ Pass aktiviran za ovaj rad'); refreshAuthAndCredits(); history.replaceState(null, '', location.pathname); }
+  else if(placeno === '0'){ toast('Plaćanje otkazano'); history.replaceState(null, '', location.pathname); }
 }
 
 /* ---------- INIT ---------- */
@@ -3236,8 +3240,16 @@ handlePaymentReturn();
     setScreen(screenParam); return;
   }
   if(tipParam && ['s','z','d'].includes(tipParam)){
-    // Tip je već odgovoren klikom na landingu — preskoči to pitanje.
-    setScreen('gdje'); return;
+    // Klik na Pass karticu na landingu = "želim pisati [tip] i kupiti Pass za
+    // to" — to je odgovor i na "koji rad pišeš" (ekran 1) i na "gdje si s
+    // radom" (ekran 2, uvijek "počinjem pisati" u ovom slučaju). Preskoči oba
+    // i sleti izravno na preostala 3 kratka, preskočiva pitanja lijevka —
+    // najbliže "dijelu za kupnju" bez lažnog zaobilaženja prijave/projekta
+    // koje /api/checkout stvarno zahtijeva (Audit 4: Pass je vezan uz
+    // academic_project_id, ne postoji kupnja bez postojećeg projekta).
+    funPending = FUN_MODES.write;
+    funStep = 0;
+    setScreen('pitanja'); funnelRender(); return;
   }
   // Dovoljno duga pauza uz stvarni napredak nadjačava zapamćeni ekran —
   // tada je pravi doček "nastavimo gdje smo stali", a ne ploča usred posla.

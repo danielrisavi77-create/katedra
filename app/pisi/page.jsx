@@ -24,7 +24,7 @@ var CH={tip:'funnel',gdje:'funnel',pitanja:'funnel',fakultet:'fak',ploca:'board'
 var params=new URLSearchParams(location.search);
 var qs=params.get('screen');
 var tp=params.get('tip');
-var s=(qs&&CH[qs])?qs:(tp&&['s','z','d'].indexOf(tp)>-1?'gdje':localStorage.getItem('rp_screen'));
+var s=(qs&&CH[qs])?qs:(tp&&['s','z','d'].indexOf(tp)>-1?'pitanja':localStorage.getItem('rp_screen'));
 if(!s&&localStorage.getItem('rp_onb')==='1')s='ploca';
 if(s==='povratak')s='ploca';
 var last=+(localStorage.getItem('rp_seen')||0);

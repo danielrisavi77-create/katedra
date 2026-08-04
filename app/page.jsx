@@ -41,10 +41,13 @@ export default function LandingPage() {
                 ?tip= prije prvog painta da izbjegne flash krivog ekrana — taj script
                 tag se ne izvršava kod React client-side navigacije (Link), samo kod
                 pravog učitavanja stranice. */}
-            <a href="/pisi" className="copy-btn" style={{ width: 260, maxWidth: '100%', padding: '13px 20px', fontSize: 14, textDecoration: 'none' }}>
+            {/* Eksplicitna height (ne samo padding+line-height): .copy-btn i .onb-back
+                imaju različit naslijeđeni line-height, pa bi se inače ipak razlikovale
+                visine iako je width isti — provjereno mjerenjem u pravom browseru. */}
+            <a href="/pisi" className="copy-btn" style={{ width: 260, height: 48, maxWidth: '100%', padding: '0 20px', fontSize: 14, textDecoration: 'none' }}>
               Počni pisati →
             </a>
-            <a href="/pisi?screen=scan" className="onb-back" style={{ width: 260, maxWidth: '100%', marginTop: 0, justifyContent: 'center', padding: '13px 20px', fontSize: 14, textDecoration: 'none' }}>
+            <a href="/pisi?screen=scan" className="onb-back" style={{ width: 260, height: 48, maxWidth: '100%', marginTop: 0, justifyContent: 'center', padding: '0 20px', fontSize: 14, textDecoration: 'none' }}>
               Provjeri bez prijave →
             </a>
           </div>
