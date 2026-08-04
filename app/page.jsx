@@ -1,184 +1,123 @@
-﻿'use client'
-
-import { useEffect } from 'react'
-import { initKatedraEngine } from './katedra-engine'
-import { KATEDRA_BODY_HTML } from './katedra-body'
-import { ensureGuestProjectIdentity } from '@/lib/academic-suite/guest-project'
-import { normalizeLektaHandoffHashForLegacyEngine } from '@/lib/academic-suite/handoff'
-import { installLektaRecheckLifecycle } from '@/lib/academic-suite/reconciliation'
-import { installKatedraProductBoundary } from '@/lib/academic-suite/product-boundary'
+import Link from 'next/link'
 import './katedra-scoped.css'
 
-const LEKTA_PRODUCTION_ORIGIN = 'https://lektahr.netlify.app'
-const LEKTA_PAIRED_PREVIEW_ORIGIN = 'https://deploy-preview-25--lektahr.netlify.app'
-const KATEDRA_PAIRED_PREVIEW_HOST = 'deploy-preview-1--katedra.netlify.app'
-
-// Ekran i koža čitaju se prije prvog painta kako povratnik ne bi vidio
-// kratki flash uvodnog ekrana ili zadane kože.
-const BOOT = `(function(){try{
-var r=document.getElementById('katedra-root');if(!r)return;
-var CH={tip:'funnel',gdje:'funnel',pitanja:'funnel',fakultet:'fak',ploca:'board',chat:'board',povratak:'funnel'};
-var s=localStorage.getItem('rp_screen');
-if(!s&&localStorage.getItem('rp_onb')==='1')s='ploca';
-if(s==='povratak')s='ploca';
-var last=+(localStorage.getItem('rp_seen')||0);
-if(last&&Date.now()-last>144e5){try{
-var ck=(JSON.parse(localStorage.getItem('rp_state')||'{}').checks)||{};
-if(Object.keys(ck).some(function(k){return ck[k];}))s='povratak';}catch(e){}}
-if(s&&CH[s]){r.setAttribute('data-screen',s);r.setAttribute('data-chrome',CH[s]);}
-var k=localStorage.getItem('rp_skin');
-if(k){if(k==='papir')r.removeAttribute('data-skin');else r.setAttribute('data-skin',k);}
-}catch(e){}})();`
-
-function pairedLektaPreviewUrl(value) {
-  if (
-    typeof window === 'undefined' ||
-    window.location.hostname !== KATEDRA_PAIRED_PREVIEW_HOST
-  ) return value
-
-  if (typeof value !== 'string') return value
-
-  try {
-    const url = new URL(value, window.location.href)
-    if (url.origin !== LEKTA_PRODUCTION_ORIGIN) return value
-
-    const preview = new URL(LEKTA_PAIRED_PREVIEW_ORIGIN)
-    url.protocol = preview.protocol
-    url.host = preview.host
-    return url.toString()
-  } catch {
-    return value
-  }
-}
-
-async function persistIncomingLektaManifest() {
-  let manifest
-
-  try {
-    manifest = JSON.parse(localStorage.getItem('rp_manifest') || 'null')
-  } catch {
-    return
-  }
-
-  if (
-    !manifest?.projectId ||
-    !manifest?.lektaCheckedAt ||
-    !Array.isArray(manifest?.lektaIssues)
-  ) return
-
-  const workType =
-    ['s', 'z', 'd'].includes(manifest.workType) ? manifest.workType : 'z'
-
-  try {
-    await fetch('/api/state', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        projectId: manifest.projectId,
-        guestProjectId: manifest.projectId,
-        workType,
-        profileId: manifest.profileId || '',
-        rulesetVersion: manifest.rulesetVersion || '',
-        lektaScore: manifest.lektaScore ?? null,
-        lektaCheckedAt: manifest.lektaCheckedAt,
-        lektaIssues: manifest.lektaIssues,
-        lektaFixedTotal: manifest.lektaFixedTotal || 0,
-      }),
-    })
-  } catch {
-    // Local-first engine ostaje funkcionalan i bez mreže.
-  }
-}
-
-export default function KatedraPage() {
-  useEffect(() => {
-    ensureGuestProjectIdentity()
-
-    const isPairedPreview =
-      window.location.hostname === KATEDRA_PAIRED_PREVIEW_HOST
-
-    const originalOpen = window.open
-    let lektaLinkObserver = null
-
-    if (isPairedPreview) {
-      window.open = function patchedOpen(url, target, features) {
-        return originalOpen.call(
-          window,
-          pairedLektaPreviewUrl(url),
-          target,
-          features
-        )
-      }
-    }
-
-    const hadIncomingLektaHandoff =
-      window.location.hash.startsWith('#lekta=')
-
-    const normalizeIncomingLektaHash = () => {
-      normalizeLektaHandoffHashForLegacyEngine()
-    }
-
-    window.addEventListener('hashchange', normalizeIncomingLektaHash)
-    normalizeIncomingLektaHash()
-
-    initKatedraEngine()
-
-    // Katedra = sadržaj/proces.
-    // Lekta = jedini tehnički validator stvarnog dokumenta.
-    const removeProductBoundary = installKatedraProductBoundary()
-
-    if (hadIncomingLektaHandoff) {
-      void persistIncomingLektaManifest()
-    }
-
-    if (isPairedPreview) {
-      const rewriteRenderedLektaLinks = () => {
-        document
-          .querySelectorAll(`a[href^="${LEKTA_PRODUCTION_ORIGIN}"]`)
-          .forEach(anchor => {
-            const next = pairedLektaPreviewUrl(anchor.href)
-            if (next !== anchor.href) anchor.href = next
-          })
-      }
-
-      rewriteRenderedLektaLinks()
-
-      const root = document.getElementById('katedra-root')
-      if (root) {
-        lektaLinkObserver = new MutationObserver(rewriteRenderedLektaLinks)
-        lektaLinkObserver.observe(root, {
-          childList: true,
-          subtree: true,
-        })
-      }
-    }
-
-    const removeRecheckLifecycle = installLektaRecheckLifecycle()
-
-    return () => {
-      window.removeEventListener('hashchange', normalizeIncomingLektaHash)
-      removeRecheckLifecycle()
-      removeProductBoundary()
-      lektaLinkObserver?.disconnect()
-
-      if (isPairedPreview) {
-        window.open = originalOpen
-      }
-    }
-  }, [])
-
+export default function LandingPage() {
   return (
-    <>
-      <div
-        id="katedra-root"
-        className="katedra-page"
-        suppressHydrationWarning
-        data-skin="kreda"
-        data-screen="tip"
-        data-chrome="funnel"
-        dangerouslySetInnerHTML={{ __html: KATEDRA_BODY_HTML }}
-      />
-      <script dangerouslySetInnerHTML={{ __html: BOOT }} />
-    </>
+    <div className="katedra-page" style={{ minHeight: '100vh', padding: '26px 16px 90px' }}>
+      <div className="wrap" style={{ maxWidth: 980 }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="logo-badge">K</div>
+            <div>
+              <h1 style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.4px' }}>Katedra</h1>
+              <p style={{ fontSize: 12.5, color: 'var(--mut)', marginTop: 1 }}>Od teme do obrane</p>
+            </div>
+          </div>
+          <Link href="/prijava" style={{ color: 'var(--acc)', fontSize: 13.5, fontWeight: 700 }}>Prijavi se</Link>
+        </header>
+
+        {/* HERO */}
+        <section style={{ marginTop: 48, marginBottom: 40, textAlign: 'center' }}>
+          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, letterSpacing: '-.5px', lineHeight: 1.15, maxWidth: 720, margin: '0 auto' }}>
+            Završi rad bez nagađanja.
+          </h2>
+          <p style={{ fontSize: 16, color: 'var(--mut)', marginTop: 16, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.55 }}>
+            Katedra te vodi od teme do obrane — prati što je još otvoreno, što tvoj fakultet
+            dopušta uz AI i što mentor čeka. Lekta provjerava stvarni dokument prije predaje.
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' }}>
+            <Link href="/pisi" className="copy-btn" style={{ width: 'auto', padding: '13px 26px', textDecoration: 'none' }}>
+              Počni pisati →
+            </Link>
+            <Link href="/pisi?screen=scan" className="onb-back" style={{ marginTop: 0, padding: '13px 20px', fontSize: 13.5, textDecoration: 'none' }}>
+              Provjeri gdje stoji tvoj rad — bez prijave
+            </Link>
+          </div>
+        </section>
+
+        {/* TRUST LINE */}
+        <section className="panel" style={{ textAlign: 'center', marginBottom: 28 }}>
+          <h3 style={{ fontSize: 16.5 }}>AI se prilagođava pravilima tvog projekta — ne obrnuto.</h3>
+          <p style={{ fontSize: 13.5, color: 'var(--mut)', marginTop: 6, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+            Katedra prvo provjerava što ti je dopušteno prema objavljenim pravilima tvog
+            fakulteta — tek onda uključuje AI. Kad pravilo nije potvrđeno, Katedra ostaje na
+            sigurnijoj strani i vodi te pitanjima umjesto da piše umjesto tebe.
+          </p>
+        </section>
+
+        {/* KAKO RADI */}
+        <section style={{ marginBottom: 28 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 16 }}>
+            Kako radi — 3 koraka
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+            <div className="panel">
+              <b style={{ color: 'var(--acc)', fontSize: 13 }}>1</b>
+              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+                <b>Odgovori na par pitanja u chatu</b> — koji rad, koja tema, kad je rok. Vodi te
+                korak po korak, ništa ne moraš znati unaprijed.
+              </p>
+            </div>
+            <div className="panel">
+              <b style={{ color: 'var(--acc)', fontSize: 13 }}>2</b>
+              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+                <b>Dodaj datoteke</b> — app ti kaže točno što pomaže: upute fakulteta, literatura,
+                postojeći draft. Nemaš nešto? Preskoči, radi i bez toga.
+              </p>
+            </div>
+            <div className="panel">
+              <b style={{ color: 'var(--acc)', fontSize: 13 }}>3</b>
+              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+                <b>Pišeš ovdje</b> — prvo detaljan plan, zatim pisanje uz tvoje odobravanje svakog
+                koraka, prilagođeno AI pravilima tvog fakulteta. Prije predaje, Lekta provjerava
+                stvarni dokument.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* CIJENE */}
+        <section style={{ marginBottom: 28 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 16 }}>
+            Jedna kupnja, jedan rad
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+            <div className="panel" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Seminarski Pass</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>29,90 €</div>
+              <div style={{ fontSize: 12, color: 'var(--mut)' }}>~1 seminarski s revizijama</div>
+            </div>
+            <div className="panel" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Završni Pass</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>79,90 €</div>
+              <div style={{ fontSize: 12, color: 'var(--mut)' }}>~1 završni + recenzija</div>
+            </div>
+            <div className="panel" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Diplomski Pass</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>129,90 €</div>
+              <div style={{ fontSize: 12, color: 'var(--mut)' }}>diplomski rad</div>
+            </div>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--mut2)', textAlign: 'center', marginTop: 12 }}>
+            Pass otključava Katedru i Lektu za taj konkretan rad. Plan i program te Lekta
+            provjera ostaju besplatni bez kupnje.
+          </p>
+        </section>
+
+        {/* FINALNI CTA */}
+        <section style={{ textAlign: 'center', marginBottom: 36 }}>
+          <Link href="/pisi" className="copy-btn" style={{ width: 'auto', padding: '13px 26px', textDecoration: 'none', display: 'inline-flex' }}>
+            Počni pisati →
+          </Link>
+        </section>
+
+        <footer style={{ borderTop: '1px solid var(--line)', paddingTop: 18, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', fontSize: 12.5 }}>
+          <Link href="/privatnost" style={{ color: 'var(--mut)' }}>Politika privatnosti</Link>
+          <Link href="/uvjeti" style={{ color: 'var(--mut)' }}>Uvjeti korištenja</Link>
+          <Link href="/prijava" style={{ color: 'var(--mut)' }}>Prijava</Link>
+          <a href="mailto:podrska@katedra.hr" style={{ color: 'var(--mut)' }}>podrska@katedra.hr</a>
+        </footer>
+      </div>
+    </div>
   )
 }

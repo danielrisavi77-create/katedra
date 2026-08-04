@@ -9,11 +9,11 @@ export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const oauthError = searchParams.get('error_description') || searchParams.get('error')
-  const redirectRaw = searchParams.get('redirect') ?? '/'
+  const redirectRaw = searchParams.get('redirect') ?? '/pisi'
   // Sigurnost: dozvoli samo relativne, same-origin putanje (spriječi open redirect)
   const redirect = (redirectRaw.startsWith('/') && !redirectRaw.startsWith('//') && !redirectRaw.startsWith('/\\'))
     ? redirectRaw
-    : '/'
+    : '/pisi'
 
   if (oauthError) {
     return NextResponse.redirect(`${origin}/prijava?error=${encodeURIComponent(oauthError)}`)

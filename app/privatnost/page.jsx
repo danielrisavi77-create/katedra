@@ -16,7 +16,7 @@ export default function PrivatnostPage() {
           prođe pravnu reviziju i dok se ne popune sva polja u uglatim zagradama.
         </div>
 
-        <Link href="/" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
+        <Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
         <h1 style={{ marginTop: 16 }}>Politika privatnosti</h1>
         <p style={{ color: 'var(--mut)' }}>Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
 

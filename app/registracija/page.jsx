@@ -36,7 +36,7 @@ export default function RegistracijaPage() {
         return
       }
 
-      if (data.session) { window.location.href = '/'; return }
+      if (data.session) { window.location.href = '/pisi'; return }
       setDone(true)
     } catch {
       setError('Registracija trenutno nije dostupna.')

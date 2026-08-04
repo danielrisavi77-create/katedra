@@ -34,7 +34,7 @@ export default function RacunPage() {
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', padding: '40px 16px 90px' }}>
       <div className="wrap" style={{ maxWidth: 640 }}>
-        <Link href="/" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
+        <Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
         <h1 style={{ marginTop: 16 }}>Moj račun</h1>
 
         <div className="panel" style={{ marginTop: 20, lineHeight: 1.6 }}>
