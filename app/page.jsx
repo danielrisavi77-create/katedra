@@ -3,7 +3,7 @@ import './katedra-scoped.css'
 
 export default function LandingPage() {
   return (
-    <div className="katedra-page" style={{ minHeight: '100vh', padding: '26px 16px 90px' }}>
+    <div className="katedra-page" data-skin="kreda" style={{ minHeight: '100vh', padding: '26px 16px 90px' }}>
       <div className="wrap" style={{ maxWidth: 980 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
