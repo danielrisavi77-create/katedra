@@ -21,8 +21,10 @@ const KATEDRA_PAIRED_PREVIEW_HOST = 'deploy-preview-1--katedra.netlify.app'
 const BOOT = `(function(){try{
 var r=document.getElementById('katedra-root');if(!r)return;
 var CH={tip:'funnel',gdje:'funnel',pitanja:'funnel',fakultet:'fak',ploca:'board',chat:'board',povratak:'funnel',scan:'funnel'};
-var qs=new URLSearchParams(location.search).get('screen');
-var s=(qs&&CH[qs])?qs:localStorage.getItem('rp_screen');
+var params=new URLSearchParams(location.search);
+var qs=params.get('screen');
+var tp=params.get('tip');
+var s=(qs&&CH[qs])?qs:(tp&&['s','z','d'].indexOf(tp)>-1?'gdje':localStorage.getItem('rp_screen'));
 if(!s&&localStorage.getItem('rp_onb')==='1')s='ploca';
 if(s==='povratak')s='ploca';
 var last=+(localStorage.getItem('rp_seen')||0);

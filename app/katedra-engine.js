@@ -3223,6 +3223,22 @@ handlePaymentReturn();
 (() => {
   const last = +(lsGet('rp_seen') || 0), gap = Date.now() - last;
   lsSet('rp_seen', String(Date.now()));
+  // Eksplicitan URL parametar (npr. klik s landing stranice: /pisi?screen=scan
+  // ili /pisi?tip=d) nadjačava spremljeni ekran — svjež klik s jasnom namjerom
+  // pobjeđuje staro stanje, ne obrnuto. Mora doći PRIJE povratak/rp_screen
+  // grana ispod, inače bi svaki novi posjetitelj bez spremljenog stanja svejedno
+  // pao natrag na 'tip' preko zadnje linije ove funkcije.
+  const qp = new URLSearchParams(location.search);
+  const screenParam = qp.get('screen');
+  const tipParam = qp.get('tip');
+  if(tipParam && ['s','z','d'].includes(tipParam)) setTip(tipParam);
+  if(screenParam && SCREENS.includes(screenParam) && screenAvailable(screenParam)){
+    setScreen(screenParam); return;
+  }
+  if(tipParam && ['s','z','d'].includes(tipParam)){
+    // Tip je već odgovoren klikom na landingu — preskoči to pitanje.
+    setScreen('gdje'); return;
+  }
   // Dovoljno duga pauza uz stvarni napredak nadjačava zapamćeni ekran —
   // tada je pravi doček "nastavimo gdje smo stali", a ne ploča usred posla.
   if(last && gap > RETURN_AFTER && hasRealProgress() && screenAvailable('povratak')){
