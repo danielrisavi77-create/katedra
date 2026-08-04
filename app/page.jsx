@@ -1,9 +1,20 @@
 import Link from 'next/link'
 import './katedra-scoped.css'
 
+// Cijene su klikabilne — svaka vodi ravno u wizard s već pretpostavljenim
+// tipom rada (?tip=s|z|d preskače pitanje "koji rad pišeš"). Ne vodi izravno
+// na Stripe: kupnja zahtijeva prijavu i postojeći projekt (academic_project_id,
+// Audit 4), pa je najpošteniji izravan korak "kreni od tog tipa rada", ne
+// lažna "kupi odmah" tipka koja bi svejedno morala prvo tražiti prijavu.
+const PASSES = [
+  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: '~1 seminarski s revizijama' },
+  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: '~1 završni + recenzija' },
+  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'diplomski rad' },
+]
+
 export default function LandingPage() {
   return (
-    <div className="katedra-page" style={{ minHeight: '100vh', padding: '26px 16px 90px' }}>
+    <div className="katedra-page" data-skin="kreda" style={{ minHeight: '100vh', padding: '26px 16px 90px' }}>
       <div className="wrap" style={{ maxWidth: 980 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -26,17 +37,25 @@ export default function LandingPage() {
             dopušta uz AI i što mentor čeka. Lekta provjerava stvarni dokument prije predaje.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' }}>
-            <Link href="/pisi" className="copy-btn" style={{ width: 'auto', padding: '13px 26px', textDecoration: 'none' }}>
+            {/* Obični <a>, ne next/link: /pisi ima BOOT <script> koji čita ?screen=/
+                ?tip= prije prvog painta da izbjegne flash krivog ekrana — taj script
+                tag se ne izvršava kod React client-side navigacije (Link), samo kod
+                pravog učitavanja stranice. */}
+            {/* Eksplicitna height (ne samo padding+line-height): .copy-btn i .onb-back
+                imaju različit naslijeđeni line-height, pa bi se inače ipak razlikovale
+                visine iako je width isti — provjereno mjerenjem u pravom browseru. */}
+            <a href="/pisi" className="copy-btn" style={{ width: 260, height: 48, maxWidth: '100%', padding: '0 20px', fontSize: 14, textDecoration: 'none' }}>
               Počni pisati →
-            </Link>
-            <Link href="/pisi?screen=scan" className="onb-back" style={{ marginTop: 0, padding: '13px 20px', fontSize: 13.5, textDecoration: 'none' }}>
-              Provjeri gdje stoji tvoj rad — bez prijave
-            </Link>
+            </a>
+            <a href="/pisi?screen=scan" className="onb-back" style={{ width: 260, height: 48, maxWidth: '100%', marginTop: 0, justifyContent: 'center', padding: '0 20px', fontSize: 14, textDecoration: 'none' }}>
+              Provjeri bez prijave →
+            </a>
           </div>
         </section>
 
-        {/* TRUST LINE */}
-        <section className="panel" style={{ textAlign: 'center', marginBottom: 28 }}>
+        {/* TRUST LINE — namjerno lakši tretman (bez .panel okvira) da se
+            vizualno izdvoji kao izjava, ne kao još jedna kartica */}
+        <section style={{ textAlign: 'center', marginBottom: 40, padding: '22px 16px', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
           <h3 style={{ fontSize: 16.5 }}>AI se prilagođava pravilima tvog projekta — ne obrnuto.</h3>
           <p style={{ fontSize: 13.5, color: 'var(--mut)', marginTop: 6, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
             Katedra prvo provjerava što ti je dopušteno prema objavljenim pravilima tvog
@@ -45,29 +64,30 @@ export default function LandingPage() {
           </p>
         </section>
 
-        {/* KAKO RADI */}
-        <section style={{ marginBottom: 28 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 16 }}>
+        {/* KAKO RADI — čist numerirani niz, bez kartica, da se razlikuje od
+            cijena ispod (te ostaju kartice jer se stvarno uspoređuju) */}
+        <section style={{ marginBottom: 40 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 22 }}>
             Kako radi — 3 koraka
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            <div className="panel">
-              <b style={{ color: 'var(--acc)', fontSize: 13 }}>1</b>
-              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
+            <div>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>1</div>
+              <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Odgovori na par pitanja u chatu</b> — koji rad, koja tema, kad je rok. Vodi te
                 korak po korak, ništa ne moraš znati unaprijed.
               </p>
             </div>
-            <div className="panel">
-              <b style={{ color: 'var(--acc)', fontSize: 13 }}>2</b>
-              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+            <div>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>2</div>
+              <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Dodaj datoteke</b> — app ti kaže točno što pomaže: upute fakulteta, literatura,
                 postojeći draft. Nemaš nešto? Preskoči, radi i bez toga.
               </p>
             </div>
-            <div className="panel">
-              <b style={{ color: 'var(--acc)', fontSize: 13 }}>3</b>
-              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+            <div>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>3</div>
+              <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Pišeš ovdje</b> — prvo detaljan plan, zatim pisanje uz tvoje odobravanje svakog
                 koraka, prilagođeno AI pravilima tvog fakulteta. Prije predaje, Lekta provjerava
                 stvarni dokument.
@@ -76,27 +96,24 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* CIJENE */}
-        <section style={{ marginBottom: 28 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 16 }}>
+        {/* CIJENE — ostaje kartica-tretman (.panel): ovdje se stvarno uspoređuju 3 opcije */}
+        <section style={{ marginBottom: 36 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 22 }}>
             Jedna kupnja, jedan rad
           </h3>
+          <style>{`
+            .landing-pass-card{transition:.15s;text-decoration:none;color:inherit;display:block;cursor:pointer}
+            .landing-pass-card:hover{border-color:var(--acc);background:var(--card2)}
+          `}</style>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-            <div className="panel" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Seminarski Pass</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>29,90 €</div>
-              <div style={{ fontSize: 12, color: 'var(--mut)' }}>~1 seminarski s revizijama</div>
-            </div>
-            <div className="panel" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Završni Pass</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>79,90 €</div>
-              <div style={{ fontSize: 12, color: 'var(--mut)' }}>~1 završni + recenzija</div>
-            </div>
-            <div className="panel" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700 }}>Diplomski Pass</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>129,90 €</div>
-              <div style={{ fontSize: 12, color: 'var(--mut)' }}>diplomski rad</div>
-            </div>
+            {PASSES.map(p => (
+              <a key={p.tip} href={`/pisi?tip=${p.tip}`} className="panel landing-pass-card" style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>{p.price}</div>
+                <div style={{ fontSize: 12, color: 'var(--mut)' }}>{p.desc}</div>
+                <div style={{ fontSize: 12, color: 'var(--acc)', fontWeight: 700, marginTop: 10 }}>Odaberi →</div>
+              </a>
+            ))}
           </div>
           <p style={{ fontSize: 12, color: 'var(--mut2)', textAlign: 'center', marginTop: 12 }}>
             Pass otključava Katedru i Lektu za taj konkretan rad. Plan i program te Lekta
@@ -106,9 +123,9 @@ export default function LandingPage() {
 
         {/* FINALNI CTA */}
         <section style={{ textAlign: 'center', marginBottom: 36 }}>
-          <Link href="/pisi" className="copy-btn" style={{ width: 'auto', padding: '13px 26px', textDecoration: 'none', display: 'inline-flex' }}>
+          <a href="/pisi" className="copy-btn" style={{ width: 'auto', padding: '13px 26px', textDecoration: 'none', display: 'inline-flex' }}>
             Počni pisati →
-          </Link>
+          </a>
         </section>
 
         <footer style={{ borderTop: '1px solid var(--line)', paddingTop: 18, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', fontSize: 12.5 }}>
