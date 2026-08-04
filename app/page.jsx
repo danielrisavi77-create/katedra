@@ -26,17 +26,18 @@ export default function LandingPage() {
             dopušta uz AI i što mentor čeka. Lekta provjerava stvarni dokument prije predaje.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' }}>
-            <Link href="/pisi" className="copy-btn" style={{ width: 'auto', padding: '13px 26px', textDecoration: 'none' }}>
+            <Link href="/pisi" className="copy-btn" style={{ width: 'auto', flex: '1 1 220px', maxWidth: 320, padding: '13px 26px', textDecoration: 'none' }}>
               Počni pisati →
             </Link>
-            <Link href="/pisi?screen=scan" className="onb-back" style={{ marginTop: 0, padding: '13px 20px', fontSize: 13.5, textDecoration: 'none' }}>
+            <Link href="/pisi?screen=scan" className="onb-back" style={{ marginTop: 0, flex: '1 1 220px', maxWidth: 380, justifyContent: 'center', padding: '13px 20px', fontSize: 13.5, textDecoration: 'none' }}>
               Provjeri gdje stoji tvoj rad — bez prijave
             </Link>
           </div>
         </section>
 
-        {/* TRUST LINE */}
-        <section className="panel" style={{ textAlign: 'center', marginBottom: 28 }}>
+        {/* TRUST LINE — namjerno lakši tretman (bez .panel okvira) da se
+            vizualno izdvoji kao izjava, ne kao još jedna kartica */}
+        <section style={{ textAlign: 'center', marginBottom: 40, padding: '22px 16px', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
           <h3 style={{ fontSize: 16.5 }}>AI se prilagođava pravilima tvog projekta — ne obrnuto.</h3>
           <p style={{ fontSize: 13.5, color: 'var(--mut)', marginTop: 6, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
             Katedra prvo provjerava što ti je dopušteno prema objavljenim pravilima tvog
@@ -45,29 +46,30 @@ export default function LandingPage() {
           </p>
         </section>
 
-        {/* KAKO RADI */}
-        <section style={{ marginBottom: 28 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 16 }}>
+        {/* KAKO RADI — čist numerirani niz, bez kartica, da se razlikuje od
+            cijena ispod (te ostaju kartice jer se stvarno uspoređuju) */}
+        <section style={{ marginBottom: 40 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 22 }}>
             Kako radi — 3 koraka
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            <div className="panel">
-              <b style={{ color: 'var(--acc)', fontSize: 13 }}>1</b>
-              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
+            <div>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>1</div>
+              <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Odgovori na par pitanja u chatu</b> — koji rad, koja tema, kad je rok. Vodi te
                 korak po korak, ništa ne moraš znati unaprijed.
               </p>
             </div>
-            <div className="panel">
-              <b style={{ color: 'var(--acc)', fontSize: 13 }}>2</b>
-              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+            <div>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>2</div>
+              <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Dodaj datoteke</b> — app ti kaže točno što pomaže: upute fakulteta, literatura,
                 postojeći draft. Nemaš nešto? Preskoči, radi i bez toga.
               </p>
             </div>
-            <div className="panel">
-              <b style={{ color: 'var(--acc)', fontSize: 13 }}>3</b>
-              <p style={{ marginTop: 6, fontSize: 13.8, lineHeight: 1.5 }}>
+            <div>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>3</div>
+              <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Pišeš ovdje</b> — prvo detaljan plan, zatim pisanje uz tvoje odobravanje svakog
                 koraka, prilagođeno AI pravilima tvog fakulteta. Prije predaje, Lekta provjerava
                 stvarni dokument.
@@ -76,9 +78,9 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* CIJENE */}
-        <section style={{ marginBottom: 28 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 16 }}>
+        {/* CIJENE — ostaje kartica-tretman (.panel): ovdje se stvarno uspoređuju 3 opcije */}
+        <section style={{ marginBottom: 36 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 22 }}>
             Jedna kupnja, jedan rad
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
