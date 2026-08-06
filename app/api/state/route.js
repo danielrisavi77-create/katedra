@@ -23,6 +23,8 @@ import {
   isAcademicWorkType,
 } from '@/lib/academic-suite/contracts'
 import { GEN_SERVER_SAFE_KEYS, LOG_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
+import { loadOwnedWorkflow, WorkflowPersistenceError } from '@/lib/academic-suite/workflow/repository'
+import { resolveWorkflowForLegacySelection } from '@/lib/academic-suite/workflow/resolver'
 
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
@@ -110,6 +112,12 @@ function cleanOpaqueId(value) {
   return id
 }
 
+function cleanCanonicalProjectId(value) {
+  const id = cleanOpaqueId(value)
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return ''
+  return id
+}
+
 function canonicalWorkType(body) {
   if (isAcademicWorkType(body?.workTypeCanonical)) return body.workTypeCanonical
   if (body?.workType === 's' || body?.workType === 'z' || body?.workType === 'd') {
@@ -151,7 +159,29 @@ export async function GET() {
     .maybeSingle()
 
   if (error) return Response.json({ error: 'Učitavanje nije uspjelo.' }, { status: 500 })
-  return Response.json(rowToCamel(row))
+
+  const candidateProjectId = cleanCanonicalProjectId(row?.project_id)
+  let workflowResolution = {
+    workflowAuthority: 'legacy-compat',
+    workflow: null,
+  }
+
+  if (candidateProjectId) {
+    try {
+      const loadResult = await loadOwnedWorkflow(supabase, {
+        ownerUserId: user.id,
+        projectId: candidateProjectId,
+      })
+      workflowResolution = resolveWorkflowForLegacySelection(candidateProjectId, loadResult)
+    } catch (workflowError) {
+      if (workflowError instanceof WorkflowPersistenceError) {
+        return Response.json({ error: 'Učitavanje workflowa nije uspjelo.' }, { status: 500 })
+      }
+      throw workflowError
+    }
+  }
+
+  return Response.json({ ...rowToCamel(row), ...workflowResolution })
 }
 
 export async function PUT(req) {
