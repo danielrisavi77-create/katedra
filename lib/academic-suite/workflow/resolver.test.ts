@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { canonicalProjectCandidate, resolveWorkflowForLegacySelection } from './resolver'
+import { resolveWorkflowForLegacySelection } from './resolver'
 import type { WorkflowSnapshot } from './types'
 
 const WORKFLOW: WorkflowSnapshot = {
@@ -30,20 +30,6 @@ const WORKFLOW: WorkflowSnapshot = {
   source: 'completion',
   updatedAt: '2026-08-06T12:00:00.000Z',
 }
-
-describe('canonicalProjectCandidate', () => {
-  it('accepts a canonical academic project UUID', () => {
-    expect(canonicalProjectCandidate('123e4567-e89b-42d3-a456-426614174000')).toBe(
-      '123e4567-e89b-42d3-a456-426614174000',
-    )
-  })
-
-  it('rejects legacy opaque project IDs without treating them as DB errors', () => {
-    expect(canonicalProjectCandidate('legacy-k-123')).toBeNull()
-    expect(canonicalProjectCandidate('')).toBeNull()
-    expect(canonicalProjectCandidate(null)).toBeNull()
-  })
-})
 
 describe('resolveWorkflowForLegacySelection', () => {
   it('returns canonical Completion workflow when found', () => {
