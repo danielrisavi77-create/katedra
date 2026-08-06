@@ -1,8 +1,10 @@
-// Generated from canonical Supabase project zrrjttizjyfcxmcpgzml on 2026-08-06.
+// Derived from Supabase-generated types for canonical production project
+// zrrjttizjyfcxmcpgzml on 2026-08-06.
 //
-// V2-001 intentionally checks in the production `entitlements` projection
-// required by Katedra's Project Pass boundary. Do not hand-add columns here:
-// refresh this projection from Supabase when the canonical schema changes.
+// V2-001 intentionally checks in only the production `entitlements` projection
+// required by Katedra's Project Pass boundary rather than duplicating the full
+// shared schema owned by Lekta. Do not hand-add columns here: refresh this
+// projection from canonical generated types when the shared schema changes.
 // In particular, the live table has `academic_project_id` and DOES NOT have
 // `project_id`, `scope`, `capabilities`, or `source_product_id` columns.
 
