@@ -6,6 +6,8 @@ type EntitlementFixture = {
   id: string
   user_id: string
   academic_project_id: string | null
+  provider: string
+  product_id: string | null
   status: string
   purchase_expires_at: string
 }
@@ -16,6 +18,8 @@ const ACTIVE_PASS: EntitlementFixture = {
   id: 'entitlement-1',
   user_id: 'user-1',
   academic_project_id: 'project-1',
+  provider: 'stripe',
+  product_id: null,
   status: 'active',
   purchase_expires_at: '2026-12-31T23:59:59.000Z',
 }
@@ -33,6 +37,10 @@ function createEntitlementDb(rows: EntitlementFixture[]) {
           return query
         },
         eq(column: keyof EntitlementFixture, value: string) {
+          predicates.push((row) => row[column] === value)
+          return query
+        },
+        is(column: keyof EntitlementFixture, value: null) {
           predicates.push((row) => row[column] === value)
           return query
         },
@@ -66,7 +74,7 @@ async function resolvePass(rows: EntitlementFixture[], overrides: Partial<{ user
 }
 
 describe('hasActiveProjectPass', () => {
-  it('accepts an active non-expired entitlement bound to the same project', async () => {
+  it('accepts an active non-expired Katedra Project Pass bound to the same project', async () => {
     await expect(resolvePass([ACTIVE_PASS])).resolves.toBe(true)
   })
 
@@ -93,6 +101,24 @@ describe('hasActiveProjectPass', () => {
 
   it('rejects a non-active entitlement', async () => {
     await expect(resolvePass([{ ...ACTIVE_PASS, status: 'consumed' }])).resolves.toBe(false)
+  })
+
+  it('rejects a Lekta retail entitlement even when it is active and project-bound', async () => {
+    await expect(
+      resolvePass([
+        {
+          ...ACTIVE_PASS,
+          provider: 'lemonsqueezy',
+          product_id: 'pass_semestralni',
+        },
+      ]),
+    ).resolves.toBe(false)
+  })
+
+  it('rejects a Stripe entitlement that belongs to a catalog product', async () => {
+    await expect(
+      resolvePass([{ ...ACTIVE_PASS, product_id: 'some-catalog-product' }]),
+    ).resolves.toBe(false)
   })
 
   it('returns false when there is no matching entitlement', async () => {
