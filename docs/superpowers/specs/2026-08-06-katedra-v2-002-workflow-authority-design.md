@@ -56,6 +56,8 @@ For V2-002, canonical read ownership is:
 
 A legacy Katedra deadline or phase value must never override canonical Completion state when canonical state exists.
 
+The legacy top-level `deadline` field may remain in `/api/state` for backward compatibility during V2-002, but it is explicitly non-authoritative whenever `workflowAuthority === "completion"`. New V2 consumers must use `workflow.timeline.targetSubmissionDate`.
+
 ## 5. Architecture
 
 V2-002 introduces a narrow adapter inside Katedra:
@@ -152,6 +154,8 @@ export type WorkflowTaskSnapshot = {
 
 The initial contract intentionally uses stable serialized strings for shared enum-like values rather than importing the entire Completion domain. V2-003+ may tighten shared enum types after the ownership boundary is established.
 
+Tasks are returned in stable `created_at ASC` order unless the shared Completion contract later defines a different canonical ordering.
+
 ## 7. Repository responsibilities
 
 `repository.ts` must:
@@ -166,6 +170,15 @@ The initial contract intentionally uses stable serialized strings for shared enu
 8. Never write Completion state in V2-002.
 
 The repository must not load another user's workflow even if a caller supplies a valid foreign project UUID.
+
+The repository result must distinguish at least:
+
+- owned canonical project + Completion state;
+- owned canonical project + no Completion state;
+- canonical project not owned/not found for the supplied owner;
+- database/query failure.
+
+It must not collapse these states into a single nullable row.
 
 ## 8. Resolver responsibilities
 
@@ -191,7 +204,12 @@ Completion state wins over overlapping legacy values.
 
 ### Compatibility case
 
-If the owned academic project exists but no Completion state exists, return:
+There are two compatibility cases at the `/api/state` adapter boundary:
+
+1. an owned canonical academic project exists but has no Completion state yet;
+2. the current legacy Katedra row has no usable canonical academic-project identity at all, for example an older guest-only/opaque project ID that does not resolve to an owned `academic_projects` row.
+
+Both expose:
 
 ```ts
 {
@@ -202,9 +220,13 @@ If the owned academic project exists but no Completion state exists, return:
 
 This is an explicit compatibility state. The resolver must not synthesize a fake canonical workflow from `katedra_projects.deadline`, PHASES, localStorage, or other legacy process data.
 
+The second case is compatibility only when the candidate project identity comes from the authenticated user's own legacy Katedra row. It must not become a general rule that arbitrary foreign project IDs silently downgrade to compatibility mode.
+
 ### Error case
 
 A database error must propagate as an application error and produce a server failure response. It must not silently downgrade to `legacy-compat`, because that would hide canonical-state outages as if the project merely had no Completion state.
+
+An explicit repository/API attempt to load a canonical project that belongs to another user must be denied/not returned as workflow and must not be represented as `legacy-compat`.
 
 ## 9. `/api/state` integration
 
@@ -228,7 +250,7 @@ Existing response fields remain for backward compatibility. The route is extende
 }
 ```
 
-or, when canonical Completion state is absent:
+or, when canonical Completion state is absent/unavailable because the authenticated user's current legacy row has not yet been reconciled to a canonical academic project:
 
 ```json
 {
@@ -241,9 +263,16 @@ The existing PUT behavior remains unchanged in V2-002. This avoids introducing d
 
 ## 10. Project selection behavior
 
-The current GET route loads the user's most recently updated legacy `katedra_projects` row. V2-002 must preserve compatibility with that behavior while deriving the canonical project ID from that row's `project_id`.
+The current GET route loads the user's most recently updated legacy `katedra_projects` row. V2-002 preserves that selection behavior.
 
-If the legacy row has no usable canonical project ID, the response remains `legacy-compat` and `workflow: null`.
+The route takes that authenticated user's selected legacy row and treats its `project_id` only as a candidate canonical academic project identity.
+
+Resolution rules:
+
+1. If the candidate resolves to an `academic_projects` row owned by the same user and Completion state exists, expose `completion` workflow authority.
+2. If the owned academic project exists but Completion state is missing, expose `legacy-compat`.
+3. If the authenticated user's own legacy row contains an older guest/opaque ID that does not resolve to an owned canonical `academic_projects` row, expose `legacy-compat`.
+4. If a lower-level repository call is explicitly given a valid canonical project belonging to another user, deny/not-found it; do not expose compatibility state for that foreign project.
 
 V2-002 does not redesign project selection, multi-project navigation, or guest-to-canonical project reconciliation. Those remain separate migration concerns.
 
@@ -266,11 +295,13 @@ If a required field does not exist in canonical production, implementation must 
 The implementation must distinguish these states:
 
 1. `completion` — canonical state loaded successfully.
-2. `legacy-compat` — owned project is valid, but no Completion state exists.
+2. `legacy-compat` — the authenticated user's selected legacy project has not yet produced a complete canonical Completion workflow state.
 3. server error — canonical lookup failed because of a DB/query/contract failure.
-4. unauthorized/not-owned — caller cannot access that project's workflow.
+4. unauthorized/not-owned — an explicit canonical project lookup does not belong to the caller.
 
 The code must never convert state 3 or 4 into state 2.
+
+A missing canonical academic-project row may become state 2 only at the trusted `/api/state` compatibility adapter when the candidate ID originated from the authenticated user's own legacy Katedra row.
 
 ## 13. Privacy boundary
 
@@ -285,15 +316,16 @@ V2-002 is implemented test-first.
 Required behavior tests:
 
 1. canonical Completion stage is returned for an owned project;
-2. Completion submission deadline wins over conflicting legacy Katedra deadline;
+2. Completion submission deadline is the authoritative V2 deadline when it conflicts with legacy Katedra `deadline`;
 3. mentor waiting state comes from `completion_project_state`;
-4. Completion tasks are returned for the project;
-5. a foreign user's project cannot be loaded;
+4. Completion tasks are returned in stable `created_at ASC` order;
+5. an explicit foreign-user canonical project lookup cannot load workflow or downgrade to compatibility mode;
 6. an owned project with no Completion state returns `legacy-compat` and `workflow: null`;
-7. a database error does not downgrade to compatibility mode;
-8. `/api/state` uses the workflow module instead of directly querying `completion_*` tables;
-9. production-derived DB types include the required canonical columns;
-10. stale/legacy workflow data cannot be presented as `source: "completion"`.
+7. an authenticated user's legacy guest/opaque project with no canonical academic-project row returns `legacy-compat`;
+8. a database error does not downgrade to compatibility mode;
+9. `/api/state` uses the workflow module instead of directly querying `completion_*` tables;
+10. production-derived DB types include the required canonical columns;
+11. stale/legacy workflow data cannot be presented as `source: "completion"`.
 
 Existing V2-001 gates remain mandatory:
 
@@ -335,10 +367,11 @@ After V2-002:
 V2-002 is complete when all of the following are true:
 
 - Katedra can expose canonical Completion workflow state for an owned project.
-- Canonical Completion values win over conflicting legacy workflow values.
+- Canonical Completion values are explicitly authoritative over conflicting legacy workflow values.
 - A missing Completion row is explicit compatibility mode, not fabricated canonical state.
+- A legacy guest/opaque project can remain functional in explicit compatibility mode without being mistaken for a canonical project.
 - A DB failure fails closed.
-- A foreign project cannot be read.
+- A foreign canonical project cannot be read or disguised as compatibility mode.
 - Existing Katedra v1 state response remains backward compatible.
 - Existing PUT behavior is unchanged.
 - No new production schema/migration exists in Katedra.
