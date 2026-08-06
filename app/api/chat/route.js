@@ -16,6 +16,7 @@ import { MIN_BALANCE } from '@/lib/limits'
 import { ensureFreeStarterGrant } from '@/lib/katedra-free-starter'
 import { resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
+import { hasActiveProjectPass } from '@/lib/academic-suite/repositories/entitlements'
 
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
@@ -31,8 +32,6 @@ const MODEL_COST_MULTIPLIER = {
   'claude-sonnet-5': 1,
   'claude-opus-5': 5 / 3,
 }
-
-const PASS_SCOPES = ['academic-pass', 'academic-pass-plus']
 
 // Server-side product boundary. This is intentionally enforced above every
 // legacy/user prompt so a stale client cannot turn Katedra into a competing
@@ -94,15 +93,7 @@ export async function POST(req) {
   // ---------- 4. PASS ENTITLEMENT (primarni gate) ----------
   let hasPass = false
   if (projectId) {
-    const { data: entitlement } = await db
-      .from('entitlements')
-      .select('user_id')
-      .eq('user_id', userId)
-      .eq('project_id', projectId)
-      .in('scope', PASS_SCOPES)
-      .eq('status', 'active')
-      .maybeSingle()
-    hasPass = Boolean(entitlement)
+    hasPass = await hasActiveProjectPass(db, { userId, projectId })
   }
 
   // ---------- 5. WALLET — interni spend-guard / free-tier starter budžet ----------
