@@ -10,13 +10,20 @@ it('keeps Completion workflow reads behind the workflow module', () => {
     "import { loadOwnedWorkflow, WorkflowPersistenceError } from '@/lib/academic-suite/workflow/repository'",
   )
   expect(source).toContain(
-    "import { canonicalProjectCandidate, resolveWorkflowForLegacySelection } from '@/lib/academic-suite/workflow/resolver'",
+    "import { resolveWorkflowForLegacySelection } from '@/lib/academic-suite/workflow/resolver'",
   )
-  expect(source).toContain('candidateProjectId = canonicalProjectCandidate(row?.project_id)')
+  expect(source).toContain('const candidateProjectId = cleanCanonicalProjectId(row?.project_id)')
   expect(source).toContain('loadOwnedWorkflow(supabase, {')
   expect(source).toContain('resolveWorkflowForLegacySelection(candidateProjectId, loadResult)')
   expect(source).not.toContain(".from('completion_project_state')")
   expect(source).not.toContain(".from('completion_tasks')")
+})
+
+it('keeps legacy opaque project IDs out of canonical UUID queries', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/api/state/route.js'), 'utf8')
+
+  expect(source).toContain('function cleanCanonicalProjectId(value)')
+  expect(source).toContain('[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}')
 })
 
 it('fails closed on canonical workflow persistence errors', () => {
