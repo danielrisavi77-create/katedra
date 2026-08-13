@@ -221,7 +221,7 @@ html[data-theme='dark'] .pis-catalog-menu button:hover, html[data-theme='dark'] 
 .pis-topbar {
   height: 58px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
   align-items: center;
   gap: 22px;
   padding: 0 20px;
@@ -247,7 +247,10 @@ html[data-theme='dark'] .pis-catalog-menu button:hover, html[data-theme='dark'] 
 .pis-sync-state[data-state='failed'] { color: var(--pis-red); }
 .pis-sync-state[data-state='failed'] i { background: var(--pis-red); }
 .pis-topbar-actions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; min-width: 0; }
-.pis-desktop-account { min-width: 0; }
+.pis-desktop-account { min-width: 0; max-width: clamp(150px, 18vw, 260px); overflow: hidden; }
+.pis-desktop-account .pis-account { min-width: 0; display: block; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pis-desktop-account .pis-account-group { min-width: 0; max-width: 100%; }
+.pis-account-group .pis-pass-status { flex: 0 0 auto; }
 .pis-word-total,
 .pis-account { color: var(--pis-muted); font-size: 11px; text-decoration: none; }
 .pis-toolbar-button { min-height: 34px; padding: 7px 2px; border: 0; border-bottom: 1px solid var(--pis-line-strong); background: none; color: var(--pis-ink); cursor: pointer; }
@@ -472,9 +475,17 @@ html[data-theme='dark'] .pis-custom-prompt textarea::placeholder { color: var(--
 
 @media (max-width: 1100px) {
   .pis-columns { grid-template-columns: 220px minmax(430px, 1fr) 290px; }
-  .pis-topbar { grid-template-columns: minmax(200px, 1fr) auto; gap: 15px; padding-inline: 16px; }
+  .pis-topbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 15px; padding-inline: 16px; }
   .pis-word-total { display: none; }
   .pis-sync-state { display: none; }
+}
+
+@media (min-width: 801px) and (max-width: 920px) {
+  .pis-desktop-account,
+  .pis-toolbar-button,
+  .pis-export-button { display: none; }
+  .pis-mobile-overflow { display: block; }
+  .pis-topbar-actions { gap: 10px; }
 }
 
 @media (max-width: 800px) {

@@ -39,3 +39,10 @@ it('defines the quiet manuscript composition contract', () => {
   expect(css).toContain('top: 0')
   expect(css).toContain('.pis-save-state .pis-save-label')
 })
+
+it('constrains the desktop action zone so account controls cannot overflow', () => {
+  expect(css).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr)')
+  expect(css).toContain('.pis-desktop-account { min-width: 0; max-width: clamp(150px, 18vw, 260px); overflow: hidden; }')
+  expect(css).toContain('.pis-desktop-account .pis-account { min-width: 0; display: block; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
+  expect(css).toContain('.pis-account-group .pis-pass-status { flex: 0 0 auto; }')
+})
