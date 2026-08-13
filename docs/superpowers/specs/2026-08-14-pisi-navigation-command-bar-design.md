@@ -124,3 +124,35 @@ Postojeći testovi `/pisi`, autha, project drawera, exporta i ThemeTogglea moraj
 - nova ikonska biblioteka;
 - promjena landinga, auth stranica ili pravnih stranica;
 - globalna promjena dizajn tokena izvan `/pisi`.
+
+## Revizija: Quiet manuscript zone iznad rukopisa
+
+### Problem
+
+Prva verzija command bara i zaglavlja rukopisa zajedno stvaraju previše uzastopnih horizontalnih slojeva. Aktivna sekcija se ponavlja u gornjoj traci i na samom dokumentu, statusi zauzimaju središnji prostor, a format toolbar vizualno djeluje kao dodatna kartica. Posljedica je da papir počinje prenisko i da korisnik prvo vidi navigaciju, a tek onda mjesto za pisanje.
+
+### Odobreni smjer
+
+Zona iznad rukopisa prelazi u `Quiet manuscript` kompoziciju:
+
+- desktop header postaje niži, približno 56–60 px;
+- aktivna sekcija uklanja se iz središta gornjeg nav-a; naslov na papiru ostaje jedini primarni prikaz sekcije;
+- status spremanja ostaje kao diskretan indikator, dok se dugi statusni tekst ne prikazuje stalno;
+- prostor između radne zone i papira smanjuje se tako da dokument počinje ranije;
+- zaglavlje aktivne sekcije na papiru dobiva manji, mirniji ritam i jasniju tipografsku hijerarhiju;
+- format toolbar ostaje dostupan, ali se prikazuje kao tanka alatna linija neposredno uz dokument, bez dojma zasebne kartice;
+- mobilni header ne ponavlja aktivnu sekciju, a donji nav ostaje jedini prebacivač konteksta;
+- sve postojeće funkcije, keyboard pristup, dark mode i reduced-motion podrška ostaju.
+
+### Granice promjene
+
+Ova revizija ne mijenja sadržaj rukopisa, Tiptap schema, autosave, AI panel, outline, projektni drawer, auth, Pass ili DOCX export. Promjene su ograničene na markup koji predstavlja navigacijski kontekst i CSS za gornju zonu, zaglavlje papira i format toolbar.
+
+### Prihvatni kriteriji revizije
+
+- iznad papira nema više od jedne dominantne navigacijske trake;
+- aktivna sekcija nije duplicirana u topbaru i zaglavlju dokumenta;
+- dokument počinje vidljivo ranije na desktopu i mobitelu;
+- toolbar se čita kao alat za tekst, ne kao zasebna kartica ili panel;
+- status spremanja ostaje dostupan asistivnim tehnologijama i vizualno prepoznatljiv;
+- svi postojeći navigation, editor, dark-mode i reduced-motion testovi ostaju zeleni.
