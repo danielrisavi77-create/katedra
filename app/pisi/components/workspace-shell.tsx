@@ -37,13 +37,11 @@ export function WorkspaceShell({
   assistant: ReactNode
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
-  const activeSectionTitle = manuscript.sections.find((section) => section.id === manuscript.activeSectionId)?.title || 'Radno poglavlje'
 
   return (
     <div className="pis-workspace">
       <WorkspaceNavigation
         projectTitle={manuscript.title}
-        activeSectionTitle={activeSectionTitle}
         saveStatus={saveStatus}
         syncStatus={syncStatus}
         totalWords={totalWords}

@@ -34,22 +34,6 @@ function WorkspaceBrand({ projectTitle }: { projectTitle: string }) {
   )
 }
 
-function WorkspaceContext({ activeSectionTitle, saveStatus, syncStatus }: Pick<WorkspaceNavigationProps, 'activeSectionTitle' | 'saveStatus' | 'syncStatus'>) {
-  return (
-    <div className="pis-workspace-nav-context">
-      <span className="pis-active-section" title={activeSectionTitle}>{activeSectionTitle}</span>
-      <div className="pis-save-state" data-state={saveStatus} role="status" aria-live="polite">
-        <i aria-hidden="true" />
-        <span>{SAVE_LABELS[saveStatus]}</span>
-      </div>
-      <div className="pis-sync-state" data-state={syncStatus} title="Tekst rukopisa ostaje na ovom uređaju">
-        <i aria-hidden="true" />
-        <span>{SYNC_LABELS[syncStatus]}</span>
-      </div>
-    </div>
-  )
-}
-
 function WorkspaceOverflowMenu({ account, onOpenTools, onExport }: Pick<WorkspaceNavigationProps, 'account' | 'onOpenTools' | 'onExport'>) {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -95,9 +79,17 @@ function WorkspaceOverflowMenu({ account, onOpenTools, onExport }: Pick<Workspac
   )
 }
 
-function WorkspaceActions({ totalWords, account, onOpenTools, onExport }: Pick<WorkspaceNavigationProps, 'totalWords' | 'account' | 'onOpenTools' | 'onExport'>) {
+function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenTools, onExport }: Pick<WorkspaceNavigationProps, 'saveStatus' | 'syncStatus' | 'totalWords' | 'account' | 'onOpenTools' | 'onExport'>) {
   return (
     <div className="pis-topbar-actions">
+      <div className="pis-save-state" data-state={saveStatus} role="status" aria-live="polite" title={SAVE_LABELS[saveStatus]}>
+        <i aria-hidden="true" />
+        <span className="pis-save-label">{SAVE_LABELS[saveStatus]}</span>
+      </div>
+      <div className="pis-sync-state" data-state={syncStatus} aria-label={SYNC_LABELS[syncStatus]} title="Tekst rukopisa ostaje na ovom uređaju">
+        <i aria-hidden="true" />
+        <span className="pis-sync-label">{SYNC_LABELS[syncStatus]}</span>
+      </div>
       <span className="pis-word-total">{totalWords.toLocaleString('hr-HR')} riječi</span>
       <div className="pis-desktop-account">{account}</div>
       <ThemeToggle />
@@ -110,7 +102,6 @@ function WorkspaceActions({ totalWords, account, onOpenTools, onExport }: Pick<W
 
 export type WorkspaceNavigationProps = {
   projectTitle: string
-  activeSectionTitle: string
   saveStatus: SaveStatus
   syncStatus: SyncStatus
   totalWords: number
@@ -119,12 +110,11 @@ export type WorkspaceNavigationProps = {
   onExport: () => void
 }
 
-export function WorkspaceNavigation({ projectTitle, activeSectionTitle, saveStatus, syncStatus, totalWords, account, onOpenTools, onExport }: WorkspaceNavigationProps) {
+export function WorkspaceNavigation({ projectTitle, saveStatus, syncStatus, totalWords, account, onOpenTools, onExport }: WorkspaceNavigationProps) {
   return (
     <header className="pis-topbar">
       <WorkspaceBrand projectTitle={projectTitle} />
-      <WorkspaceContext activeSectionTitle={activeSectionTitle} saveStatus={saveStatus} syncStatus={syncStatus} />
-      <WorkspaceActions totalWords={totalWords} account={account} onOpenTools={onOpenTools} onExport={onExport} />
+      <WorkspaceActions saveStatus={saveStatus} syncStatus={syncStatus} totalWords={totalWords} account={account} onOpenTools={onOpenTools} onExport={onExport} />
     </header>
   )
 }
