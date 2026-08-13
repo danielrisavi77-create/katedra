@@ -13,7 +13,6 @@ afterEach(cleanup)
 function renderNavigation(overrides: Partial<React.ComponentProps<typeof WorkspaceNavigation>> = {}) {
   const props: React.ComponentProps<typeof WorkspaceNavigation> = {
     projectTitle: 'Digitalizacija javne uprave',
-    activeSectionTitle: 'Teorijski okvir',
     saveStatus: 'saved',
     syncStatus: 'local_only',
     totalWords: 1240,
@@ -31,7 +30,7 @@ describe('WorkspaceNavigation', () => {
     renderNavigation()
 
     expect(screen.getByRole('link', { name: /Katedra početna/i })).toBeTruthy()
-    expect(screen.getByText('Teorijski okvir')).toBeTruthy()
+    expect(screen.queryByText('Teorijski okvir')).toBeNull()
     expect(screen.getByRole('status').textContent).toMatch(/Spremljeno/i)
     expect(screen.getByRole('button', { name: /Projekt/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Izvezi DOCX/i })).toBeTruthy()

@@ -25,11 +25,17 @@ it('keeps nonessential motion disabled for reduced-motion users', () => {
 })
 
 it('defines the editorial desktop and mobile navigation contract', () => {
-  expect(css).toContain('.pis-workspace-nav-context')
   expect(css).toContain('.pis-mobile-overflow')
   expect(css).toContain('env(safe-area-inset-bottom)')
   expect(css).toContain('.pis-topbar button:focus-visible')
   expect(css).toContain('.pis-mobile-nav button:focus-visible')
   expect(css).toContain("html[data-theme='dark'] .pis-overflow-menu")
   expect(css).toContain("html[data-theme='dark'] .pis-export-button")
+})
+
+it('defines the quiet manuscript composition contract', () => {
+  expect(css).toContain('.pis-section-heading')
+  expect(css).toContain('.pis-formatbar')
+  expect(css).toContain('top: 0')
+  expect(css).toContain('.pis-save-state .pis-save-label')
 })
