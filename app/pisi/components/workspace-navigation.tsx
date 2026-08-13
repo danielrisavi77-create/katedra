@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 
 import { ThemeToggle } from '../../theme-toggle'
 import type { SyncStatus } from '../../../lib/manuscript/sync-status'
@@ -23,13 +24,13 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
 
 function WorkspaceBrand({ projectTitle }: { projectTitle: string }) {
   return (
-    <a className="pis-brand" href="/" aria-label="Katedra početna">
+    <Link className="pis-brand" href="/" aria-label="Katedra početna">
       <span className="pis-brand-mark" aria-hidden="true">K</span>
       <span>
         <b>Katedra</b>
         <small>{projectTitle || 'Rad bez naslova'}</small>
       </span>
-    </a>
+    </Link>
   )
 }
 
