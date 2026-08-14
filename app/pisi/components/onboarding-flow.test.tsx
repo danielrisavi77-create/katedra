@@ -47,6 +47,18 @@ describe('OnboardingFlow', () => {
     }))
   })
 
+  it('renders readable navigation arrows on the current-state step', async () => {
+    const user = userEvent.setup()
+    render(<ThemeProvider><OnboardingFlow onComplete={vi.fn()} /></ThemeProvider>)
+
+    await user.click(screen.getByRole('button', { name: /novi rad/i }))
+    await user.click(screen.getByRole('button', { name: /dalje/i }))
+
+    expect(screen.getByRole('button', { name: '← Natrag' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Dalje →' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /â†/i })).toBeNull()
+  })
+
   it('accepts pasted text for an existing draft without offering DOCX parsing', async () => {
     const user = userEvent.setup()
     const onComplete = vi.fn()

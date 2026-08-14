@@ -229,8 +229,8 @@ export function OnboardingFlow({
             </div>
           </fieldset>
           <div className="pis-onboarding-actions">
-            <button type="button" className="pis-text-button" onClick={() => setStep(2)}>â† Natrag</button>
-            <button type="button" className="pis-primary-button" onClick={() => setStep(4)}>Dalje â†’</button>
+            <button type="button" className="pis-text-button" onClick={() => setStep(2)}>← Natrag</button>
+            <button type="button" className="pis-primary-button" onClick={() => setStep(4)}>Dalje →</button>
           </div>
         </section>
       )}
