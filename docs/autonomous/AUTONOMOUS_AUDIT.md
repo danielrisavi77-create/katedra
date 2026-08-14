@@ -575,6 +575,36 @@ That could make link commands and schema behavior ambiguous.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14x
+
+### Root cause selected
+
+Priority: P2 (Next.js development asset guard blocked the loopback browser
+origin `127.0.0.1`, leaving `/pisi` stuck before hydration).
+
+### Fix
+
+- Allow both `localhost` and `127.0.0.1` through Next's `allowedDevOrigins`.
+- Add a regression assertion covering both local origins.
+
+### Verification
+
+- TDD regression: PASS (red before the config change, green afterward).
+- Focused regression: PASS (2/2).
+- Full suite: PASS (126 files, 413 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Fresh Playwright checks: PASS for `/pisi?tip=d` on both local origins;
+  both returned `200`, onboarding was visible, no Next static asset response
+  was `>=400`, and no page errors occurred.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment and staging browser
+  journeys remain the external blockers listed in `BLOCKERS.md`.
+- Local feature flags remain disabled until the canonical Lekta preflight passes.
+
 ## Cycle: 2026-08-14t
 
 ### Root cause selected
