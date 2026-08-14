@@ -27,6 +27,7 @@ export async function POST(req, { params }) {
     .maybeSingle()
   if (runError) return Response.json({ error: 'Run nije moguće učitati.' }, { status: 503 })
   if (!run) return Response.json({ error: 'Run nije pronađen.' }, { status: 404 })
+  if (run.status === 'running') return Response.json({ error: 'Kontekst se ne može mijenjati dok worker obrađuje run.' }, { status: 409 })
   if (['completed', 'failed', 'cancelled'].includes(run.status)) {
     return Response.json({ error: 'Kontekst se ne može promijeniti nakon završetka runa.' }, { status: 409 })
   }

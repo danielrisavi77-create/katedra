@@ -27,7 +27,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     const query = {
       select() { return query },
       eq() { return query },
-      async maybeSingle() { return { data: { run_id: 'run-1', project_id: 'project-1', status: 'running' }, error: null } },
+      async maybeSingle() { return { data: { run_id: 'run-1', project_id: 'project-1', status: 'paused' }, error: null } },
     }
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
@@ -60,7 +60,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     const query = {
       select() { return query },
       eq() { return query },
-      async maybeSingle() { return { data: { run_id: 'run-1', project_id: 'project-1', status: 'running' }, error: null } },
+      async maybeSingle() { return { data: { run_id: 'run-1', project_id: 'project-1', status: 'paused' }, error: null } },
     }
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
@@ -89,7 +89,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     const query = {
       select() { return query },
       eq() { return query },
-      async maybeSingle() { return { data: { run_id: 'run-1', project_id: 'project-1', status: 'running' }, error: null } },
+      async maybeSingle() { return { data: { run_id: 'run-1', project_id: 'project-1', status: 'paused' }, error: null } },
     }
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },

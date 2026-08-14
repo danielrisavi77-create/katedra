@@ -1,5 +1,56 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15c
+
+### Root cause selected
+
+Priority: P1/P2 (temporary material concurrency and agent-run initialization
+readiness).
+
+The material upload route reused the client-controlled `x-request-id` as the
+distributed reservation key. Replaying that ID could make concurrent uploads
+look like one reservation. Material deletion also matched storage objects by
+an arbitrary prefix. Separately, a newly-created agent run was `pending`
+before its private manuscript context and selected payloads were registered,
+so a worker could claim the intake step too early; context could also be
+overwritten while a worker was already running.
+
+### Fix
+
+- Keep the incoming request ID for tracing only and generate a fresh
+  server-side reservation ID for every material upload.
+- Require a complete UUID for material deletion and resolve only the exact
+  manifest plus one exact raw object; reject ambiguous storage state.
+- Add the Lekta `initializing` run state and canonical `activate_agent_run`
+  readiness transition. New runs become worker-eligible only after the
+  private context exists and payloads are attached.
+- Allow context edits for initialization/paused/blocked intervention states,
+  but reject context replacement while the run status is `running`.
+- Add the activation RPC to Katedra's canonical agent preflight contract.
+
+### Verification
+
+- TDD regressions: PASS; the agent-run readiness tests were red before the
+  readiness fix and green after it. Material reservation and storage-path
+  regressions pass after their minimal fixes.
+- Focused root tests: PASS (14 tests for materials, agent-runs and the
+  canonical backend wrapper).
+- Lekta readiness contract test: PASS (2 tests).
+- Full Katedra suite: PASS (128 files, 428 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 generated routes).
+- Browser smoke: PASS; 28 desktop/mobile light/dark route combinations on
+  localhost returned 200 with no page errors or horizontal overflow.
+
+### Remaining issues
+
+- The new Lekta migration and activation RPC are local contract evidence only;
+  they are not deployed or concurrency-tested against canonical Supabase.
+- Authenticated commerce, canonical Lekta deployment, dependency advisory
+  audit and staging Golden Journeys remain external blockers in
+  `BLOCKERS.md`.
+
 ## Cycle: 2026-08-14
 
 ### Root cause selected

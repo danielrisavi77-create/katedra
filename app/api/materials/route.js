@@ -6,7 +6,7 @@ import { MATERIAL_LIMITS } from '@/lib/materials/extractors'
 import { registerAgentPayload } from '@/lib/agents/backend-contract'
 import { resolveProjectCapability } from '@/lib/product/server-capabilities'
 import { isDistributedRateLimitConfigured, reserveDistributedRequest, reserveUserRequest } from '@/lib/ai/rate-limit'
-import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
+import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
 
 const ENABLED = process.env.KATEDRA_MATERIALS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -14,11 +14,12 @@ const KINDS = new Set(['draft', 'source', 'mentor', 'rules', 'notes', 'scan'])
 const MULTIPART_OVERHEAD_BYTES = 1 * 1024 * 1024
 
 export async function POST(req) {
-  const requestId = getRequestId(req)
-  return withRequestId(await handlePost(req, requestId), requestId)
+  const requestContext = createRequestContext(req)
+  return withRequestId(await handlePost(req, requestContext), requestContext.traceRequestId)
 }
 
-async function handlePost(req, requestId) {
+async function handlePost(req, requestContext) {
+  const { traceRequestId, reservationRequestId } = requestContext
   if (!ENABLED) return Response.json({ error: 'Privremena pohrana materijala još nije aktivna u backendu.' }, { status: 503 })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -30,11 +31,11 @@ async function handlePost(req, requestId) {
   }
   const distributedRateLimit = isDistributedRateLimitConfigured()
   if (process.env.NODE_ENV === 'production' && !distributedRateLimit) {
-    console.error(JSON.stringify({ eventName: 'material_rate_limit_store_unavailable', userId: user.id, requestId }))
+    console.error(JSON.stringify({ eventName: 'material_rate_limit_store_unavailable', userId: user.id, requestId: traceRequestId }))
     return Response.json({ error: 'Ograničavanje upload zahtjeva još nije konfigurirano.' }, { status: 503 })
   }
   const reservation = distributedRateLimit
-    ? await reserveDistributedRequest(createAdminClient(), { userId: user.id, requestId, estimatedCharge: 0 })
+    ? await reserveDistributedRequest(createAdminClient(), { userId: user.id, requestId: reservationRequestId, estimatedCharge: 0 })
     : reserveUserRequest(user.id)
   if (!reservation.allowed) {
     return Response.json({
@@ -115,7 +116,7 @@ async function handlePost(req, requestId) {
   return Response.json({ asset, storagePath, manifestPath, manifestId: registered.value.manifestId, expiresAt: asset.expiresAt })
   } finally {
     await Promise.resolve(reservation.release()).catch((error) => {
-      console.error(JSON.stringify({ eventName: 'material_rate_limit_release_failed', userId: user.id, requestId, error: error?.message }))
+      console.error(JSON.stringify({ eventName: 'material_rate_limit_release_failed', userId: user.id, requestId: traceRequestId, reservationRequestId, error: error?.message }))
     })
   }
 }
