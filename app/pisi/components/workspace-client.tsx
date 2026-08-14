@@ -6,6 +6,9 @@ import { normalizeLektaHandoffHashForLegacyEngine } from '../../../lib/academic-
 import { ensureGuestProjectIdentity } from '../../../lib/academic-suite/guest-project'
 import { useAuth } from '../../../lib/hooks/useAuth'
 import { createTextDeltaParser } from '../../../lib/manuscript/client-sse'
+import { mergeVerifiedAgenticSections } from '../../../lib/manuscript/agentic-merge'
+import { createCompletionScan } from '../../../lib/project/completion-scan'
+import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import { shouldShowManuscriptOnboarding } from '../../../lib/manuscript/onboarding-state'
 import { buildAiMessages, capabilityForAction, type ManuscriptAiAction } from '../../../lib/manuscript/context'
 import { exportManuscriptDocx } from '../../../lib/manuscript/export-docx'
@@ -33,6 +36,8 @@ import { OnboardingFlow, type OnboardingInitialValues, type OnboardingResult } f
 import { OutlinePanel } from './outline-panel'
 import { PassDialog } from './pass-dialog'
 import { PaidProjectSetup, type AgenticWorkspacePhase } from './paid-project-setup'
+import { FreeProjectPlan } from './free-project-plan'
+import { ProjectHome } from './project-home'
 import { ProjectDrawer } from './project-drawer'
 import { WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
 
@@ -63,6 +68,8 @@ export default function WorkspaceClient() {
   const [showOnboarding, setShowOnboarding] = useState(true)
   const [initialTip, setInitialTip] = useState<LegacyWorkType | undefined>()
   const [scanMode, setScanMode] = useState(false)
+  const [completionScan, setCompletionScan] = useState<ReturnType<typeof createCompletionScan> | null>(null)
+  const [projectHome, setProjectHome] = useState(false)
   const [manuscript, setManuscript] = useState<ManuscriptV1 | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local_only')
@@ -128,16 +135,18 @@ export default function WorkspaceClient() {
       if (cancelled) return
       const storage = getBrowserStorage()
       const projectSetupConfirmed = readStorage(storage, `${PROJECT_SETUP_PREFIX}${migrated.projectId}`) === '1'
-      setManuscript(stored || migrated)
+        setManuscript(stored || migrated)
       setLegacyChecks(legacyState?.checks || {})
       setLektaSummary(readLektaSummary(manifest))
       setMentorTasks(readJson<MentorTask[]>(`${MENTOR_PREFIX}${migrated.projectId}`) || legacyState?.mentorTasks || [])
-      setShowOnboarding(shouldShowManuscriptOnboarding({
+      const needsOnboarding = shouldShowManuscriptOnboarding({
         hasStoredManuscript: Boolean(stored),
         hasWorkspaceReadyMarker: readStorage(storage, `${READY_PREFIX}${migrated.projectId}`) === '1',
         hasLegacyOnboardingMarker: readStorage(storage, 'rp_onb') === '1',
         hasProjectSetupConfirmed: projectSetupConfirmed,
-      }))
+      })
+      setShowOnboarding(needsOnboarding)
+      setProjectHome(!needsOnboarding)
       setBooting(false)
     }
     void bootstrap().catch(() => {
@@ -257,6 +266,8 @@ export default function WorkspaceClient() {
     title: manuscript.title,
     mentor: manuscript.meta.mentor,
     deadline: manuscript.meta.deadline,
+    currentState: manuscript.meta.currentState,
+    materials: manuscript.meta.materials,
   }) : undefined, [manuscript])
 
   const completeOnboarding = (result: OnboardingResult) => {
@@ -274,6 +285,16 @@ export default function WorkspaceClient() {
       },
       legacyState: { gen: { f_fakultet: result.institution, f_smjer: result.program, f_mentor: result.mentor } },
     })
+    const scan = createCompletionScan({
+      startMode: result.startMode,
+      currentState: result.currentState,
+      title: result.title,
+      importedText: result.importedText,
+      mentor: result.mentor,
+      deadline: result.deadline,
+      materials: result.materials,
+    })
+    next.meta = { ...next.meta, currentState: result.currentState, materials: result.materials }
     if (result.importedText) next.sections[0].content = plainTextDocument(result.importedText)
     next.sections[0].status = result.importedText ? 'draft' : 'empty'
     const storage = getBrowserStorage()
@@ -281,6 +302,8 @@ export default function WorkspaceClient() {
     writeStorage(storage, `${PROJECT_SETUP_PREFIX}${next.projectId}`, '1')
     persistManifest(next)
     setManuscript(next)
+    setCompletionScan(scan)
+    setProjectHome(true)
     setShowOnboarding(false)
     void syncMetadata(next, Boolean(user)).then((result) => setSyncStatus(result.status))
   }
@@ -296,6 +319,24 @@ export default function WorkspaceClient() {
         updatedAt: new Date().toISOString(),
       } : section),
     }))
+  }
+
+  const acceptAgenticDraft = async (draft: AgenticDraftV1, sectionIds?: string[]) => {
+    if (!manuscript) return
+    const merged = mergeVerifiedAgenticSections({ manuscript, draft, sectionIds })
+    if (merged.ok === false) {
+      setAssistantError(merged.error)
+      return
+    }
+    try {
+      await storeRef.current?.snapshot(manuscript, 'Prije prihvata verificiranog agenticnog rezultata')
+      setManuscript(merged.manuscript)
+      setSaveStatus('saving')
+      clearAiContext()
+      merged.acceptedSectionIds.forEach((sectionId) => appendProcessLog(manuscript.projectId, 'Verificirani agenticni rezultat', sectionId))
+    } catch {
+      setAssistantError('Verificirani rezultat nije moguće spremiti u lokalnu verziju.')
+    }
   }
 
   const runAi = async (action: ManuscriptAiAction, instruction?: string) => {
@@ -444,6 +485,7 @@ export default function WorkspaceClient() {
 
   if (booting || !manuscript) return <div className="pis-boot"><span className="pis-brand-mark">K</span><p>Otvaram tvoj rukopis…</p></div>
   if (showOnboarding) return <OnboardingFlow initialTip={initialTip} initialValues={onboardingInitialValues} scanMode={scanMode} onComplete={completeOnboarding} />
+  if (completionScan) return <FreeProjectPlan title={manuscript.title} scan={completionScan} authenticated={Boolean(user)} onContinue={() => setCompletionScan(null)} />
   if (!activeSection) return null
 
   return (
@@ -457,12 +499,14 @@ export default function WorkspaceClient() {
         onMobileViewChange={setMobileView}
         onExport={() => void exportDocx()}
         onOpenTools={() => setDrawerOpen(true)}
-        onOpenAgents={() => { setDrawerOpen(false); setAgenticMode(true); setAgenticView('preparation') }}
-        onCloseAgents={() => { setAgenticMode(false); setAgenticView('preparation') }}
-        view={(agenticMode ? agenticView : 'writing') as WorkspaceView}
+        onOpenAgents={() => { setDrawerOpen(false); setProjectHome(false); setAgenticMode(true); setAgenticView('preparation') }}
+        onCloseAgents={() => { setAgenticMode(false); setProjectHome(false); setAgenticView('preparation') }}
+        onOpenWriting={() => { setProjectHome(false); setAgenticMode(false) }}
+        view={(projectHome ? 'home' : agenticMode ? agenticView : 'writing') as WorkspaceView}
         projectLocked={agenticMode && passStatus === 'active'}
         activeAgentLabel={agenticMode && agenticView === 'dashboard' ? 'Autonomni agenti' : undefined}
-        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} /> : undefined}
+        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} onAcceptDraft={acceptAgenticDraft} /> : undefined}
+        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => setProjectHome(false)} onPrepare={() => { setProjectHome(false); setAgenticMode(true); setAgenticView('preparation') }} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>

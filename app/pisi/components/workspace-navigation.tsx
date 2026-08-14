@@ -24,6 +24,7 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
 }
 
 const WORKSPACE_VIEW_LABELS: Record<WorkspaceView, string> = {
+  home: 'Projekt',
   preparation: 'Priprema rada',
   dashboard: 'Autonomni tijek',
   intervention: 'Intervencija',
@@ -88,7 +89,7 @@ function WorkspaceOverflowMenu({ account, onOpenTools, onExport }: Pick<Workspac
   )
 }
 
-function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenTools, onExport, view, projectLocked, activeAgentLabel, onOpenAgents, onCloseAgents }: Pick<WorkspaceNavigationProps, 'saveStatus' | 'syncStatus' | 'totalWords' | 'account' | 'onOpenTools' | 'onExport' | 'view' | 'projectLocked' | 'activeAgentLabel' | 'onOpenAgents' | 'onCloseAgents'>) {
+function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenTools, onExport, view, projectLocked, activeAgentLabel, onOpenAgents, onCloseAgents, onOpenWriting }: Pick<WorkspaceNavigationProps, 'saveStatus' | 'syncStatus' | 'totalWords' | 'account' | 'onOpenTools' | 'onExport' | 'view' | 'projectLocked' | 'activeAgentLabel' | 'onOpenAgents' | 'onCloseAgents' | 'onOpenWriting'>) {
   return (
     <div className="pis-topbar-actions">
       <div className="pis-save-state" data-state={saveStatus} role="status" aria-live="polite" title={SAVE_LABELS[saveStatus]}>
@@ -108,7 +109,9 @@ function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenT
       <div className="pis-desktop-account">{account}</div>
       <ThemeToggle />
       <button type="button" className="pis-toolbar-button" onClick={onOpenTools}>Projekt</button>
-      {view === 'writing'
+      {view === 'home'
+        ? <button type="button" className="pis-toolbar-button pis-agents-button" onClick={onOpenWriting}>Nastavi pisati</button>
+        : view === 'writing'
         ? <button type="button" className="pis-toolbar-button pis-agents-button" onClick={onOpenAgents}>Agenti</button>
         : <button type="button" className="pis-toolbar-button pis-agents-button" onClick={onCloseAgents}>Radni prostor</button>}
       <button type="button" className="pis-export-button" onClick={onExport}>Izvezi DOCX <span aria-hidden="true">↓</span></button>
@@ -130,13 +133,14 @@ export type WorkspaceNavigationProps = {
   activeAgentLabel?: string
   onOpenAgents?: () => void
   onCloseAgents?: () => void
+  onOpenWriting?: () => void
 }
 
-export function WorkspaceNavigation({ projectTitle, saveStatus, syncStatus, totalWords, account, onOpenTools, onExport, view, projectLocked, activeAgentLabel, onOpenAgents, onCloseAgents }: WorkspaceNavigationProps) {
+export function WorkspaceNavigation({ projectTitle, saveStatus, syncStatus, totalWords, account, onOpenTools, onExport, view, projectLocked, activeAgentLabel, onOpenAgents, onCloseAgents, onOpenWriting }: WorkspaceNavigationProps) {
   return (
     <header className="pis-topbar">
       <WorkspaceBrand projectTitle={projectTitle} />
-      <WorkspaceActions saveStatus={saveStatus} syncStatus={syncStatus} totalWords={totalWords} account={account} onOpenTools={onOpenTools} onExport={onExport} view={view} projectLocked={projectLocked} activeAgentLabel={activeAgentLabel} onOpenAgents={onOpenAgents} onCloseAgents={onCloseAgents} />
+      <WorkspaceActions saveStatus={saveStatus} syncStatus={syncStatus} totalWords={totalWords} account={account} onOpenTools={onOpenTools} onExport={onExport} view={view} projectLocked={projectLocked} activeAgentLabel={activeAgentLabel} onOpenAgents={onOpenAgents} onCloseAgents={onCloseAgents} onOpenWriting={onOpenWriting} />
     </header>
   )
 }

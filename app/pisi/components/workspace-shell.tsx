@@ -9,7 +9,7 @@ import { MobileWorkspaceNav } from './mobile-workspace-nav'
 import { WorkspaceNavigation, type SaveStatus } from './workspace-navigation'
 
 export type MobileView = 'outline' | 'editor' | 'assistant'
-export type WorkspaceView = 'preparation' | 'dashboard' | 'intervention' | 'review' | 'writing'
+export type WorkspaceView = 'home' | 'preparation' | 'dashboard' | 'intervention' | 'review' | 'writing'
 export type { SaveStatus } from './workspace-navigation'
 
 export function WorkspaceShell({
@@ -24,12 +24,14 @@ export function WorkspaceShell({
   outline,
   editor,
   assistant,
+  projectHome,
   view = 'writing',
   projectLocked = false,
   activeAgentLabel,
   agenticContent,
   onOpenAgents,
   onCloseAgents,
+  onOpenWriting,
 }: {
   manuscript: ManuscriptV1
   saveStatus: SaveStatus
@@ -42,6 +44,7 @@ export function WorkspaceShell({
   outline: ReactNode
   editor: ReactNode
   assistant: ReactNode
+  projectHome?: ReactNode
   view?: WorkspaceView
   onViewChange?: (view: WorkspaceView) => void
   projectLocked?: boolean
@@ -49,6 +52,7 @@ export function WorkspaceShell({
   agenticContent?: ReactNode
   onOpenAgents?: () => void
   onCloseAgents?: () => void
+  onOpenWriting?: () => void
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
 
@@ -67,9 +71,12 @@ export function WorkspaceShell({
         activeAgentLabel={activeAgentLabel}
         onOpenAgents={onOpenAgents}
         onCloseAgents={onCloseAgents}
+        onOpenWriting={onOpenWriting}
       />
 
-      {view !== 'writing' && agenticContent
+      {view === 'home' && projectHome
+        ? <main className="pis-project-home-main" aria-label="Projektna početna">{projectHome}</main>
+        : view !== 'writing' && agenticContent
         ? <main className="pis-agentic-main" aria-label="Agentički workspace">{agenticContent}</main>
         : <div className="pis-columns" data-mobile-view={activeMobileView}>
           <nav className="pis-outline-column" aria-label="Struktura rada">{outline}</nav>

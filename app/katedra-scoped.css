@@ -1,0 +1,1530 @@
+  .katedra-page{
+    /* ═══ KOŽA: papir i tinta (dosadašnji izgled) ═══
+       Sve boje aplikacije prolaze kroz ove tokene. Koža se mijenja
+       atributom data-skin na #katedra-root — v. blokove na dnu datoteke. */
+    --bg:#ece5d3; --bg2:#f6f2e6; --bg3:#f5f0e2; --card:#fbf8f0; --card2:#f3edde;
+    --line:#dcd3ba; --line2:#c8bd9e;
+    --txt:#22252e; --mut:#6f6a55; --mut2:#9a9279;
+    --acc:#2c5fa8; --acc2:#1e4478; --acc3:#173d78; --acc-rgb:44,95,168;
+    --on-acc:#fff; --on-acc2:#f2f6ff;
+    --ok:#2e7d5b; --ok2:#2dd4a0; --ok3:#1fb98c; --ok-rgb:45,212,160;
+    --warn:#a97b12; --warn-rgb:255,180,84;
+    --bad:#b3382e; --bad-rgb:255,92,122;
+    --grad:linear-gradient(135deg,#2c5fa8 0%,#173d78 100%);
+    /* papir — indeks, živi dokument, žig */
+    --paper:#fbf8f0; --paper2:#f3edde; --paper3:#fffdf6;
+    --ink:#22252e; --ink2:#6f6a55; --pline:#dcd3ba;
+    --pl-line:#e4ddc8; --pl-line2:#d8cfb4; --pl-line3:#eee7d4;
+    --pl-edge:#c9bd9c; --pl-edge2:#b3a887; --pl-edge3:#cbbf9d; --pl-edge4:#cfc4a6;
+    --pl-mut:#6b5d40; --pl-mut2:#9a8a64; --pl-mut3:#8a7a58; --pl-crest:#5a4a2f;
+    --pl-skel:#e8e6dd; --pl-skel2:#cdcaba; --pl-ph:#b9bcc4; --pl-ph2:#cfd2da;
+    --rail:#d9d0b6; --stamp:#b3382e; --stamp-rgb:179,56,46; --gold:#8a6d1c;
+    --shadow-rgb:60,48,25; --grain:rgba(90,74,47,.055); --scheme:light;
+    --serif:Georgia,'Times New Roman',serif;
+    --r:14px; --rs:10px;
+  }
+  html[data-theme='dark'] .katedra-page{
+    --bg:#18232a; --bg2:#202d34; --bg3:#22323a; --card:#27363e; --card2:#1d2930;
+    --line:rgba(245,237,221,.17); --line2:rgba(245,237,221,.3);
+    --txt:#f5eddd; --mut:#c1b9aa; --mut2:#9d9688;
+    --acc:#78a8eb; --acc2:#9fc4f7; --acc3:#c6dcff; --acc-rgb:120,168,235;
+    --on-acc:#132331; --on-acc2:#18232a;
+    --ok:#78ba91; --ok2:#92d9ae; --ok3:#6fbd8c; --ok-rgb:120,186,145;
+    --warn:#f4cf62; --warn-rgb:244,207,98;
+    --bad:#ed8d84; --bad-rgb:237,141,132;
+    --grad:linear-gradient(135deg,#78a8eb 0%,#b9d4ff 100%);
+    --paper:#27363e; --paper2:#202d34; --paper3:#31434c;
+    --ink:#f5eddd; --ink2:#c1b9aa; --pline:rgba(245,237,221,.17);
+    --pl-line:rgba(245,237,221,.13); --pl-line2:rgba(245,237,221,.23); --pl-line3:rgba(245,237,221,.1);
+    --pl-edge:rgba(245,237,221,.28); --pl-edge2:rgba(245,237,221,.18); --pl-edge3:rgba(245,237,221,.22); --pl-edge4:rgba(245,237,221,.18);
+    --pl-mut:#d3c6aa; --pl-mut2:#b9ab90; --pl-mut3:#a99b82; --pl-crest:#f4cf62;
+    --pl-skel:#304149; --pl-skel2:#43565e; --pl-ph:#b9c5cc; --pl-ph2:#9fadb6;
+    --rail:#40545c; --stamp:#ed8d84; --stamp-rgb:237,141,132; --gold:#f4cf62;
+    --shadow-rgb:0,0,0; --grain:rgba(245,237,221,.035); --scheme:dark;
+  }
+  .katedra-page .landing-header-actions,.katedra-page .auth-header-actions,.katedra-page .legal-header-actions,.katedra-page .theme-utility-row{display:flex;align-items:center;gap:10px}
+  .katedra-page .theme-utility-row{justify-content:space-between}
+  .katedra-page .theme-page-control{position:absolute;top:18px;right:18px}
+  .katedra-page *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{scroll-behavior:smooth}
+  .katedra-page{
+    background:var(--bg); color:var(--txt);
+    font-family:Georgia,"Times New Roman",var(--serif);
+    font-size:15px; line-height:1.55; min-height:100vh;
+    background-image:
+      radial-gradient(var(--grain) 1px, transparent 1.4px),
+      radial-gradient(1100px 480px at 50% -8%, var(--bg3), transparent 62%);
+    background-size:22px 22px, auto;
+  }
+  .katedra-page .logo h1{font-family:var(--serif);letter-spacing:0}
+  .katedra-page .panel h3,.katedra-page .cs h3{font-family:var(--serif)}
+  .katedra-page .wrap{max-width:1080px;margin:0 auto;padding:0 16px 90px}
+
+  /* ---------- HEADER ---------- */
+  .katedra-page header{padding:26px 0 10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .katedra-page .logo{display:flex;align-items:center;gap:12px;flex:1;min-width:220px}
+  .katedra-page .logo-badge{width:46px;height:46px;border-radius:50%;background:var(--paper);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:23px;font-family:var(--serif);font-weight:700;border:2px solid var(--ink);box-shadow:0 0 0 3px var(--paper),0 6px 22px rgba(0,0,0,.45)}
+  .katedra-page .logo h1{font-size:21px;font-weight:800;letter-spacing:-.4px}
+  .katedra-page .logo p{font-size:12.5px;color:var(--mut);margin-top:1px}
+  .katedra-page .ring-box{display:flex;align-items:center;gap:10px}
+  .katedra-page .ring{position:relative;width:58px;height:58px}
+  .katedra-page .ring svg{transform:rotate(-90deg)}
+  .katedra-page .ring .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+  .katedra-page .ring-lbl{font-size:11.5px;color:var(--mut);line-height:1.3}
+
+  /* ---------- TIP RADA ---------- */
+  .katedra-page .tip-row{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;align-items:center}
+  .katedra-page .tip-lbl{font-size:11px;font-weight:700;letter-spacing:1.4px;color:var(--mut2);text-transform:uppercase;margin-right:2px}
+  .katedra-page .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;flex:1;min-width:280px;max-width:430px}
+  .katedra-page .seg button{flex:1;border:0;background:transparent;color:var(--mut);font-weight:700;font-size:13.5px;padding:9px 6px;border-radius:9px;cursor:pointer;transition:.18s;font-family:inherit}
+  .katedra-page .seg button.on{background:var(--grad);color:var(--on-acc);box-shadow:0 4px 14px rgba(var(--acc-rgb),.35)}
+
+  /* ---------- STATUS BANNER ---------- */
+  .katedra-page .banner{border-radius:var(--r);padding:16px 18px;margin:14px 0 6px;display:flex;gap:14px;align-items:center;border:1px solid}
+  .katedra-page .banner .ico{font-size:26px;line-height:1}
+  .katedra-page .banner h3{font-size:15.5px;font-weight:800;letter-spacing:-.2px}
+  .katedra-page .banner p{font-size:13px;opacity:.85;margin-top:2px}
+  .katedra-page .banner.no{background:rgba(var(--bad-rgb),.08);border-color:rgba(var(--bad-rgb),.35)}
+  .katedra-page .banner.no h3{color:var(--bad)}
+  .katedra-page .banner.almost{background:rgba(var(--warn-rgb),.07);border-color:rgba(var(--warn-rgb),.3)}
+  .katedra-page .banner.almost h3{color:var(--warn)}
+  .katedra-page .banner.yes{background:rgba(var(--ok-rgb),.07);border-color:rgba(var(--ok-rgb),.35)}
+  .katedra-page .banner.yes h3{color:var(--ok)}
+  .katedra-page .banner .go{margin-left:auto;flex-shrink:0;background:var(--grad);color:var(--on-acc);border:0;border-radius:10px;padding:10px 16px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(var(--acc-rgb),.35)}
+
+  /* ---------- TABS ---------- */
+  .katedra-page .tabs{position:sticky;top:0;z-index:50;display:flex;gap:6px;padding:10px 0;background:linear-gradient(var(--bg) 78%,transparent);overflow-x:auto;scrollbar-width:none}
+  .katedra-page .tabs::-webkit-scrollbar{display:none}
+  .katedra-page .tabs button{border:1px solid var(--line);background:var(--card);color:var(--mut);font-weight:700;font-size:13.5px;padding:10px 16px;border-radius:99px;cursor:pointer;white-space:nowrap;transition:.18s;font-family:inherit;display:flex;gap:7px;align-items:center}
+  .katedra-page .tabs button.on{background:var(--grad);border-color:transparent;color:var(--on-acc);box-shadow:0 4px 16px rgba(var(--acc-rgb),.3)}
+
+  /* ---------- NEXT-STEP TRAKA (F2) — uvijek vidljiv sljedeći korak, isti CTA kroz cijelu app ---------- */
+  /* top se prepisuje iz syncStickyOffsets() prema stvarnoj visini #tabs —
+     fiksnih 52px bilo je manje od trake tabova, pa je traka klizila ispod nje. */
+  .katedra-page .next-bar{position:sticky;top:52px;z-index:45;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 10px 10px 16px;margin:10px 0 14px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  .katedra-page .nb-txt{flex:1;min-width:0;font-size:14px;color:var(--txt);line-height:1.35;font-weight:600}
+  .katedra-page .nb-lbl{display:block;font-size:9.5px;font-weight:800;letter-spacing:1.5px;
+    text-transform:uppercase;color:var(--mut2);margin-bottom:2px}
+  .katedra-page .nb-txt b{color:var(--txt)}
+  .katedra-page .nb-go{flex-shrink:0;background:var(--grad);color:var(--on-acc);border:0;border-radius:9px;padding:9px 16px;font-weight:800;font-size:12.8px;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(var(--acc-rgb),.35);white-space:nowrap}
+  .katedra-page .nb-go.glow{animation:katedra-nbglow 1.8s ease-in-out infinite}
+  @keyframes katedra-nbglow{0%,100%{box-shadow:0 4px 14px rgba(var(--acc-rgb),.35)}50%{box-shadow:0 4px 22px rgba(var(--acc-rgb),.65)}}
+  @media(prefers-reduced-motion: reduce){.katedra-page .nb-go.glow{animation:none}}
+
+  .katedra-page .view{display:none}
+  .katedra-page .view.on{display:block;animation:katedra-fade .25s ease}
+  @keyframes katedra-fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---------- SECTION LABELS ---------- */
+  .katedra-page .sec-lbl{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
+  .katedra-page .sec-lbl span{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--mut)}
+  .katedra-page .sec-lbl i{flex:1;height:1px;background:var(--line);display:block}
+  .katedra-page .sec-lbl b{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:99px;letter-spacing:.5px}
+  .katedra-page .sec-lbl b.req{background:rgba(var(--bad-rgb),.12);color:var(--bad)}
+  .katedra-page .sec-lbl b.after{background:rgba(var(--acc-rgb),.12);color:var(--acc2)}
+
+  /* ---------- PHASE CARDS ---------- */
+  .katedra-page .phase{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px;overflow:hidden;transition:border-color .2s}
+  .katedra-page .phase.done{border-color:rgba(var(--ok-rgb),.4)}
+  .katedra-page .ph-head{display:flex;align-items:center;gap:13px;padding:15px 16px;cursor:pointer;user-select:none}
+  .katedra-page .ph-ico{width:40px;height:40px;border-radius:12px;background:var(--card2);border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+  .katedra-page .phase.done .ph-ico{background:rgba(var(--ok-rgb),.12);border-color:rgba(var(--ok-rgb),.4)}
+  .katedra-page .ph-tit{flex:1;min-width:0}
+  .katedra-page .ph-tit h3{font-size:16.5px;font-weight:800;letter-spacing:-.35px}
+  .katedra-page .ph-tit p{font-size:12.5px;color:var(--mut);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .katedra-page .ph-meta{display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .katedra-page .ph-count{font-size:12px;font-weight:800;color:var(--mut)}
+  .katedra-page .ph-count.full{color:var(--ok)}
+  .katedra-page .ph-bar{width:52px;height:5px;border-radius:99px;background:var(--line);overflow:hidden}
+  .katedra-page .ph-bar i{display:block;height:100%;background:var(--grad);border-radius:99px;transition:width .3s}
+  .katedra-page .phase.done .ph-bar i{background:var(--ok)}
+  .katedra-page .chev{color:var(--mut2);transition:transform .25s;font-size:12px}
+  .katedra-page .phase.open .chev{transform:rotate(180deg)}
+  .katedra-page .ph-body{display:none;padding:2px 16px 14px;border-top:1px solid var(--line)}
+  .katedra-page .phase.open .ph-body{display:block}
+  .katedra-page .ph-intro{font-size:13px;color:var(--mut);padding:11px 2px 9px;border-bottom:1px dashed var(--line)}
+  .katedra-page .ph-intro b{color:var(--warn);font-weight:700}
+
+  /* ---------- CHECK ITEMS ---------- */
+  .katedra-page .item{display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line);align-items:flex-start}
+  .katedra-page .item:last-child{border-bottom:0}
+  .katedra-page .cb{width:23px;height:23px;border-radius:8px;border:2px solid var(--line2);background:var(--bg2);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;margin-top:1px}
+  .katedra-page .cb svg{opacity:0;transform:scale(.5);transition:.15s}
+  .katedra-page .item.ck .cb{background:var(--grad);border-color:transparent;box-shadow:0 3px 10px rgba(var(--acc-rgb),.4)}
+  .katedra-page .item.ck .cb svg{opacity:1;transform:scale(1)}
+  .katedra-page .item.next .cb{animation:katedra-itempulse 1.8s ease-in-out infinite}
+  @keyframes katedra-itempulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--acc-rgb),.4)}50%{box-shadow:0 0 0 6px rgba(var(--acc-rgb),0)}}
+  @media(prefers-reduced-motion: reduce){.katedra-page .item.next .cb{animation:none}}
+  .katedra-page .it-main{flex:1;min-width:0}
+  .katedra-page .it-txt{font-size:14px;font-weight:600;cursor:pointer;letter-spacing:-.1px}
+  .katedra-page .item.ck .it-txt{color:var(--mut);text-decoration:line-through;text-decoration-color:var(--line2)}
+  .katedra-page .badges{display:inline-flex;gap:5px;margin-left:7px;vertical-align:1px}
+  .katedra-page .bdg{font-size:9.5px;font-weight:800;letter-spacing:.6px;padding:2px 7px;border-radius:99px;text-transform:uppercase}
+  .katedra-page .bdg.crit{background:rgba(var(--bad-rgb),.13);color:var(--bad)}
+  .katedra-page .it-detail{display:none;font-size:12.8px;color:var(--mut);margin-top:6px;background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:9px;padding:9px 12px}
+  .katedra-page .item.exp .it-detail{display:block}
+  .katedra-page .it-detail b{color:var(--txt)}
+  .katedra-page .why{border:0;background:transparent;color:var(--mut2);font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;padding:2px 0 0;display:inline-flex;gap:4px;align-items:center;transition:color .15s}
+  .katedra-page .why:hover{color:var(--acc);text-decoration:underline}
+  .katedra-page .jump{display:inline-flex;align-items:center;gap:6px;margin-top:7px;background:rgba(var(--acc-rgb),.12);color:var(--acc);border:1px solid rgba(var(--acc-rgb),.35);border-radius:9px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+  /* ---------- GENERATOR ---------- */
+  .katedra-page .gen-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  @media(max-width:860px){.katedra-page .gen-grid{grid-template-columns:1fr}}
+  .katedra-page .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+  .katedra-page .panel h3{font-size:15px;font-weight:800;margin-bottom:4px;letter-spacing:-.2px}
+  .katedra-page .panel .sub{font-size:12.5px;color:var(--mut);margin-bottom:14px}
+  .katedra-page .mode-seg{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+  .katedra-page .mode-seg button{flex:1;min-width:110px;border:1px solid var(--line);background:var(--bg2);color:var(--mut);font-weight:700;font-size:12.5px;padding:10px 8px;border-radius:10px;cursor:pointer;font-family:inherit;transition:.15s}
+  .katedra-page .mode-seg button.on{border-color:var(--acc);background:rgba(var(--acc-rgb),.12);color:var(--acc)}
+  .katedra-page .fld{margin-bottom:12px}
+  .katedra-page .fld label{display:flex;font-size:11.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);margin-bottom:6px;gap:6px;align-items:center}
+  .katedra-page .fld label .req-star{color:var(--bad)}
+  .katedra-page .fld input,.katedra-page .fld textarea,.katedra-page .fld select{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;color:var(--txt);font-size:14px;padding:10px 12px;font-family:inherit;outline:none;transition:border-color .15s}
+  .katedra-page .fld input:focus,.katedra-page .fld textarea:focus,.katedra-page .fld select:focus{border-color:var(--acc)}
+  .katedra-page .fld textarea{resize:vertical;min-height:64px}
+  .katedra-page .fld .hint{font-size:11.5px;color:var(--mut2);margin-top:4px}
+  .katedra-page .fld.missing input,.katedra-page .fld.missing textarea,.katedra-page .fld.missing select{border-color:rgba(var(--bad-rgb),.55)}
+  .katedra-page .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:480px){.katedra-page .two{grid-template-columns:1fr}}
+  .katedra-page .chk-row{display:flex;align-items:center;gap:9px;padding:9px 12px;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;cursor:pointer;margin-bottom:8px}
+  .katedra-page .chk-row input{accent-color:var(--acc);width:16px;height:16px;cursor:pointer}
+  .katedra-page .chk-row span{font-size:13px;font-weight:600}
+  .katedra-page .chk-row small{display:block;font-size:11.5px;color:var(--mut);font-weight:400}
+  .katedra-page .miss-box{display:none;background:rgba(var(--bad-rgb),.08);border:1px solid rgba(var(--bad-rgb),.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12.5px}
+  .katedra-page .miss-box.on{display:block}
+  .katedra-page .miss-box b{color:var(--bad)}
+  .katedra-page .miss-box .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .katedra-page .miss-box .chips span{background:rgba(var(--bad-rgb),.13);color:var(--bad);border-radius:99px;padding:2px 9px;font-size:11px;font-weight:700}
+  .katedra-page .prompt-box{position:relative}
+  .katedra-page .prompt-out{background:var(--paper3);border:1px solid var(--line);border-radius:10px;padding:14px;font-size:12.3px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:var(--ink);max-height:560px;overflow-y:auto}
+  .katedra-page .copy-btn{width:100%;margin-top:12px;background:var(--grad);color:var(--on-acc);border:0;border-radius:12px;padding:13px;font-weight:800;font-size:14.5px;cursor:pointer;font-family:inherit;box-shadow:0 6px 20px rgba(var(--acc-rgb),.35);transition:.15s;display:flex;align-items:center;justify-content:center;gap:8px}
+  .katedra-page .copy-btn:active{transform:scale(.98)}
+  .katedra-page .copy-btn.ok{background:linear-gradient(135deg,var(--ok2),var(--ok3));box-shadow:0 6px 20px rgba(var(--ok-rgb),.35)}
+  .katedra-page .sticky-prev{position:sticky;top:64px}
+
+  /* ---------- CHEATSHEET ---------- */
+  .katedra-page .cs-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:820px){.katedra-page .cs-grid{grid-template-columns:1fr}}
+  .katedra-page .cs{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:17px}
+  .katedra-page .cs.full{grid-column:1/-1}
+  .katedra-page .cs h3{font-size:14.5px;font-weight:800;margin-bottom:11px;display:flex;gap:9px;align-items:center;letter-spacing:-.2px}
+  .katedra-page .cs h3 em{font-style:normal;font-size:17px}
+  .katedra-page .cs ol,.katedra-page .cs ul{padding-left:20px;font-size:13.3px;color:var(--mut)}
+  .katedra-page .cs li{margin-bottom:6px}
+  .katedra-page .cs li b{color:var(--txt)}
+  .katedra-page .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .katedra-page .chip{font-size:12px;font-weight:700;padding:5px 11px;border-radius:99px}
+  .katedra-page .chip.bad{background:rgba(var(--bad-rgb),.1);color:var(--bad);border:1px solid rgba(var(--bad-rgb),.25);text-decoration:line-through}
+  .katedra-page .chip.good{background:rgba(var(--ok-rgb),.09);color:var(--ok);border:1px solid rgba(var(--ok-rgb),.25)}
+  .katedra-page .cs table{width:100%;border-collapse:collapse;font-size:12.6px}
+  .katedra-page .cs th{text-align:left;color:var(--mut2);font-size:10.5px;text-transform:uppercase;letter-spacing:1px;padding:5px 8px;border-bottom:1px solid var(--line)}
+  .katedra-page .cs td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  .katedra-page .cs td:first-child{color:var(--mut);white-space:nowrap}
+  .katedra-page .cs td b{color:var(--ok);font-weight:700}
+  .katedra-page .cs td s{color:var(--bad);opacity:.8}
+  .katedra-page .cite-ex{background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;font-size:13px;margin-bottom:8px}
+  .katedra-page .cite-ex b{color:var(--acc)}
+  .katedra-page .cite-ex small{display:block;color:var(--mut);font-size:11.8px;margin-top:2px}
+  .katedra-page .trap{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .katedra-page .trap:last-child{border:0}
+  .katedra-page .trap .t-ico{flex-shrink:0}
+  .katedra-page .trap b{color:var(--txt)}
+  .katedra-page .trap span{color:var(--mut)}
+
+  /* ---------- FOOTER BAR ---------- */
+  .katedra-page .foot{display:flex;gap:8px;margin-top:22px;flex-wrap:wrap;align-items:center}
+  .katedra-page .foot button{border:1px solid var(--line);background:var(--card);color:var(--mut);font-weight:700;font-size:12.5px;padding:9px 14px;border-radius:10px;cursor:pointer;font-family:inherit}
+  .katedra-page .foot button:hover{color:var(--txt);border-color:var(--line2)}
+  .katedra-page .foot .note{font-size:11.5px;color:var(--mut2);flex-basis:100%}
+  .katedra-page .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--paper3);border:1px solid var(--line2);color:var(--txt);padding:11px 20px;border-radius:12px;font-size:13.5px;font-weight:700;box-shadow:0 10px 30px rgba(var(--shadow-rgb),.22);transition:.3s;z-index:99;opacity:0}
+  .katedra-page .toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+
+  /* ---------- AUTOPILOT ---------- */
+  .katedra-page .auto-note{font-size:12.8px;color:var(--mut);background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:9px;padding:10px 13px;margin-top:10px}
+  .katedra-page .auto-note b{color:var(--txt)}
+
+  /* ---------- ROK KALKULATOR ---------- */
+  .katedra-page .dl-panel{padding:14px 16px;margin:14px 0 2px}
+  .katedra-page .dl-head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .katedra-page .dl-head h3{font-size:14px;font-weight:800;letter-spacing:-.2px}
+  .katedra-page .dl-head p{font-size:12px;color:var(--mut2);flex-basis:100%;margin-top:-4px}
+  .katedra-page .dl-head input,.katedra-page .dl-head select{background:var(--bg2);border:1px solid var(--line2);border-radius:9px;color:var(--txt);padding:8px 11px;font-family:inherit;font-size:13.5px;color-scheme:var(--scheme);outline:none}
+  .katedra-page .dl-head input:focus,.katedra-page .dl-head select:focus{border-color:var(--acc)}
+  .katedra-page .dl-out{font-size:12.8px;color:var(--mut);margin-top:9px}
+  /* Mentor komentari — mala dodaj-red + lista, isti vizualni rječnik kao
+     ostali .dl-panel alati u bočnoj traci. */
+  .katedra-page .mc-add{display:flex;gap:8px;width:100%;flex-basis:100%}
+  .katedra-page .mc-add input{flex:1 1 auto;min-width:0}
+  .katedra-page .mc-add button{flex:0 0 auto;border:0;border-radius:9px;background:var(--grad);
+    color:var(--on-acc);font-weight:800;font-size:12.5px;font-family:inherit;padding:8px 13px;cursor:pointer}
+  .katedra-page .mc-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;
+    border-bottom:1px solid var(--line2)}
+  .katedra-page .mc-item:last-child{border-bottom:0}
+  .katedra-page .mc-item input[type="checkbox"]{margin-top:3px;flex:0 0 auto}
+  .katedra-page .mc-item span{flex:1 1 auto;line-height:1.4}
+  .katedra-page .mc-item.done span{color:var(--mut2);text-decoration:line-through}
+  .katedra-page .mc-item button{flex:0 0 auto;border:0;background:transparent;color:var(--mut2);
+    cursor:pointer;font-size:13px;padding:2px 5px}
+  .katedra-page .mc-item button:hover{color:var(--bad)}
+  .katedra-page .mc-empty{font-size:12px;color:var(--mut2);font-style:italic}
+  .katedra-page .dl-row{display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13px}
+  .katedra-page .dl-row:last-child{border:0}
+  .katedra-page .dl-row b{color:var(--txt);font-weight:700}
+  .katedra-page .dl-row .date{font-weight:800;color:var(--acc2);white-space:nowrap}
+  .katedra-page .dl-row.past .date{color:var(--bad)}
+  .katedra-page .mentor-add{display:flex;gap:8px;flex-basis:100%}
+  .katedra-page .mentor-add input{flex:1;min-width:0}
+  .katedra-page .mentor-add button{border:1px solid var(--line2);background:var(--bg2);color:var(--txt);
+    font-weight:700;font-size:12.5px;padding:8px 12px;border-radius:9px;cursor:pointer;font-family:inherit;
+    white-space:nowrap;transition:.15s}
+  .katedra-page .mentor-add button:hover{border-color:var(--acc);color:var(--acc)}
+  .katedra-page .mentor-list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .katedra-page .mentor-empty{font-size:12.5px;color:var(--mut2);font-style:italic;margin-top:8px}
+  .katedra-page .mentor-item{display:flex;align-items:flex-start;gap:9px;padding:2px 0}
+  .katedra-page .mentor-item.done .cb{background:var(--grad);border-color:transparent}
+  .katedra-page .mentor-item.done .cb svg{opacity:1;transform:scale(1)}
+  .katedra-page .mentor-item.done .mentor-txt{color:var(--mut2);text-decoration:line-through}
+  .katedra-page .mentor-txt{flex:1;font-size:13px;color:var(--txt);cursor:pointer;padding-top:2px}
+  .katedra-page .mentor-del{border:0;background:transparent;color:var(--mut2);font-size:13px;cursor:pointer;
+    padding:2px 6px;line-height:1;flex-shrink:0}
+  .katedra-page .mentor-del:hover{color:var(--bad)}
+  .katedra-page .scan-mentor{font-size:12.5px;color:var(--mut);margin-top:8px}
+
+  /* ---------- CHAT ---------- */
+  .katedra-page .chat-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;height:auto;min-height:210px;max-height:min(78vh,900px);overflow:hidden}
+  .katedra-page .chat-log{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 14px;display:flex;flex-direction:column;gap:12px}
+  .katedra-page .msg{max-width:92%;display:flex;flex-direction:column;gap:8px;animation:katedra-fade .25s ease}
+  .katedra-page .msg.a{align-self:flex-start}
+  .katedra-page .msg.u{align-self:flex-end}
+  .katedra-page .bub{padding:12px 15px;border-radius:16px;font-size:14px;line-height:1.55}
+  .katedra-page .msg.a .bub{background:var(--card2);border:1px solid var(--line2);border-bottom-left-radius:6px}
+  .katedra-page .msg.u .bub{background:var(--grad);color:var(--on-acc);border-bottom-right-radius:6px;font-weight:600}
+  .katedra-page .msg.a .bub b{color:var(--txt)}
+  .katedra-page .msg .prompt-out{margin-top:10px;max-height:300px}
+  .katedra-page .chips-row{display:flex;flex-wrap:wrap;gap:8px;max-width:92%}
+  .katedra-page .qchip{border:1px solid rgba(var(--acc-rgb),.4);background:rgba(var(--acc-rgb),.1);color:var(--acc);font-weight:700;font-size:13px;padding:9px 15px;border-radius:99px;cursor:pointer;font-family:inherit;transition:.15s}
+  .katedra-page .qchip:hover{background:rgba(var(--acc-rgb),.22)}
+  .katedra-page .qchip.ghost{border-color:var(--line2);background:var(--bg2);color:var(--mut)}
+  .katedra-page .qchip.sel{background:var(--grad);color:var(--on-acc);border-color:transparent;box-shadow:0 3px 12px rgba(var(--acc-rgb),.35)}
+  .katedra-page .att-card{background:var(--bg2);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;margin-top:8px}
+  .katedra-page .att-card.reqd{border-color:rgba(var(--bad-rgb),.45)}
+  .katedra-page .att-top{display:flex;align-items:center;gap:9px}
+  .katedra-page .att-top .ic{font-size:17px}
+  .katedra-page .att-top .nm{flex:1;font-size:13px;font-weight:700;min-width:0}
+  .katedra-page .att-top .nm small{display:block;font-weight:400;color:var(--mut);font-size:11.5px}
+  .katedra-page .att-top .nm .rq{color:var(--bad);font-size:10px;font-weight:800;letter-spacing:.6px}
+  .katedra-page .att-btn{border:1px solid rgba(var(--acc-rgb),.45);background:rgba(var(--acc-rgb),.12);color:var(--acc);font-weight:800;font-size:12px;padding:6px 12px;border-radius:9px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .katedra-page .att-skip{border:0;background:transparent;color:var(--mut2);font-size:11.5px;cursor:pointer;font-family:inherit;padding:6px 2px}
+  .katedra-page .att-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .katedra-page .att-files span{display:inline-flex;align-items:center;gap:6px;background:rgba(var(--ok-rgb),.1);border:1px solid rgba(var(--ok-rgb),.3);color:var(--ok);border-radius:99px;padding:3px 10px;font-size:11.5px;font-weight:700}
+  .katedra-page .att-files span i{cursor:pointer;font-style:normal;opacity:.75}
+  .katedra-page .att-card.skipped{opacity:.5}
+  .katedra-page .composer{display:flex;gap:9px;padding:12px;border-top:1px solid var(--line);background:var(--card)}
+  .katedra-page .composer .plus{width:44px;height:44px;border-radius:12px;border:1px solid var(--line2);background:var(--bg2);color:var(--mut);font-size:22px;cursor:pointer;flex-shrink:0;font-family:inherit;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .katedra-page .composer .plus:hover{color:var(--acc);border-color:rgba(var(--acc-rgb),.45)}
+  .katedra-page .composer input{flex:1;background:var(--bg2);border:1px solid var(--line2);border-radius:12px;color:var(--txt);font-size:14px;padding:0 14px;font-family:inherit;outline:none;min-width:0}
+  .katedra-page .composer input:focus{border-color:var(--acc)}
+  .katedra-page .composer .send{width:44px;height:44px;border-radius:12px;border:0;background:var(--grad);color:var(--on-acc);font-size:16px;cursor:pointer;flex-shrink:0;box-shadow:0 4px 14px rgba(var(--acc-rgb),.35)}
+  .katedra-page .final-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+  .katedra-page .final-actions .fa{border:0;border-radius:10px;padding:10px 14px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:7px}
+  .katedra-page .fa.p{background:var(--grad);color:var(--on-acc);box-shadow:0 4px 14px rgba(var(--acc-rgb),.35)}
+  .katedra-page .fa.p.ok{background:linear-gradient(135deg,var(--ok2),var(--ok3))}
+  .katedra-page .fa.s{background:var(--bg2);border:1px solid var(--line2);color:var(--mut)}
+
+  /* ---------- ONBOARDING OVERLAY ---------- */
+  .katedra-page .onb{position:fixed;inset:0;z-index:200;background:rgba(5,6,10,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;animation:katedra-fade .3s ease}
+  .katedra-page .onb-card{background:var(--card);border:1px solid var(--line2);border-radius:20px;max-width:440px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .katedra-page .onb-card h2{font-size:24px;font-weight:800;letter-spacing:-.5px;margin:12px 0 4px}
+  .katedra-page .onb-sub{font-size:13.5px;color:var(--mut);margin-bottom:20px}
+  .katedra-page .onb-steps{text-align:left;display:flex;flex-direction:column;gap:12px;margin-bottom:22px}
+  .katedra-page .onb-steps>div{display:flex;gap:13px;align-items:flex-start}
+  .katedra-page .onb-steps>div>b{width:28px;height:28px;flex-shrink:0;border-radius:9px;background:var(--grad);color:var(--on-acc);display:flex;align-items:center;justify-content:center;font-size:13px}
+  .katedra-page .onb-steps span{font-size:13px;color:var(--mut);line-height:1.5}
+  .katedra-page .onb-steps span b{color:var(--txt)}
+  .katedra-page .onb-go{display:block;box-sizing:border-box;text-align:center;width:100%;background:var(--grad);color:var(--on-acc);border:0;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;box-shadow:0 6px 20px rgba(var(--acc-rgb),.35);user-select:none}
+  .katedra-page .onb-choices{display:flex;flex-direction:column;gap:9px;margin-bottom:14px;text-align:left}
+  .katedra-page .onb-choice{display:block;box-sizing:border-box;background:var(--card2);border:1px solid var(--line2);border-radius:12px;padding:13px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .katedra-page .onb-choice:hover{border-color:var(--acc);background:rgba(var(--acc-rgb),.08)}
+  .katedra-page .onb-choice b{display:block;font-size:14px;font-weight:800;color:var(--txt)}
+  .katedra-page .onb-choice span{display:block;font-size:12px;color:var(--mut);margin-top:2px;font-weight:400}
+  .katedra-page .onb-choice.ghost{background:transparent;border-color:transparent}
+  .katedra-page .onb-choice.ghost:hover{background:var(--card2);border-color:var(--line2)}
+  .katedra-page .onb-note{font-size:11.5px;color:var(--mut2);margin-top:12px}
+  /* Sporedni ulaz u Completion Scan — mora izgledati manje važno od glavnih
+     onb-choice gumba (koje ovaj student vjerojatno traži), ali i dalje kao
+     tipka koju je vrijedno kliknuti. */
+  .katedra-page .onb-scan-link{display:block;box-sizing:border-box;width:100%;background:transparent;
+    border:1px dashed var(--line2);color:var(--mut);font-size:12.5px;font-weight:700;font-family:inherit;
+    cursor:pointer;margin-top:12px;padding:11px 14px;border-radius:12px;transition:.15s}
+  .katedra-page .onb-scan-link:hover{border-color:var(--acc);color:var(--txt);border-style:solid}
+
+  /* ---------- STEP BAR ---------- */
+  /* Traka koraka više ne sjedi na vrhu .chat-wrap nego u chromeu, pa joj
+     donji rub više ne služi kao spoj — dobiva vlastiti okvir. */
+  .katedra-page .stepbar{display:flex;gap:4px;align-items:center;padding:9px 14px;border:1px solid var(--line);
+    border-radius:var(--rs);background:var(--card);overflow-x:auto;scrollbar-width:none;margin:0 0 12px}
+  .katedra-page .stepbar::-webkit-scrollbar{display:none}
+  .katedra-page .stepbar span{font-size:10.5px;font-weight:800;letter-spacing:.4px;color:var(--mut2);padding:4px 10px;border-radius:99px;white-space:nowrap;border:1px solid transparent}
+  .katedra-page .stepbar .sb-lbl{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--mut2);opacity:.75;padding:4px 10px 4px 2px;border-right:1px solid var(--line);margin-right:4px}
+  .katedra-page .stepbar span.cur{color:var(--acc);background:rgba(var(--acc-rgb),.12);border-color:rgba(var(--acc-rgb),.4)}
+  .katedra-page .stepbar span.done{color:var(--ok)}
+
+  /* .adv je nekad prigušivao napredne tabove na .55. Otkad semafor koristi
+     .locked (.45), ta dva stanja izgledaju gotovo isto — otključan tab bi se
+     činio nedostupnim. Prigušenje sad nosi isključivo brava. */
+  .katedra-page .tabs button.adv{opacity:1}
+
+  /* ══════════ LINIJA (koncept C — header) ══════════ */
+  .katedra-page .linija{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px 4px;margin:14px 0 12px}
+  .katedra-page .lin-map{position:relative;padding:24px 6px 2px}
+  .katedra-page .lin-rail{position:absolute;left:26px;right:26px;top:42px;height:6px;background:var(--rail);border-radius:99px}
+  .katedra-page .lin-rail i{position:absolute;left:0;top:0;bottom:0;background:var(--grad);border-radius:99px;width:0%;transition:width .7s cubic-bezier(.6,0,.3,1)}
+  .katedra-page .lin-sts{display:flex;justify-content:space-between;position:relative;padding:0 14px}
+  .katedra-page .lin-st{display:flex;flex-direction:column;align-items:center;width:56px;position:relative}
+  .katedra-page .lin-st .dot{width:15px;height:15px;border-radius:50%;background:var(--paper3);border:3px solid var(--pl-edge2);transition:.4s;margin-top:10px;z-index:2;position:relative}
+  .katedra-page .lin-st.past .dot{border-color:var(--acc);background:var(--acc)}
+  .katedra-page .lin-st.cur .dot{border-color:var(--stamp);animation:katedra-lpulse 1.6s infinite}
+  .katedra-page .lin-st.cur .dot::after{content:'';position:absolute;inset:2.5px;border-radius:50%;background:var(--stamp)}
+  @keyframes katedra-lpulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--stamp-rgb),.35)}50%{box-shadow:0 0 0 8px rgba(var(--stamp-rgb),0)}}
+  .katedra-page .lin-st .nm{font-size:8.5px;font-weight:800;letter-spacing:1px;color:var(--mut2);text-transform:uppercase;margin-top:7px;white-space:nowrap}
+  .katedra-page .lin-st.past .nm{color:var(--acc)}
+  .katedra-page .lin-st.cur .nm{color:var(--stamp)}
+  .katedra-page .lin-tram{position:absolute;top:12px;left:14px;width:52px;height:30px;z-index:3;transition:left .7s cubic-bezier(.6,0,.3,1);filter:drop-shadow(0 5px 8px rgba(var(--acc-rgb),.3));animation:katedra-tbob 2.6s ease-in-out infinite}
+  @keyframes katedra-tbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}
+  .katedra-page .lin-info{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--mut);padding:8px 2px;border-top:1px dashed var(--line);margin-top:6px}
+  .katedra-page .lin-info b{color:var(--warn)}
+  .katedra-page .lin-info .ln-badge{background:var(--grad);color:var(--on-acc);font-weight:800;font-size:11px;border-radius:6px;padding:2px 8px;font-family:var(--serif)}
+  @media(max-width:560px){.katedra-page .lin-st .nm{font-size:6.8px}.katedra-page .lin-st{width:36px}}
+
+  /* ══════════ ŽIVI DOKUMENT (koncept A — start) ══════════ */
+  .katedra-page .doc-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+  @media(max-width:880px){.katedra-page .doc-grid{grid-template-columns:1fr}}
+  .katedra-page .kpaper{background:var(--paper3);color:var(--ink);border-radius:3px;padding:26px 24px;font-family:var(--serif);box-shadow:0 14px 34px rgba(var(--shadow-rgb),.16),0 2px 6px rgba(var(--shadow-rgb),.08);border:1px solid var(--line);position:sticky;top:64px}
+  @media(max-width:880px){.katedra-page .kpaper{position:static;padding:20px 18px}}
+  .katedra-page .kp-uni{text-align:center;font-size:10px;letter-spacing:1.2px;color:var(--ink2);text-transform:uppercase}
+  .katedra-page .kp-title{margin:16px 0 5px;text-align:center;font-size:15px;font-weight:700;min-height:42px;line-height:1.45}
+  .katedra-page .kp-title .ph{color:var(--pl-ph);font-style:italic;font-weight:400;border-bottom:1.5px dashed var(--pl-ph2);padding-bottom:2px}
+  .katedra-page .kp-sub{text-align:center;font-size:10.5px;color:var(--ink2);margin-bottom:16px}
+  .katedra-page .kp-h{font-size:9.5px;letter-spacing:1.8px;color:var(--ink2);text-transform:uppercase;border-bottom:1px solid var(--pline);padding-bottom:4px;margin:13px 0 8px}
+  .katedra-page .kp-chap{margin-bottom:9px;transition:.4s}
+  .katedra-page .kp-chap .t{font-size:11px;font-weight:700;display:flex;gap:8px}
+  .katedra-page .kp-chap .t .pc{margin-left:auto;font-size:8.5px;color:var(--pl-mut2);}
+  .katedra-page .kp-chap .sk{margin-top:4px;display:flex;flex-direction:column;gap:3px}
+  .katedra-page .kp-chap .sk i{display:block;height:4px;border-radius:3px;background:var(--pl-skel);transform-origin:left;transform:scaleX(0);transition:transform .6s ease}
+  .katedra-page .kp-chap.ghost{opacity:.42;filter:blur(.3px)}
+  .katedra-page .kp-chap.live .sk i{transform:scaleX(1);background:var(--pl-skel2)}
+  .katedra-page .kp-files{font-size:10.5px;color:var(--ink2)}
+  .katedra-page .kp-files div{padding:2px 0;border-bottom:1px dotted var(--pline)}
+  .katedra-page .kp-file-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .katedra-page .kp-file-del{cursor:pointer;font-style:normal;opacity:.6;padding:0 4px}
+  .katedra-page .kp-file-del:hover{opacity:1;color:var(--bad)}
+  .katedra-page .kp-pct{position:absolute;top:9px;right:9px;left:60px;font-size:9.5px;font-weight:800;background:var(--ink);color:var(--paper);border-radius:99px;padding:3px 9px;max-width:calc(100% - 69px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;text-align:right}
+  .katedra-page .kp-rok{font-size:10.5px;color:var(--stamp);font-weight:700}
+
+  /* chat kao marginalije */
+  .katedra-page .msg.a .bub{border-left:3px solid var(--acc);border-radius:12px;border-bottom-left-radius:4px}
+  .katedra-page .msg.a .bub::before{content:'KATEDRA';display:block;font-size:9px;font-weight:800;letter-spacing:1.4px;color:var(--acc2);margin-bottom:5px}
+  .katedra-page .msg.u .bub{background:linear-gradient(135deg,var(--acc),var(--acc2));border:0;color:var(--on-acc2);font-family:var(--serif);font-style:italic}
+
+  /* ══════════ INDEKS (koncept B — checklista) ══════════ */
+  .katedra-page .idx-head{background:linear-gradient(var(--paper3),var(--paper2));color:var(--ink);border-radius:8px 8px 4px 4px;padding:18px 20px 15px;font-family:var(--serif);display:flex;gap:18px;align-items:center;flex-wrap:wrap;box-shadow:0 10px 26px rgba(var(--shadow-rgb),.14);margin-top:14px;border:1px solid var(--line);border-bottom:2px solid var(--pl-edge4)}
+  .katedra-page .idx-crest{width:54px;height:54px;border:2px solid var(--pl-crest);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--pl-crest);position:relative;flex-shrink:0}
+  .katedra-page .idx-crest::after{content:'';position:absolute;inset:4px;border:1px solid var(--pl-crest);border-radius:50%}
+  .katedra-page .idx-head .ih-t{font-size:12px;letter-spacing:2.5px;text-transform:uppercase;color:var(--pl-crest);font-weight:700}
+  .katedra-page .idx-head .ih-s{font-size:9.5px;letter-spacing:1px;color:var(--pl-mut3);text-transform:uppercase;margin-top:2px}
+  .katedra-page .idx-head .ih-f{margin-left:auto;text-align:right;font-size:11px;color:var(--pl-mut);min-width:170px}
+  .katedra-page .idx-head .ih-f b{display:block;font-style:italic;font-size:12.5px;color:var(--ink);font-weight:600;max-width:340px}
+  .katedra-page #view-check .phase{background:var(--paper);border:1px solid var(--pl-line2);color:var(--ink)}
+  .katedra-page #view-check .phase.done{border-color:var(--stamp)}
+  .katedra-page #view-check .ph-ico{background:var(--paper2);border-color:var(--pl-line2)}
+  .katedra-page #view-check .ph-tit h3{color:var(--ink);font-family:var(--serif)}
+  .katedra-page #view-check .ph-tit p{color:var(--ink2)}
+  .katedra-page #view-check .ph-count{color:var(--pl-mut2)}
+  .katedra-page #view-check .ph-count.full{color:var(--stamp)}
+  .katedra-page #view-check .ph-bar{background:var(--pl-line)}
+  .katedra-page #view-check .ph-bar i,.katedra-page #view-check .phase.done .ph-bar i{background:var(--stamp)}
+  .katedra-page #view-check .chev{color:var(--pl-edge2)}
+  .katedra-page #view-check .ph-body{border-top:1px solid var(--pl-line)}
+  .katedra-page #view-check .ph-intro{color:var(--pl-mut);border-bottom-color:var(--pl-line)}
+  .katedra-page #view-check .ph-intro b{color:var(--stamp)}
+  .katedra-page #view-check .item{border-bottom-color:var(--pl-line3)}
+  .katedra-page #view-check .it-txt{color:var(--ink)}
+  .katedra-page #view-check .item.ck .it-txt{color:var(--pl-mut2)}
+  .katedra-page #view-check .cb{background:var(--paper3);border-color:var(--pl-edge)}
+  .katedra-page #view-check .item.ck .cb{background:var(--stamp);border-color:transparent;box-shadow:none}
+  .katedra-page #view-check .bdg.crit{background:rgba(var(--stamp-rgb),.12);color:var(--stamp)}
+  .katedra-page #view-check .it-detail{background:var(--paper3);border-color:var(--pl-line);border-left-color:var(--stamp);color:var(--pl-mut)}
+  .katedra-page #view-check .it-detail b{color:var(--ink)}
+  .katedra-page #view-check .why{color:var(--acc)}
+  .katedra-page #view-check .jump{background:rgba(var(--acc-rgb),.08);color:var(--acc);border-color:rgba(var(--acc-rgb),.3)}
+  .katedra-page #view-check .sec-lbl span{color:var(--pl-mut2)}
+  .katedra-page #view-check .dl-panel{background:var(--paper);border-color:var(--pl-line2);color:var(--ink)}
+  .katedra-page #view-check .dl-head h3{color:var(--ink);font-family:var(--serif)}
+  .katedra-page #view-check .dl-head p{color:var(--pl-mut2)}
+  .katedra-page #view-check .dl-head input,.katedra-page #view-check .dl-head select{background:var(--paper3);border-color:var(--pl-edge);color:var(--ink);color-scheme:var(--scheme)}
+  .katedra-page #view-check .dl-out{color:var(--pl-mut)}
+  .katedra-page #view-check .dl-row{border-bottom-color:var(--pl-line3)}
+  .katedra-page #view-check .dl-row b{color:var(--ink)}
+  .katedra-page #view-check .dl-row .date{color:var(--acc)}
+  .katedra-page #view-check .dl-row.past .date{color:var(--stamp)}
+  .katedra-page .ph-stamp{width:50px;height:50px;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center}
+  .katedra-page .ph-stamp::before{content:'';position:absolute;inset:7px;border:1px dashed var(--pl-edge3);
+    border-radius:50%;opacity:0;transition:opacity .25s}
+  .katedra-page .phase.started .ph-stamp::before,
+  .katedra-page .phase.done .ph-stamp::before{opacity:1}
+  .katedra-page .ph-stamp .stp{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:6.5px;font-weight:800;letter-spacing:.7px;color:var(--stamp);border:2px solid var(--stamp);border-radius:50%;text-align:center;line-height:1.25;transform:rotate(-14deg) scale(0);opacity:0;text-transform:uppercase;padding:3px;}
+  .katedra-page .ph-stamp .stp.on{animation:katedra-slam .38s cubic-bezier(.2,1.6,.4,1) forwards}
+  @keyframes katedra-slam{0%{transform:rotate(8deg) scale(2);opacity:0}60%{transform:rotate(-14deg) scale(.94);opacity:.9}100%{transform:rotate(-14deg) scale(1);opacity:.85}}
+  .katedra-page .ph-stamp .stp.gold{color:var(--gold);border-color:var(--gold)}
+
+  /* ══════════ JEDNOSTAVNI MOD (progressive disclosure) ══════════ */
+  .katedra-page.simple .tip-row{display:none}
+  .katedra-page.simple #banner{display:none}
+  .katedra-page.simple #tabs button[data-view="auto"],
+  .katedra-page.simple #tabs button[data-view="gen"],
+  .katedra-page.simple #tabs button[data-view="cheat"]{display:none}
+  .katedra-page.simple #btnExport, .katedra-page.simple #btnImport{display:none}
+  .katedra-page #advBtn{margin-left:auto;flex-shrink:0}
+  .katedra-page #advBtn.on{background:var(--grad);border-color:transparent;color:var(--on-acc)}
+
+  /* ══════════════════════════════════════════════════════════════════
+     KOŽE — data-skin na #katedra-root prebacuje cijelu paletu.
+     Bez atributa vrijedi "papir i tinta" iz bloka na vrhu datoteke.
+     Zadana koža za nove korisnike je "kreda" (postavlja je engine).
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* ---------- PLOČA I KREDA (zadano) ---------- */
+  .katedra-page[data-skin="kreda"]{
+    --bg:#1e3a2f; --bg2:#24463a; --bg3:#1a332a; --card:#24463a; --card2:#2b5145;
+    --line:#3a5f51; --line2:#4d7a68;
+    --txt:#f1efe3; --mut:#a9bdae; --mut2:#8aa294;
+    --acc:#e8c468; --acc2:#d4ad4a; --acc3:#c19a34; --acc-rgb:232,196,104;
+    --on-acc:#1e3a2f; --on-acc2:#1e3a2f;
+    --ok:#8fc79a; --ok2:#8fc79a; --ok3:#6fae7c; --ok-rgb:143,199,154;
+    --warn:#e0b755; --warn-rgb:224,183,85;
+    --bad:#e8867a; --bad-rgb:232,134,122;
+    --grad:linear-gradient(135deg,#e8c468 0%,#c19a34 100%);
+    --paper:#24463a; --paper2:#2b5145; --paper3:#1a332a;
+    --ink:#f1efe3; --ink2:#a9bdae; --pline:#3a5f51;
+    --pl-line:#33574a; --pl-line2:#3f6657; --pl-line3:#2c4d41;
+    --pl-edge:#4d7a68; --pl-edge2:#5b8a76; --pl-edge3:#456f5e; --pl-edge4:#3f6657;
+    --pl-mut:#a9bdae; --pl-mut2:#8aa294; --pl-mut3:#7d9488; --pl-crest:#e8c468;
+    --pl-skel:#2c4d41; --pl-skel2:#4d7a68; --pl-ph:#7d9488; --pl-ph2:#4d7a68;
+    --rail:#33574a; --stamp:#e8c468; --stamp-rgb:232,196,104; --gold:#e8c468;
+    --shadow-rgb:0,0,0; --grain:rgba(255,255,255,.045); --scheme:dark;
+  }
+
+  /* ---------- FILATELIJA ---------- */
+  .katedra-page[data-skin="filatelija"]{
+    --bg:#e7dcbf; --bg2:#efe6cd; --bg3:#f0e7ce; --card:#f3ead0; --card2:#eadfbe;
+    --line:#c9b98c; --line2:#b0a075;
+    --txt:#2b2013; --mut:#6b5a3c; --mut2:#8a7856;
+    --acc:#a13327; --acc2:#82281e; --acc3:#6d2018; --acc-rgb:161,51,39;
+    --on-acc:#f7f0dc; --on-acc2:#f7f0dc;
+    --ok:#4a6b3f; --ok2:#5c7f4f; --ok3:#4a6b3f; --ok-rgb:74,107,63;
+    --warn:#9c7318; --warn-rgb:196,150,60;
+    --bad:#a13327; --bad-rgb:161,51,39;
+    --grad:linear-gradient(135deg,#a13327 0%,#6d2018 100%);
+    --paper:#f3ead0; --paper2:#eadfbe; --paper3:#faf3de;
+    --ink:#2b2013; --ink2:#6b5a3c; --pline:#c9b98c;
+    --pl-line:#ddd0a8; --pl-line2:#cfc094; --pl-line3:#e6dcbb;
+    --pl-edge:#bfad80; --pl-edge2:#ab9868; --pl-edge3:#c9b98c; --pl-edge4:#b0a075;
+    --pl-mut:#6b5a3c; --pl-mut2:#8a7856; --pl-mut3:#9a8a68; --pl-crest:#7a5c2a;
+    --pl-skel:#e2d7b4; --pl-skel2:#c9b98c; --pl-ph:#a89676; --pl-ph2:#cfc094;
+    --rail:#d5c69c; --stamp:#a13327; --stamp-rgb:161,51,39; --gold:#8a6d1c;
+    --shadow-rgb:60,40,15; --grain:rgba(90,74,47,.06); --scheme:light;
+    --r:5px; --rs:4px;
+  }
+
+  /* ---------- KATALOG KARTICA ---------- */
+  .katedra-page[data-skin="katalog"]{
+    --bg:#e8e4d5; --bg2:#f0ede0; --bg3:#f2efe3; --card:#f9f7ee; --card2:#f2efe1;
+    --line:#c4b995; --line2:#a89a72;
+    --txt:#1f1c16; --mut:#5f5744; --mut2:#847a5f;
+    --acc:#5b4a2f; --acc2:#463823; --acc3:#372c1b; --acc-rgb:91,74,47;
+    --on-acc:#f9f7ee; --on-acc2:#f9f7ee;
+    --ok:#3f6b4f; --ok2:#4d7d5e; --ok3:#3f6b4f; --ok-rgb:63,107,79;
+    --warn:#8a6a1c; --warn-rgb:180,140,50;
+    --bad:#8a3a2c; --bad-rgb:138,58,44;
+    --grad:linear-gradient(135deg,#5b4a2f 0%,#372c1b 100%);
+    --paper:#f9f7ee; --paper2:#f2efe1; --paper3:#fffdf7;
+    --ink:#1f1c16; --ink2:#5f5744; --pline:#c4b995;
+    --pl-line:#e0d9bf; --pl-line2:#cfc4a0; --pl-line3:#ebe5d2;
+    --pl-edge:#b8ac86; --pl-edge2:#a89a72; --pl-edge3:#c4b995; --pl-edge4:#b0a380;
+    --pl-mut:#5f5744; --pl-mut2:#847a5f; --pl-mut3:#948a6d; --pl-crest:#5b4a2f;
+    --pl-skel:#e6e0cc; --pl-skel2:#c4b995; --pl-ph:#9e937a; --pl-ph2:#cfc4a0;
+    --rail:#d8cfae; --stamp:#5b4a2f; --stamp-rgb:91,74,47; --gold:#8a6d1c;
+    --shadow-rgb:60,48,25; --grain:rgba(90,74,47,.04); --scheme:light;
+    --r:3px; --rs:2px;
+  }
+
+  /* ---------- OGLASNA PLOČA ---------- */
+  .katedra-page[data-skin="ploca"]{
+    --bg:#a97a44; --bg2:#b48450; --bg3:#b8894f; --card:#f6eeda; --card2:#efe4c9;
+    --line:#cdb98e; --line2:#b09b6d;
+    --txt:#2a1c0d; --mut:#6a563b; --mut2:#8a7454;
+    --acc:#c73b3b; --acc2:#a52d2d; --acc3:#8a2424; --acc-rgb:199,59,59;
+    --on-acc:#fff; --on-acc2:#fff;
+    --ok:#3f7048; --ok2:#4f8459; --ok3:#3f7048; --ok-rgb:63,112,72;
+    --warn:#9c7318; --warn-rgb:196,150,60;
+    --bad:#c73b3b; --bad-rgb:199,59,59;
+    --grad:linear-gradient(135deg,#c73b3b 0%,#8a2424 100%);
+    --paper:#f6eeda; --paper2:#efe4c9; --paper3:#fdf8ea;
+    --ink:#2a1c0d; --ink2:#6a563b; --pline:#cdb98e;
+    --pl-line:#e2d5b4; --pl-line2:#d3c39c; --pl-line3:#ebe1c6;
+    --pl-edge:#c2ad82; --pl-edge2:#b09b6d; --pl-edge3:#cdb98e; --pl-edge4:#bba576;
+    --pl-mut:#6a563b; --pl-mut2:#8a7454; --pl-mut3:#9a8462; --pl-crest:#8a5a24;
+    --pl-skel:#e6dcc0; --pl-skel2:#cdb98e; --pl-ph:#a89070; --pl-ph2:#d3c39c;
+    --rail:#dccfa8; --stamp:#c73b3b; --stamp-rgb:199,59,59; --gold:#8a6d1c;
+    --shadow-rgb:0,0,0; --grain:rgba(0,0,0,.16); --scheme:light;
+    --r:3px; --rs:2px;
+  }
+
+  /* ---------- RAZGLEDNICA ---------- */
+  .katedra-page[data-skin="razglednica"]{
+    --bg:#eee5d2; --bg2:#f5eee0; --bg3:#f7f1e4; --card:#fffcf4; --card2:#f7f0e0;
+    --line:#d9cdb0; --line2:#bfae8b;
+    --txt:#2a2620; --mut:#6e6455; --mut2:#8f8471;
+    --acc:#3d6b8a; --acc2:#2f5570; --acc3:#26455c; --acc-rgb:61,107,138;
+    --on-acc:#fff; --on-acc2:#eef5fa;
+    --ok:#4e7d55; --ok2:#5e9166; --ok3:#4e7d55; --ok-rgb:78,125,85;
+    --warn:#a07a20; --warn-rgb:200,155,60;
+    --bad:#b05040; --bad-rgb:176,80,64;
+    --grad:linear-gradient(135deg,#3d6b8a 0%,#26455c 100%);
+    --paper:#fffcf4; --paper2:#f7f0e0; --paper3:#fffdf8;
+    --ink:#2a2620; --ink2:#6e6455; --pline:#d9cdb0;
+    --pl-line:#e8dfc6; --pl-line2:#d9cdb0; --pl-line3:#f0e9d6;
+    --pl-edge:#c9bb98; --pl-edge2:#bfae8b; --pl-edge3:#d0c2a0; --pl-edge4:#c4b48f;
+    --pl-mut:#6e6455; --pl-mut2:#8f8471; --pl-mut3:#9d927e; --pl-crest:#3d6b8a;
+    --pl-skel:#ece5d4; --pl-skel2:#d9cdb0; --pl-ph:#a99e88; --pl-ph2:#d0c2a0;
+    --rail:#e0d5bb; --stamp:#b05040; --stamp-rgb:176,80,64; --gold:#a07a20;
+    --shadow-rgb:80,60,30; --grain:rgba(90,74,47,.045); --scheme:light;
+    --r:4px; --rs:3px;
+  }
+
+  /* ---------- KARTA POTRAGE ---------- */
+  .katedra-page[data-skin="karta"]{
+    --bg:#e6dbbc; --bg2:#ece2c8; --bg3:#efe6cf; --card:#f2ead2; --card2:#e9dfc0;
+    --line:#c4b58d; --line2:#a89771;
+    --txt:#3b3324; --mut:#6d6146; --mut2:#8b7f61;
+    --acc:#8a3b2f; --acc2:#702e24; --acc3:#5c251c; --acc-rgb:138,59,47;
+    --on-acc:#f4ecd6; --on-acc2:#f4ecd6;
+    --ok:#6b7a4f; --ok2:#7d8d5e; --ok3:#6b7a4f; --ok-rgb:107,122,79;
+    --warn:#93721e; --warn-rgb:190,150,50;
+    --bad:#8a3b2f; --bad-rgb:138,59,47;
+    --grad:linear-gradient(135deg,#8a3b2f 0%,#5c251c 100%);
+    --paper:#f2ead2; --paper2:#e9dfc0; --paper3:#f8f2e0;
+    --ink:#3b3324; --ink2:#6d6146; --pline:#c4b58d;
+    --pl-line:#ded2ae; --pl-line2:#cdbf98; --pl-line3:#e7ddbf;
+    --pl-edge:#bcac83; --pl-edge2:#a89771; --pl-edge3:#c4b58d; --pl-edge4:#b3a37c;
+    --pl-mut:#6d6146; --pl-mut2:#8b7f61; --pl-mut3:#9a8e6f; --pl-crest:#6b7a4f;
+    --pl-skel:#e4d9ba; --pl-skel2:#c4b58d; --pl-ph:#a4977a; --pl-ph2:#cdbf98;
+    --rail:#d7c9a4; --stamp:#8a3b2f; --stamp-rgb:138,59,47; --gold:#93721e;
+    --shadow-rgb:70,55,25; --grain:rgba(90,74,47,.05); --scheme:light;
+    --r:4px; --rs:3px;
+  }
+
+  /* ---------- NOVINSKA NASLOVNICA ---------- */
+  .katedra-page[data-skin="novine"]{
+    --bg:#f2f0e8; --bg2:#f7f5ec; --bg3:#faf8f1; --card:#fff; --card2:#f7f5ec;
+    --line:#c9c5b8; --line2:#8f8b80;
+    --txt:#141414; --mut:#5a5a54; --mut2:#7d7d76;
+    --acc:#7a1f1f; --acc2:#5e1717; --acc3:#4a1111; --acc-rgb:122,31,31;
+    --on-acc:#fff; --on-acc2:#fff;
+    --ok:#2e6141; --ok2:#3a7550; --ok3:#2e6141; --ok-rgb:46,97,65;
+    --warn:#7a5c10; --warn-rgb:170,130,30;
+    --bad:#7a1f1f; --bad-rgb:122,31,31;
+    --grad:linear-gradient(135deg,#7a1f1f 0%,#4a1111 100%);
+    --paper:#fff; --paper2:#f7f5ec; --paper3:#fff;
+    --ink:#141414; --ink2:#5a5a54; --pline:#c9c5b8;
+    --pl-line:#ddd9cd; --pl-line2:#c9c5b8; --pl-line3:#e8e5db;
+    --pl-edge:#b3afa3; --pl-edge2:#8f8b80; --pl-edge3:#c9c5b8; --pl-edge4:#a5a196;
+    --pl-mut:#5a5a54; --pl-mut2:#7d7d76; --pl-mut3:#8d8d86; --pl-crest:#141414;
+    --pl-skel:#e8e5db; --pl-skel2:#c9c5b8; --pl-ph:#9a968b; --pl-ph2:#c9c5b8;
+    --rail:#d5d1c5; --stamp:#7a1f1f; --stamp-rgb:122,31,31; --gold:#7a5c10;
+    --shadow-rgb:0,0,0; --grain:rgba(0,0,0,.03); --scheme:light;
+    --r:0px; --rs:0px;
+  }
+
+  /* Tramvaj na vozom redu — boje su u SVG atributima kao zaštita ako stil
+     ne stigne; ova pravila ih nadjačavaju da vozilo prati kožu. */
+  .katedra-page .lin-tram .tr-pole{stroke:var(--acc3)}
+  .katedra-page .lin-tram .tr-body{fill:var(--acc);stroke:var(--acc3)}
+  .katedra-page .lin-tram .tr-win{fill:var(--on-acc2)}
+  .katedra-page .lin-tram .tr-skirt{fill:var(--acc3)}
+  .katedra-page .lin-tram .tr-wheel{fill:var(--acc3)}
+  .katedra-page .lin-tram .tr-lamp{fill:var(--gold)}
+
+  /* ---------- MENTOROV STOL — faza na kojoj si je povučena naprijed ----------
+     Selektori nose #view-check jer ondje žive faze i ondje ih boja gazi
+     ID-specifičnošću; bez toga bi obrub aktivne faze izgubio od papir-sloja. */
+  .katedra-page .phase{transition:transform .3s ease,opacity .3s ease,border-color .2s,box-shadow .3s}
+  .katedra-page #view-check .phase.done{opacity:.6;transform:scale(.985) rotate(-.3deg)}
+  .katedra-page #view-check .phase.ahead{opacity:.52}
+  .katedra-page #view-check .phase.ahead:hover{opacity:.8}
+  /* "Povučena prema tebi" je podignuta i osjenčana, ne uvećana: skaliranje ju
+     je činilo širom od stupca i od zaglavlja iznad, što izgleda kao greška u
+     poravnanju, a ne kao naglasak. */
+  .katedra-page #view-check .phase.now{transform:translateY(-3px);border-color:var(--stamp);
+    border-width:2px;box-shadow:0 14px 34px rgba(var(--shadow-rgb),.26);position:relative;z-index:2}
+  .katedra-page #view-check .phase.now .ph-tit h3::after{content:'ovo sad';margin-left:9px;font-size:9px;
+    font-weight:800;letter-spacing:.9px;text-transform:uppercase;background:var(--stamp);color:var(--paper);
+    border-radius:99px;padding:2px 8px;vertical-align:2px;white-space:nowrap}
+  @media(prefers-reduced-motion:reduce){
+    .katedra-page #view-check .phase.done,.katedra-page #view-check .phase.now{transform:none}
+  }
+
+  /* ---------- ŠAHOVSKI SAT — čiji je red (živi razgovor) ---------- */
+  .katedra-page .chat-clock{margin-left:auto;display:inline-flex;flex-shrink:0;border:1px solid var(--line2);
+    border-radius:99px;overflow:hidden;align-self:center}
+  .katedra-page .chat-clock[hidden]{display:none}
+  .katedra-page .chat-clock i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.7px;
+    text-transform:uppercase;padding:4px 10px;color:var(--mut2);background:var(--bg2);white-space:nowrap}
+  .katedra-page .chat-clock i.on{background:var(--grad);color:var(--on-acc)}
+
+  /* ---------- ONBOARDING LIJEVAK — brojač koraka ---------- */
+  .katedra-page .onb-count{display:flex;align-items:center;justify-content:center;gap:10px;font-size:10.5px;
+    font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut2);margin-top:14px}
+  .katedra-page .onb-dots{display:inline-flex;gap:4px}
+  .katedra-page .onb-dots i{width:18px;height:3px;border-radius:2px;background:var(--line2);opacity:.55;display:block}
+  .katedra-page .onb-dots i.on{background:var(--acc);opacity:1}
+  .katedra-page .onb-choice{width:100%;text-align:left;font-family:inherit;color:var(--txt)}
+
+  /* ══════════ KASKADA: fakultet → studij → smjer ══════════ */
+  .katedra-page .lp-cascade{display:grid;grid-template-columns:1.25fr .8fr 1.25fr;gap:10px;margin-bottom:12px}
+  @media(max-width:820px){.katedra-page .lp-cascade{grid-template-columns:1fr}}
+  .katedra-page .lp-col{background:var(--paper);border:1px solid var(--pl-line2);border-radius:var(--rs);
+    display:flex;flex-direction:column;overflow:hidden;min-width:0}
+  .katedra-page .lp-col h5{display:flex;align-items:center;gap:7px;font-size:9.5px;font-weight:800;letter-spacing:1.4px;
+    text-transform:uppercase;color:var(--pl-mut2);padding:9px 11px;border-bottom:1px solid var(--pl-line)}
+  .katedra-page .lp-col h5 em{font-style:normal;width:16px;height:16px;border-radius:50%;background:var(--pl-edge);
+    color:var(--paper);display:flex;align-items:center;justify-content:center;font-size:9.5px;flex-shrink:0}
+  .katedra-page .lp-col.ready h5 em{background:var(--stamp);color:var(--paper)}
+  .katedra-page .lp-search{margin:8px 8px 2px;background:var(--paper3);border:1px solid var(--pl-edge);
+    border-radius:var(--rs);color:var(--ink);padding:7px 10px;font-family:inherit;font-size:12.5px;outline:none}
+  .katedra-page .lp-search:focus{border-color:var(--stamp)}
+  .katedra-page .lp-list{max-height:210px;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:2px;
+    overscroll-behavior:contain}
+  /* Chrome od v121 ignorira SVA ::-webkit-scrollbar pravila čim je zadan
+     scrollbar-width, pa je stilizacija bila mrtva a strelice su ostajale.
+     Standardna svojstva zato idu samo tamo gdje pseudoelementi ne postoje. */
+  @supports not selector(::-webkit-scrollbar){
+    .katedra-page .lp-list{scrollbar-width:thin;scrollbar-color:var(--pl-edge) transparent}
+  }
+  .katedra-page .lp-list::-webkit-scrollbar{width:10px}
+  .katedra-page .lp-list::-webkit-scrollbar-track{background:transparent}
+  /* bez ovoga na vrhu i dnu trake stoje zadane strelice preglednika */
+  .katedra-page .lp-list::-webkit-scrollbar-button{display:none;width:0;height:0}
+  .katedra-page .lp-list::-webkit-scrollbar-corner{background:transparent}
+  .katedra-page .lp-list::-webkit-scrollbar-thumb{background:var(--pl-edge);border-radius:99px;
+    border:3px solid var(--paper);background-clip:padding-box}
+  .katedra-page .lp-list::-webkit-scrollbar-thumb:hover{background:var(--pl-edge2);background-clip:padding-box;
+    border:3px solid var(--paper)}
+  .katedra-page .lp-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;
+    border:1px solid transparent;border-radius:var(--rs);padding:7px 9px;color:var(--ink);font-family:inherit;
+    font-size:12.8px;line-height:1.35;cursor:pointer;transition:.12s}
+  .katedra-page .lp-row:hover{border-color:var(--pl-edge);background:var(--paper2)}
+  .katedra-page .lp-row.on{background:var(--stamp);border-color:var(--stamp);color:var(--on-acc);font-weight:700}
+  .katedra-page .lp-nm{flex:1;min-width:0}
+  .katedra-page .lp-nm small{display:block;font-size:10.5px;color:var(--pl-mut2);font-weight:400;margin-top:1px}
+  .katedra-page .lp-row.on .lp-nm small{color:inherit;opacity:.8}
+  .katedra-page .lp-st{flex-shrink:0;font-size:8.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+    border:1px solid currentColor;border-radius:99px;padding:2px 7px}
+  .katedra-page .lp-st.v{color:var(--ok)}
+  .katedra-page .lp-st.p{color:var(--pl-mut2)}
+  .katedra-page .lp-row.on .lp-st{color:inherit}
+  .katedra-page .lp-empty{padding:18px 12px;text-align:center;font-size:12px;color:var(--pl-mut2);line-height:1.5}
+  .katedra-page .empty-note{border:1.5px dashed var(--pl-edge);border-radius:var(--rs);padding:18px 16px;
+    text-align:center;font-size:12.5px;color:var(--pl-mut);line-height:1.55;background:var(--paper2)}
+
+  /* ══════════ IZBORNIK IZGLEDA (u zaglavlju) ══════════ */
+  .katedra-page .skin-wrap{position:relative;flex-shrink:0}
+  .katedra-page .skin-open{display:flex;align-items:center;gap:7px;border:1px solid var(--line2);background:var(--card);
+    color:var(--mut);border-radius:var(--rs);padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;
+    font-family:inherit;letter-spacing:.3px;transition:.15s}
+  .katedra-page .skin-open:hover{border-color:var(--acc);color:var(--txt)}
+  .katedra-page .skin-open .sw{width:13px;height:13px;border-radius:50%;background:var(--grad);
+    border:1px solid var(--line2);flex-shrink:0}
+  .katedra-page .skin-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:120;width:252px;background:var(--card);
+    border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 16px 40px rgba(0,0,0,.28);padding:7px;display:none}
+  .katedra-page .skin-menu.on{display:block;animation:katedra-fade .18s ease}
+  .katedra-page .skin-menu h5{font-size:10px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--mut2);padding:7px 9px 9px}
+  .katedra-page .skin-item{width:100%;display:flex;align-items:center;gap:10px;background:transparent;
+    border:1px solid transparent;border-radius:var(--rs);padding:8px 9px;font-size:13.5px;color:var(--txt);
+    font-family:inherit;text-align:left;cursor:pointer;transition:.12s}
+  .katedra-page .skin-item:hover{border-color:var(--line2);background:var(--bg2)}
+  .katedra-page .skin-item .chip{display:flex;gap:2px;flex-shrink:0}
+  .katedra-page .skin-item .chip i{width:10px;height:17px;border-radius:2px;display:block;border:1px solid rgba(0,0,0,.18)}
+  .katedra-page .skin-item .nm{flex:1;min-width:0}
+  .katedra-page .skin-item .nm small{display:block;font-size:10.5px;color:var(--mut2);font-weight:400}
+  .katedra-page .skin-item .tick{color:var(--acc);font-weight:800;opacity:0;flex-shrink:0}
+  .katedra-page .skin-item.on{background:var(--bg2);font-weight:700;border-color:var(--line)}
+  .katedra-page .skin-item.on .tick{opacity:1}
+  .katedra-page .skin-note{font-size:11px;color:var(--mut2);padding:9px 9px 4px;border-top:1px solid var(--line);
+    margin-top:6px;line-height:1.45}
+  @media(max-width:560px){.katedra-page .skin-open span.lbl{display:none}}
+
+  /* ══════════ RADNA PLOČA — dvostupčani raspored ══════════
+     Wrapperi, a ne grid na #view-check: zatečeno sedmero djece bi s
+     grid-column:2 na panelima guralo faze u četvrti red i ostavilo rupu. */
+  /* Pozdrav i podaci o radu su bili dva odvojena pojasa jedan ispod drugog;
+     sad su jedno zaglavlje — tekst lijevo, Rad i Rok desno. */
+  /* Na uskom ekranu je naslov faze bio stisnut u tri retka jer su brojač,
+     traka i žig ostajali u istom redu. Meta se prelama ispod. */
+  @media(max-width:620px){
+    .katedra-page .ph-head{flex-wrap:wrap;row-gap:10px;padding:13px 14px}
+    .katedra-page .ph-tit{flex:1 1 0;min-width:0}
+    .katedra-page .ph-meta{flex:1 1 100%;justify-content:flex-end}
+    .katedra-page .ph-tit h3{font-size:14px}
+  }
+  .katedra-page .board-hi{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;
+    flex-wrap:wrap;margin:16px 2px 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .katedra-page .board-hi h2{font-family:var(--serif);font-size:clamp(19px,2.5vw,25px);font-weight:800;
+    letter-spacing:-.3px;color:var(--txt)}
+  .katedra-page .board-hi p{font-size:13px;color:var(--mut);margin-top:5px;max-width:58ch}
+  .katedra-page #boardHiTxt{flex:1;min-width:260px}
+  .katedra-page .board-meta{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline;
+    font-size:12.5px;text-align:right;flex-shrink:0;max-width:300px}
+  .katedra-page .board-meta span{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--mut2);justify-self:start}
+  .katedra-page .board-meta b{color:var(--txt);font-weight:600;font-style:italic;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .katedra-page .scan-summary{margin:0 2px 16px}
+  .katedra-page .scan-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .katedra-page .scan-head b{font-size:14.5px}
+  .katedra-page .scan-head span{font-size:12px;color:var(--mut)}
+  .katedra-page .scan-row{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;margin-bottom:12px}
+  .katedra-page .scan-stat{display:flex;flex-direction:column;gap:2px}
+  .katedra-page .scan-stat b{font-size:21px;font-weight:800;color:var(--txt)}
+  .katedra-page .scan-stat span{font-size:10.5px;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px}
+  .katedra-page .scan-line{font-size:13px;color:var(--mut);flex:1;min-width:220px;align-self:center}
+  .katedra-page .scan-risk-head{font-size:12.5px;font-weight:700;color:var(--bad);margin-bottom:6px}
+  .katedra-page .scan-risk-head.ok{color:var(--ok)}
+  .katedra-page .scan-risks{margin:0;padding-left:18px;font-size:13px;color:var(--txt)}
+  .katedra-page .scan-risks li{margin-bottom:4px}
+  .katedra-page .scan-more{font-size:12px;color:var(--mut);font-style:italic;margin-top:6px}
+  .katedra-page .board-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+  /* Stupci se dodjeljuju izričito jer .board-side u DOM-u dolazi PRVI —
+     tako na uskom ekranu rok i opseg ostanu iznad faza, bez order trika. */
+  /* grid-row:1 je nužan uz izričite stupce: .board-side je prvi u DOM-u pa bi
+     auto-postavljanje glavni stupac gurnulo u drugi redak i ostavilo rupu. */
+  .katedra-page .board-main{grid-column:1;grid-row:1;min-width:0}
+  .katedra-page .board-side{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:12px;
+    position:sticky;top:112px}
+  .katedra-page .board-side .dl-panel{margin:0}
+  /* U 300px stupcu se "naziv ......... datum" u jednom retku lomio na dva-tri
+     retka i popis je izgledao razbacano. Ovdje datum ide ispod naziva. */
+  .katedra-page .board-side .dl-row{display:block;padding:7px 0}
+  .katedra-page .board-side .dl-row b{display:block;font-size:12.5px;line-height:1.35}
+  .katedra-page .board-side .dl-row .date{display:block;margin-top:1px;font-size:12px;white-space:normal}
+  .katedra-page .board-side .dl-head{gap:8px}
+  .katedra-page .board-side .dl-head h3{flex-basis:100%}
+  .katedra-page .board-side .dl-head input[type="date"]{width:100%}
+  @media(max-width:1000px){
+    .katedra-page .board-grid{grid-template-columns:1fr}
+    .katedra-page .board-main,.katedra-page .board-side{grid-column:auto;grid-row:auto}
+    .katedra-page .board-side{position:static}
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     LINEARNI TOK EKRANA — data-screen / data-chrome na #katedra-root
+
+     Ekran je vanjski okvir, tab je unutarnja ploha radne ploče. setTab()
+     ostaje jedini koji dira .view.on; ova pravila samo sakrivaju okvir.
+
+     ZAŠTO POSTOJI data-chrome: ".katedra-page .view.on" ima specifičnost
+     (0,2,1). Pravilo tipa [data-screen="tip"] .view ima (0,2,0) i GUBI, pa
+     bi viewovi ostali vidljivi ispod uvodnih ekrana. Oblik
+     ".katedra-page[data-chrome=…] .view.on" ima (0,3,1) i pobjeđuje čisto.
+     Ne "popravljati" ovo s !important — time pucaju ekrani 4–6.
+     ══════════════════════════════════════════════════════════════════ */
+  /* Animacija stoji na .screen, a ne na ID pravilima ispod: inače bi je
+     reduced-motion blok (0,2,0) morao nadjačati protiv ID selektora (1,2,0),
+     što bez !important nije moguće. */
+  .katedra-page .screen{display:none;padding:34px 0 60px;animation:katedra-fade .25s ease}
+  /* Kartica lijevka posuđuje .onb-card iz nekadašnjeg overlaya — isti vizualni
+     rječnik, samo šira jer sad stoji na stranici, a ne iznad nje. */
+  .katedra-page .scr-card{max-width:600px;margin:0 auto}
+  .katedra-page .scr-card h2{margin:14px 0 6px}
+  .katedra-page .onb-choices.big{flex-direction:row;gap:10px}
+  .katedra-page .onb-choices.big .onb-choice{flex:1;text-align:center;padding:18px 12px}
+  @media(max-width:560px){.katedra-page .onb-choices.big{flex-direction:column}}
+  /* Natrag je prava, prepoznatljiva tipka — prije je bio sivi tekst koji se
+     nije razlikovao od opisa i teško se pogađao. */
+  .katedra-page .onb-back{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);
+    background:transparent;color:var(--mut);font-size:12.5px;font-weight:700;font-family:inherit;
+    cursor:pointer;margin-top:14px;padding:9px 16px;border-radius:var(--rs);transition:.15s}
+  .katedra-page .onb-back:hover{border-color:var(--acc);color:var(--txt);background:var(--bg2)}
+
+  /* .onb-choice je blok sirine 100%, pa je gumb u retku gutao polje za unos i
+     ostavljao ga siroko 50px. U ovom retku polje dobiva prostor, gumb svoj. */
+  .katedra-page .fun-input{display:flex;gap:8px;margin-bottom:10px;align-items:stretch}
+  .katedra-page .fun-input input{flex:1 1 auto;min-width:0;background:var(--bg2);border:1px solid var(--line2);
+    border-radius:12px;color:var(--txt);font-family:inherit;font-size:14px;padding:12px 14px;outline:none}
+  .katedra-page .fun-input input:focus{border-color:var(--acc)}
+  .katedra-page .fun-input .onb-choice{flex:0 0 auto;width:auto;padding:12px 18px;display:flex;
+    align-items:center;background:var(--grad);border-color:transparent;color:var(--on-acc)}
+  .katedra-page .fun-input .onb-choice b{color:var(--on-acc)}
+  /* Sporedni izbor ("preskoči") mora izgledati kao tipka, ne kao zalutali tekst. */
+  .katedra-page .onb-choices .onb-choice.ghost{background:transparent;border-color:var(--line2)}
+  .katedra-page .onb-choices .onb-choice.ghost b{font-weight:600;color:var(--mut)}
+  .katedra-page .onb-choices .onb-choice.ghost:hover{border-color:var(--acc);background:var(--card2)}
+  .katedra-page .onb-choices .onb-choice.ghost:hover b{color:var(--txt)}
+  /* zaglavlje i podnožje ekrana 4 — vidljivi samo dok je chrome "fak" */
+  .katedra-page .scr-head{padding:30px 2px 14px;text-align:center}
+  .katedra-page .scr-head h2{font-family:var(--serif);font-size:clamp(20px,2.6vw,26px);font-weight:800;
+    letter-spacing:-.3px;color:var(--txt)}
+  .katedra-page .scr-head p{font-size:13px;color:var(--mut);margin:6px auto 0;max-width:62ch}
+  .katedra-page .scr-meta{font-size:11px;color:var(--mut2);margin-top:8px;letter-spacing:.3px}
+  .katedra-page .scr-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:20px 2px 44px;max-width:1080px;margin:0 auto}
+  .katedra-page .scr-foot .onb-back{margin-top:0}
+  .katedra-page .scr-foot .onb-go{width:auto;min-width:200px}
+  /* ekran povratka — jedna uputa, jedan gumb */
+  .katedra-page .ret-one{background:var(--bg2);border:1.5px solid var(--acc);border-radius:14px;
+    padding:16px 18px;display:flex;flex-direction:column;gap:11px;align-items:center;margin:16px 0 4px}
+  .katedra-page .ret-lbl{font-size:9.5px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut2)}
+  .katedra-page .ret-one b{font-size:13.5px;font-weight:600;line-height:1.5;color:var(--txt)}
+  .katedra-page .ret-one .onb-go{width:auto;min-width:170px}
+  /* Completion Scan rezultat — ista kartica-u-kartici logika kao .att-card,
+     samo bez okvira jer već sjedi unutar .onb-card. */
+  .katedra-page #scanResult{text-align:left;background:var(--bg2);border:1px solid var(--line2);
+    border-radius:14px;padding:14px 16px;margin-top:16px}
+  .katedra-page .scan-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+    font-size:13.5px;flex-wrap:wrap}
+  .katedra-page .scan-head span{font-size:11.5px;color:var(--mut2);font-weight:600}
+  .katedra-page .scan-risks{margin:6px 0 0;padding-left:18px;font-size:12.8px;color:var(--mut)}
+  .katedra-page .scan-risks li{margin-bottom:4px}
+  .katedra-page .scan-more{font-size:11.5px;color:var(--mut2);margin-top:6px}
+  .katedra-page[data-screen="tip"] #scr-tip,
+  .katedra-page[data-screen="gdje"] #scr-gdje,
+  .katedra-page[data-screen="pitanja"] #scr-pitanja,
+  .katedra-page[data-screen="povratak"] #scr-povratak,
+  .katedra-page[data-screen="scan"] #scr-scan{display:block}
+  /* Prijelaz ekrana i viewova je jedina animacija koju korisnik vidi na svaku
+     navigaciju — postojeći reduced-motion blokovi pokrivaju samo pojedine
+     elemente (glow, puls, nagib faza), ne i ovo. */
+  @media(prefers-reduced-motion:reduce){
+    .katedra-page .screen,.katedra-page .view.on{animation:none}
+  }
+
+  /* uvodni ekrani i ekran fakulteta gase cijelu plohu tabova */
+  .katedra-page[data-chrome="funnel"] .view.on{display:none}
+
+  /* ekran fakulteta = #view-cheat sveden na #fakCard.
+     Selektor MORA biti "#cheatRoot > *", ne ".cs-grid > *" — #view-help je
+     također .cs-grid pa bi se inače ispraznio. */
+  .katedra-page[data-chrome="fak"] #cheatRoot > *:not(#fakCard){display:none}
+  /* Kao ekran, kartica gubi vlastiti okvir, naslov i uvodni odlomak: sve troje
+     ponavlja ono što već piše u zaglavlju ekrana, a tri ugniježđena okvira su
+     glavni razlog zašto je dio djelovao razbacano. Kao tab ostaje kartica. */
+  .katedra-page[data-chrome="fak"] #fakCard{grid-column:1/-1;background:transparent;border:0;
+    padding:0;box-shadow:none}
+  .katedra-page[data-chrome="fak"] #fakCard > h3,
+  .katedra-page[data-chrome="fak"] #fakCard > p{display:none}
+  /* Stupci iste visine, popis puni ostatak — inače su bili nejednaki jer prvi
+     ima polje za pretragu, a ispod kraćih je ostajala prazna rupa. */
+  .katedra-page[data-chrome="fak"] .lp-cascade{height:min(46vh,360px);align-items:stretch}
+  .katedra-page[data-chrome="fak"] .lp-col{height:100%;min-height:0}
+  /* Bez ovoga je zadnji vidljivi redak prerezan po sredini i popis izgleda
+     odsjecen; ovako se blago stapa i vidi se da ima jos ispod. */
+  .katedra-page[data-chrome="fak"] .lp-list{flex:1;max-height:none;
+    mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent);
+    -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)}
+  .katedra-page:not([data-chrome="fak"]) #fakHead,
+  .katedra-page:not([data-chrome="fak"]) #fakFoot{display:none}
+
+  .katedra-page[data-chrome="funnel"] #tabs,
+  .katedra-page[data-chrome="fak"] #tabs{display:none}
+  /* Traka koraka prati čarobnjak u chatu (Zadatak → Tip → Tema → …). Na ploči
+     ne opisuje ništa što ondje radiš, pa je ondje bila samo još jedan pojas. */
+  .katedra-page:not([data-screen="chat"]) #stepbar{display:none}
+  /* #nextBar dobiva inline display iz renderLine(), pa ga CSS smije samo
+     skrivati — prikaz i dalje odlučuje hasRealProgress(). */
+  .katedra-page[data-chrome="funnel"] #nextBar,
+  .katedra-page[data-chrome="fak"] #nextBar{display:none!important}
+
+  .katedra-page:not([data-screen="ploca"]) .tip-row,
+  .katedra-page:not([data-screen="ploca"]) .linija{display:none}
+
+  /* #banner je zamijenjen trakom sljedećeg koraka: nextStepText() proizvodi
+     isti semafor ("🟢 Spreman za pisanje" / "🔴 N koraka do pisanja") i salje
+     ga u #linInfo i #nextBarTxt. Markup ostaje jer refreshProgress() u njega
+     pise bez guardova na svaku kvacicu — skrivanje je jeftinije od diranja
+     tih 19 redaka. Zeleni CTA preuzeo je #nextBarBtn. */
+  .katedra-page #banner{display:none}
+
+  /* ---------- SEMAFOR NA TABOVIMA ---------- */
+  .katedra-page .tabs button.locked{opacity:.45;cursor:not-allowed}
+  .katedra-page .tabs button.locked:hover{border-color:var(--line);color:var(--mut)}
+  .katedra-page .tabs button.locked::after{content:'🔒';font-size:9px;margin-left:1px}
+
+  /* ---------- ZAGLAVLJE EKRANA START ---------- */
+  .katedra-page .chat-hi{margin:16px 2px 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .katedra-page .chat-hi h2{font-family:var(--serif);font-size:clamp(19px,2.5vw,25px);font-weight:800;
+    letter-spacing:-.3px;color:var(--txt)}
+  .katedra-page .chat-hi p{font-size:13px;color:var(--mut);margin-top:5px;max-width:64ch}
+  /* Papir je prazan dok tema ne postoji, pa ne smije nadvladati razgovor. */
+  .katedra-page .kpaper{align-self:start}
+
+  /* ---------- LANDING PRECISION POLISH ----------
+     Jedini landing-specific source of truth. Zadrzava papir, serif i postojece
+     kartice, ali popravlja ritam, fokus i male interakcije bez novog UI sustava. */
+  .katedra-page.landing-page{
+    position:relative;
+    overflow-x:hidden;
+    --paper-shift-x:0px;
+    --paper-shift-y:0px;
+  }
+  .katedra-page.landing-page::before{
+    content:'';
+    position:fixed;
+    inset:-18%;
+    z-index:0;
+    pointer-events:none;
+    opacity:.7;
+    background:
+      radial-gradient(420px 280px at calc(50% + var(--paper-shift-x)) calc(0% + var(--paper-shift-y)),rgba(var(--acc-rgb),.08),transparent 72%),
+      radial-gradient(300px 240px at calc(92% - var(--paper-shift-x)) calc(80% - var(--paper-shift-y)),rgba(var(--warn-rgb),.08),transparent 75%);
+    transition:background-position .35s ease-out;
+  }
+  .katedra-page.landing-page > *{position:relative;z-index:1}
+  .katedra-page.landing-page .landing-wrap{max-width:1040px;padding-bottom:76px}
+  .katedra-page.landing-page .landing-brand,
+  .katedra-page.landing-page .landing-brand-title,
+  .katedra-page.landing-page .landing-brand-subtitle{
+    color:var(--gold)!important;
+  }
+  .katedra-page.landing-page .landing-brand .logo-badge{
+    color:var(--gold);
+    border-color:var(--gold);
+    transition:transform .4s cubic-bezier(.22,.8,.24,1),box-shadow .3s ease;
+    will-change:transform;
+  }
+  .katedra-page.landing-page .landing-brand:hover .logo-badge{
+    transform:rotate(-7deg) translateY(-2px);
+    box-shadow:0 0 0 3px var(--paper),0 9px 24px rgba(var(--shadow-rgb),.28);
+  }
+  .katedra-page.landing-page .landing-brand-subtitle{
+    transition:transform .3s ease,color .3s ease;
+  }
+  .katedra-page.landing-page .landing-brand:hover .landing-brand-subtitle{transform:translateX(2px)}
+  .katedra-page.landing-page .landing-brand-title{transition:letter-spacing .3s ease}
+  .katedra-page.landing-page .landing-brand:hover .landing-brand-title{letter-spacing:.1px!important}
+  .katedra-page.landing-page .landing-header{
+    padding-top:22px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .katedra-page.landing-page .landing-header > div:first-child{min-width:220px}
+  .katedra-page.landing-page .landing-header > a{
+    padding:7px 2px;
+    color:var(--acc)!important;
+    text-decoration:underline;
+    text-decoration-color:transparent;
+    text-underline-offset:5px;
+    transition:color .18s ease,text-decoration-color .18s ease;
+  }
+  .katedra-page.landing-page .landing-header > a:hover{
+    color:var(--acc2)!important;
+    text-decoration-color:currentColor;
+  }
+  .katedra-page.landing-page .landing-hero{
+    position:relative;
+    margin-top:clamp(58px,8vw,88px)!important;
+    margin-bottom:clamp(48px,7vw,72px)!important;
+    padding:0 12px 4px;
+  }
+  .katedra-page.landing-page .landing-hero::after{
+    content:'';
+    display:block;
+    width:min(180px,30%);
+    height:2px;
+    margin:clamp(38px,5vw,56px) auto 0;
+    background:var(--gold);
+    box-shadow:0 0 16px rgba(var(--warn-rgb),.2);
+    opacity:.86;
+    transform-origin:center;
+    animation:landing-rule-in .7s ease-out .35s both;
+  }
+  .katedra-page.landing-page .landing-hero h2{
+    max-width:760px!important;
+    font-size:clamp(34px,5.5vw,58px)!important;
+    letter-spacing:-.055em!important;
+    line-height:1.08!important;
+    text-wrap:balance;
+  }
+  .katedra-page.landing-page .landing-hero p{
+    max-width:600px!important;
+    margin-top:18px!important;
+    font-size:16px!important;
+    line-height:1.65!important;
+  }
+  .katedra-page.landing-page .landing-actions{
+    gap:16px!important;
+    margin-top:30px!important;
+  }
+  .katedra-page.landing-page .landing-primary-cta,
+  .katedra-page.landing-page .landing-secondary-cta{
+    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,color .18s ease,background-color .18s ease;
+  }
+  .katedra-page.landing-page .landing-primary-cta{
+    width:260px!important;
+    height:48px!important;
+    margin-top:0!important;
+    letter-spacing:.1px;
+  }
+  .katedra-page.landing-page .landing-primary-cta:hover{
+    transform:translateY(-2px);
+    box-shadow:0 8px 22px rgba(var(--acc-rgb),.3);
+  }
+  .katedra-page.landing-page .landing-secondary-cta{
+    width:260px!important;
+    height:48px!important;
+    min-height:0;
+    margin-top:0!important;
+    background:transparent;
+    color:var(--mut);
+  }
+  .katedra-page.landing-page .landing-secondary-cta:hover{
+    transform:translateY(-1px);
+    border-color:var(--acc);
+    color:var(--txt);
+    background:rgba(var(--acc-rgb),.045);
+  }
+  .katedra-page.landing-page .landing-trust{
+    max-width:820px;
+    margin:0 auto 58px!important;
+    padding:24px 18px!important;
+    background:transparent;
+    border-top:1px solid var(--line2)!important;
+    border-bottom:1px solid var(--line2)!important;
+  }
+  .katedra-page.landing-page .landing-trust h3{
+    font-size:clamp(16px,2vw,18px)!important;
+    letter-spacing:-.2px;
+  }
+  .katedra-page.landing-page .landing-trust p{
+    max-width:600px!important;
+    line-height:1.65;
+  }
+  .katedra-page.landing-page .landing-steps,
+  .katedra-page.landing-page .landing-pricing{
+    margin-bottom:58px!important;
+  }
+  .katedra-page.landing-page .landing-steps > h3,
+  .katedra-page.landing-page .landing-pricing > h3{
+    margin-bottom:24px!important;
+  }
+  .katedra-page.landing-page .landing-step-grid,
+  .katedra-page.landing-page .landing-price-grid{
+    gap:18px!important;
+  }
+  .katedra-page.landing-page .landing-step-grid > div{
+    padding:2px 4px 4px;
+    text-align:center;
+  }
+  .katedra-page.landing-page .landing-step-grid > div + div{
+    border-left:1px solid var(--line);
+    padding-left:22px;
+  }
+  .katedra-page.landing-page .landing-step-grid > div > div:first-child{
+    width:32px!important;
+    height:32px!important;
+    margin:0 auto 12px!important;
+    background:var(--bg2);
+    box-shadow:none;
+    font-size:13px!important;
+  }
+  .katedra-page.landing-page .landing-step-grid p{
+    max-width:34ch;
+    margin-left:auto;
+    margin-right:auto;
+    line-height:1.58!important;
+  }
+  .katedra-page.landing-page .landing-pass-card{
+    min-height:164px;
+    padding:20px 16px!important;
+    border-color:var(--line)!important;
+    background:var(--card)!important;
+    transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease,background-color .18s ease;
+  }
+  .katedra-page.landing-page .landing-pass-card:hover{
+    transform:translateY(-3px);
+    border-color:var(--acc)!important;
+    background:var(--card2)!important;
+    box-shadow:0 8px 20px rgba(var(--shadow-rgb),.1);
+  }
+  .katedra-page.landing-page .landing-pass-card > div:nth-child(2){
+    margin:8px 0!important;
+    font-size:25px!important;
+  }
+  .katedra-page.landing-page .landing-pricing > p{
+    max-width:620px;
+    margin:14px auto 0!important;
+    line-height:1.5;
+  }
+  .katedra-page.landing-page .landing-final-cta{
+    margin-bottom:42px!important;
+    padding-top:0;
+  }
+  .katedra-page.landing-page .landing-footer{
+    row-gap:10px!important;
+  }
+  .katedra-page.landing-page a:focus-visible{
+    outline:3px solid rgba(var(--acc-rgb),.38);
+    outline-offset:4px;
+  }
+  .katedra-page.landing-page[data-motion-ready="true"] [data-reveal="true"]{
+    opacity:0;
+    transform:translateY(12px);
+    transition:opacity .55s ease,transform .55s cubic-bezier(.22,.8,.24,1);
+  }
+  .katedra-page.landing-page[data-motion-ready="true"] [data-reveal="true"][data-revealed="true"]{
+    opacity:1;
+    transform:none;
+  }
+  .katedra-page.landing-page[data-motion-ready="true"] .landing-step-grid > div:nth-child(2){transition-delay:.08s}
+  .katedra-page.landing-page[data-motion-ready="true"] .landing-step-grid > div:nth-child(3){transition-delay:.16s}
+  .katedra-page.landing-page[data-motion-ready="true"] .landing-price-grid > a:nth-child(2){transition-delay:.08s}
+  .katedra-page.landing-page[data-motion-ready="true"] .landing-price-grid > a:nth-child(3){transition-delay:.16s}
+  @keyframes landing-rule-in{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:.78}}
+  @media(max-width:620px){
+    .katedra-page.landing-page .landing-step-grid{grid-template-columns:1fr!important}
+    .katedra-page.landing-page .landing-step-grid > div + div{border-left:0;border-top:1px solid var(--line);padding:18px 4px 4px}
+  }
+  @media(max-width:560px){
+    .katedra-page.landing-page .landing-hero{margin-top:46px!important;padding:0 2px 2px}
+    .katedra-page.landing-page .landing-actions{flex-direction:column;align-items:stretch}
+    .katedra-page.landing-page .landing-primary-cta,
+    .katedra-page.landing-page .landing-secondary-cta{width:100%!important;max-width:none!important}
+    .katedra-page.landing-page .landing-trust{margin-bottom:46px!important;padding:20px 8px!important}
+    .katedra-page.landing-page .landing-pass-card{min-height:0}
+    .katedra-page.landing-page .landing-footer{justify-content:flex-start!important}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .katedra-page.landing-page::before,
+    .katedra-page.landing-page::after,
+    .katedra-page.landing-page .landing-hero::after{animation:none}
+    .katedra-page.landing-page[data-motion-ready="true"] [data-reveal="true"]{opacity:1;transform:none;transition:none}
+    .katedra-page.landing-page .landing-primary-cta,
+    .katedra-page.landing-page .landing-secondary-cta,
+    .katedra-page.landing-page .landing-pass-card{transition:none}
+  }
+
+  /* ---------- LEGAL DOCUMENTS + SUMMARY MODAL ---------- */
+  .katedra-page.legal-page .legal-shell{max-width:900px!important;padding-bottom:0}
+  .katedra-page.legal-page .legal-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    padding:24px 0 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .katedra-page.legal-page .legal-brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:220px;
+    color:var(--gold)!important;
+    text-decoration:none;
+  }
+  .katedra-page.legal-page .legal-brand .logo-badge{
+    width:44px;
+    height:44px;
+    color:var(--gold);
+    border-color:var(--gold);
+  }
+  .katedra-page.legal-page .legal-brand-title,
+  .katedra-page.legal-page .legal-brand-subtitle{display:block;color:var(--gold)}
+  .katedra-page.legal-page .legal-brand-title{font-size:20px;line-height:1.1}
+  .katedra-page.legal-page .legal-brand-subtitle{font-size:12px;margin-top:3px}
+  .katedra-page.legal-page .legal-header-action,
+  .katedra-page.legal-page .legal-back,
+  .katedra-page.legal-page .legal-footer-links a{color:var(--acc);text-decoration:none}
+  .katedra-page.legal-page .legal-header-action{font-size:13px;font-weight:700}
+  .katedra-page.legal-page .legal-header-action:hover,
+  .katedra-page.legal-page .legal-back:hover,
+  .katedra-page.legal-page .legal-footer-links a:hover{text-decoration:underline;text-underline-offset:4px}
+  .katedra-page.legal-page .legal-hero{padding:46px 0 28px;max-width:700px}
+  .katedra-page.legal-page .legal-kicker{
+    color:var(--gold);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    margin-bottom:9px;
+  }
+  .katedra-page.legal-page .legal-title{
+    font-family:var(--serif);
+    font-size:clamp(30px,5vw,46px);
+    line-height:1.08;
+    letter-spacing:-.6px;
+  }
+  .katedra-page.legal-page .legal-meta{margin-top:12px;color:var(--mut);font-size:13px;line-height:1.55}
+  .katedra-page.legal-page .legal-alert{
+    border:1px solid rgba(var(--warn-rgb),.52);
+    border-radius:var(--r);
+    padding:16px 18px;
+    line-height:1.55;
+    box-shadow:0 8px 22px rgba(var(--shadow-rgb),.06);
+  }
+  .katedra-page.legal-page .legal-back{display:inline-block;font-size:13px;margin:3px 0 2px}
+  .katedra-page.legal-page .legal-document{
+    margin-top:18px!important;
+    padding:32px 34px!important;
+    border-color:var(--line);
+    background:var(--paper);
+    line-height:1.7!important;
+    box-shadow:0 12px 28px rgba(var(--shadow-rgb),.08);
+  }
+  .katedra-page.legal-page .legal-document h3{font-size:18px;margin-top:28px;margin-bottom:8px;color:var(--txt)}
+  .katedra-page.legal-page .legal-document h3:first-child{margin-top:0}
+  .katedra-page.legal-page .legal-document p + h3,
+  .katedra-page.legal-page .legal-document ul + h3{margin-top:30px}
+  .katedra-page.legal-page .legal-document p,
+  .katedra-page.legal-page .legal-document li{font-size:14px}
+  .katedra-page.legal-page .legal-document ul{padding-left:22px;margin-top:7px}
+  .katedra-page.legal-page .legal-document li + li{margin-top:8px}
+  .katedra-page.legal-page .legal-sources{margin-top:18px!important;padding:18px 20px!important;border-color:var(--line);background:transparent}
+  .katedra-page.legal-page .legal-sources ul{padding-left:20px;margin-top:7px}
+  .katedra-page.legal-page .legal-footer-links{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .katedra-page .legal-consent{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--mut);margin-bottom:14px;line-height:1.45}
+  .katedra-page .legal-consent input{margin-top:3px;flex:none}
+  .katedra-page .legal-inline-button{
+    border:0;
+    padding:0;
+    background:transparent;
+    color:var(--acc);
+    font:inherit;
+    text-decoration:underline;
+    text-underline-offset:3px;
+    cursor:pointer;
+  }
+  .katedra-page .legal-inline-button:hover{color:var(--acc2)}
+  .katedra-page .legal-modal-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:120;
+    display:grid;
+    place-items:center;
+    padding:18px;
+    background:rgba(34,37,46,.55);
+    backdrop-filter:blur(3px);
+  }
+  .katedra-page .legal-modal{
+    position:relative;
+    width:min(620px,100%);
+    max-height:min(700px,calc(100vh - 36px));
+    overflow:auto;
+    padding:30px 32px 28px;
+    border:1px solid var(--line2);
+    border-radius:var(--r);
+    background:var(--paper);
+    color:var(--txt);
+    box-shadow:0 22px 70px rgba(0,0,0,.3);
+    outline:none;
+    animation:legal-modal-in .2s ease-out;
+  }
+  .katedra-page .legal-modal h2{font-family:var(--serif);font-size:28px;line-height:1.12;letter-spacing:-.35px}
+  .katedra-page .legal-modal-intro{margin-top:12px;font-size:14px;line-height:1.6;color:var(--mut)}
+  .katedra-page .legal-modal-list{margin:18px 0 0;padding-left:20px;line-height:1.55}
+  .katedra-page .legal-modal-list li{font-size:13.5px}
+  .katedra-page .legal-modal-list li + li{margin-top:9px}
+  .katedra-page .legal-modal-note{margin-top:18px;padding:12px 14px;border-left:3px solid var(--gold);background:rgba(138,109,28,.08);font-size:12.5px;line-height:1.55;color:var(--mut)}
+  .katedra-page .legal-modal-close{position:absolute;top:12px;right:14px;border:0;background:transparent;color:var(--mut);font:28px/1 Arial,sans-serif;cursor:pointer;padding:4px 7px}
+  .katedra-page .legal-modal-close:hover{color:var(--txt)}
+  .katedra-page .legal-modal-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+  .katedra-page .legal-modal-actions .copy-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+  .katedra-page .legal-modal-secondary{margin:0!important}
+  @keyframes legal-modal-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+  @media(max-width:600px){
+    .katedra-page.legal-page .legal-header{align-items:flex-start;padding-top:18px}
+    .katedra-page.legal-page .legal-header-action{margin-top:10px}
+    .katedra-page.legal-page .legal-hero{padding:36px 0 24px}
+    .katedra-page.legal-page .legal-document{padding:24px 20px!important}
+    .katedra-page .legal-modal{padding:28px 20px 22px}
+    .katedra-page .legal-modal-actions{align-items:stretch;flex-direction:column}
+    .katedra-page .legal-modal-actions > *{width:100%}
+  }
+  @media(prefers-reduced-motion:reduce){.katedra-page .legal-modal{animation:none}}
+
+  /* ---------- AUTH EDITORIAL SHELL ---------- */
+  .katedra-page.auth-page{
+    min-height:100vh;
+    padding:0 16px 44px;
+  }
+  .katedra-page.auth-page .auth-shell{max-width:1080px;margin:0 auto;padding:0 16px}
+  .katedra-page.auth-page .auth-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+    padding:24px 0 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .katedra-page.auth-page .auth-brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:220px;
+    color:var(--gold)!important;
+    text-decoration:none;
+  }
+  .katedra-page.auth-page .auth-brand .logo-badge{
+    width:44px;
+    height:44px;
+    color:var(--gold);
+    border-color:var(--gold);
+  }
+  .katedra-page.auth-page .auth-brand-title,
+  .katedra-page.auth-page .auth-brand-subtitle{display:block;color:var(--gold)}
+  .katedra-page.auth-page .auth-brand-title{font-size:20px;line-height:1.1}
+  .katedra-page.auth-page .auth-brand-subtitle{font-size:12px;margin-top:3px}
+  .katedra-page.auth-page .auth-header-link,
+  .katedra-page.auth-page .auth-links a,
+  .katedra-page.auth-page .auth-footer a{color:var(--acc);text-decoration:none}
+  .katedra-page.auth-page .auth-header-link{font-size:13px;font-weight:700}
+  .katedra-page.auth-page .auth-header-link:hover,
+  .katedra-page.auth-page .auth-links a:hover,
+  .katedra-page.auth-page .auth-footer a:hover{text-decoration:underline;text-underline-offset:4px}
+  .katedra-page.auth-page .auth-layout{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(350px,420px);
+    align-items:center;
+    gap:clamp(48px,8vw,112px);
+    min-height:calc(100vh - 170px);
+    padding:54px 0 64px;
+  }
+  .katedra-page.auth-page .auth-intro{max-width:520px}
+  .katedra-page.auth-page .auth-kicker{
+    color:var(--gold);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .katedra-page.auth-page .auth-intro h1{
+    font-family:var(--serif);
+    font-size:clamp(34px,5vw,58px);
+    line-height:1.03;
+    letter-spacing:-.9px;
+    max-width:8ch;
+  }
+  .katedra-page.auth-page .auth-intro-copy{max-width:460px;margin-top:20px;color:var(--mut);font-size:16px;line-height:1.65}
+  .katedra-page.auth-page .auth-note{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    max-width:410px;
+    margin-top:32px;
+    padding:15px 0 0;
+    border-top:1px solid var(--line2);
+    color:var(--mut);
+    font-size:13px;
+    line-height:1.55;
+  }
+  .katedra-page.auth-page .auth-note-mark{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:28px;
+    height:28px;
+    flex:0 0 28px;
+    border:1px solid var(--gold);
+    border-radius:50%;
+    color:var(--gold);
+    font-family:var(--serif);
+    font-weight:800;
+  }
+  .katedra-page.auth-page .auth-card{
+    padding:30px 30px 24px;
+    border:1px solid var(--line);
+    border-radius:var(--r);
+    background:var(--paper);
+    box-shadow:0 16px 36px rgba(var(--shadow-rgb),.12);
+  }
+  .katedra-page.auth-page .auth-card-head{padding-bottom:18px;border-bottom:1px solid var(--line)}
+  .katedra-page.auth-page .auth-card-head .auth-kicker{margin-bottom:7px}
+  .katedra-page.auth-page .auth-card-head h2{font-family:var(--serif);font-size:30px;line-height:1.1;letter-spacing:-.4px}
+  .katedra-page.auth-page .auth-card-head > p:last-child{margin-top:7px;color:var(--mut);font-size:13px}
+  .katedra-page.auth-page .auth-form{margin-top:20px}
+  .katedra-page.auth-page .auth-form .fld + .fld{margin-top:14px}
+  .katedra-page.auth-page .auth-form .copy-btn{width:100%;margin-top:4px}
+  .katedra-page.auth-page .auth-links{display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:18px;color:var(--mut);font-size:12.5px;line-height:1.5}
+  .katedra-page.auth-page .auth-links a:last-child{width:100%;margin-top:2px}
+  .katedra-page.auth-page .auth-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:16px;border-top:1px solid var(--line);color:var(--mut2);font-size:11.5px}
+  @media(max-width:760px){
+    .katedra-page.auth-page .auth-shell{padding:0}
+    .katedra-page.auth-page .auth-layout{grid-template-columns:1fr;gap:30px;min-height:0;padding:42px 0 48px}
+    .katedra-page.auth-page .auth-intro{max-width:520px}
+    .katedra-page.auth-page .auth-intro h1{max-width:none;font-size:clamp(34px,10vw,48px)}
+    .katedra-page.auth-page .auth-intro-copy{margin-top:14px;font-size:14.5px}
+    .katedra-page.auth-page .auth-note{margin-top:22px}
+    .katedra-page.auth-page .auth-card{max-width:520px}
+  }
+  @media(max-width:480px){
+    .katedra-page.auth-page{padding:0 12px 28px}
+    .katedra-page.auth-page .auth-header{padding-top:18px}
+    .katedra-page.auth-page .auth-brand{min-width:0}
+    .katedra-page.auth-page .auth-header-link{font-size:12px}
+    .katedra-page.auth-page .auth-card{padding:24px 20px 20px}
+    .katedra-page.auth-page .auth-footer{display:block}
+    .katedra-page.auth-page .auth-footer span + span{display:block;margin-top:6px}
+  }
+  .katedra-page.auth-page .auth-shell,
+  .katedra-page.legal-page .legal-shell{animation:katedra-page-in .45s cubic-bezier(.22,.8,.24,1) both}
+  @keyframes katedra-page-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){
+    .katedra-page.landing-page::before{display:none}
+    .katedra-page.auth-page .auth-shell,
+    .katedra-page.legal-page .legal-shell{animation:none}
+  }
+
+  /* Legacy skin declarations live above this point. Keep the user's global
+     dark-mode preference as the final palette authority on those screens. */
+  html[data-theme='dark'] .katedra-page[data-skin]{
+    --bg:#18232a; --bg2:#202d34; --bg3:#22323a; --card:#27363e; --card2:#1d2930;
+    --line:rgba(245,237,221,.17); --line2:rgba(245,237,221,.3);
+    --txt:#f5eddd; --mut:#c1b9aa; --mut2:#9d9688;
+    --acc:#78a8eb; --acc2:#9fc4f7; --acc3:#c6dcff; --acc-rgb:120,168,235;
+    --on-acc:#132331; --on-acc2:#18232a;
+    --ok:#78ba91; --ok2:#92d9ae; --ok3:#6fbd8c; --ok-rgb:120,186,145;
+    --warn:#f4cf62; --warn-rgb:244,207,98;
+    --bad:#ed8d84; --bad-rgb:237,141,132;
+    --grad:linear-gradient(135deg,#78a8eb 0%,#b9d4ff 100%);
+    --paper:#27363e; --paper2:#202d34; --paper3:#31434c;
+    --ink:#f5eddd; --ink2:#c1b9aa; --pline:rgba(245,237,221,.17);
+    --pl-line:rgba(245,237,221,.13); --pl-line2:rgba(245,237,221,.23); --pl-line3:rgba(245,237,221,.1);
+    --pl-edge:rgba(245,237,221,.28); --pl-edge2:rgba(245,237,221,.18); --pl-edge3:rgba(245,237,221,.22); --pl-edge4:rgba(245,237,221,.18);
+    --pl-mut:#d3c6aa; --pl-mut2:#b9ab90; --pl-mut3:#a99b82; --pl-crest:#f4cf62;
+    --pl-skel:#304149; --pl-skel2:#43565e; --pl-ph:#b9c5cc; --pl-ph2:#9fadb6;
+    --rail:#40545c; --stamp:#ed8d84; --stamp-rgb:237,141,132; --gold:#f4cf62;
+    --shadow-rgb:0,0,0; --grain:rgba(245,237,221,.035); --scheme:dark;
+  }
+.account-overview { margin-top: 20px; }
+.account-overview h2 { margin: 4px 0 18px; font-family: var(--serif, Georgia, serif); font-size: 28px; font-weight: 500; }
+.account-overview-grid { display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--line, #d8d1c4); }
+.account-overview-grid div { padding: 14px 12px 14px 0; border-right: 1px solid var(--line, #d8d1c4); }
+.account-overview-grid div + div { padding-left: 12px; }
+.account-overview-grid div:last-child { border-right: 0; }
+.account-overview-grid b, .account-overview-grid span { display: block; }
+.account-overview-grid b { font-size: 24px; }
+.account-overview-grid span { margin-top: 2px; color: var(--mut); font-size: 12px; }
+.account-project-list { margin: 18px 0 0; padding: 0; list-style: none; }
+.account-project-list li { display: flex; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line, #d8d1c4); }
+.account-project-list b, .account-project-list small { display: block; }
+.account-project-list small { margin-top: 3px; color: var(--mut); font-size: 12px; }
+.account-project-list a, .account-data-actions a { color: var(--acc); }
+.account-data-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--mut); font-size: 12px; }
+@media (max-width: 560px) {
+  .account-overview-grid { grid-template-columns: 1fr; }
+  .account-overview-grid div, .account-overview-grid div + div { padding: 10px 0; border-right: 0; border-bottom: 1px solid var(--line, #d8d1c4); }
+  .account-overview-grid div:last-child { border-bottom: 0; }
+  .account-data-actions { align-items: flex-start; flex-direction: column; }
+}
