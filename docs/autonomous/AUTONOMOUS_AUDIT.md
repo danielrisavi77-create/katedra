@@ -370,3 +370,47 @@ so a paused run could potentially resume after the Pass expired or changed.
 
 - Real resume/worker behavior still requires the canonical Lekta RPC/RLS and
   authenticated staging environment described in `BLOCKERS.md`.
+
+## Cycle: 2026-08-14m
+
+### Root cause selected
+
+Priority: P1 (transient provider failures were not retried safely).
+
+The provider-to-worker bridge treated HTTP 429/5xx, network failures and
+incomplete provider streams as ordinary failures. The worker therefore ended
+the step immediately instead of using the existing maximum-three-attempt
+contract. In addition, a non-retryable billing or configuration failure could
+be reported to the scheduler as `retrying` even though the backend step was
+not requeued.
+
+### Fix
+
+- Add an explicit retryable signal to provider error events.
+- Mark provider 429/5xx, network, malformed-stream and incomplete-result
+  failures as retryable while keeping validation, capability and billing or
+  configuration errors non-retryable.
+- Convert retryable provider errors into verifier `needs_revision` results so
+  the worker requeues only while the attempt is below three; the third attempt
+  becomes blocked.
+- Align the worker return status with the persisted backend status so a failed
+  non-retryable step is never reported as retrying.
+- Add regression coverage for provider signals, HTTP status retryability,
+  bounded worker retries and non-retryable billing/configuration failures.
+
+### Verification
+
+- Focused provider/worker tests: PASS (3 files, 17 tests).
+- Full suite: PASS (129 files, 399 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+
+### Remaining issues
+
+- Local HTTP smoke: PASS via `curl` against the existing localhost process;
+  `/`, `/pisi`, `/racun`, `/prijava`, `/privatnost`, and `/uvjeti` all returned
+  `200`. No process was terminated.
+- Real retry, billing reconciliation and worker lease behavior still require
+  the canonical Lekta RPC/RLS and authenticated staging environment described
+  in `BLOCKERS.md`.
