@@ -575,6 +575,48 @@ That could make link commands and schema behavior ambiguous.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14ab
+
+### Root cause selected
+
+Priority: P2 (mojibake navigation labels in onboarding step 3).
+
+The current-state onboarding step rendered the back and next arrows as the
+literal mojibake strings `â†` and `â†’`, while the other onboarding steps used
+readable Unicode arrows. This was confirmed in the rendered Testing Library
+accessible tree, not inferred from a shell display.
+
+### Fix
+
+- Replace both step-3 labels with actual `U+2190` and `U+2192` arrows.
+- Add a component regression test that reaches step 3 and rejects the old
+  mojibake labels.
+
+### Verification
+
+- TDD regression: PASS; the new test failed against the old rendered labels and
+  passed after the minimal text-only fix.
+- Focused onboarding tests: PASS (8 tests).
+- Full suite: PASS (126 files, 421 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Browser verification: PASS on `localhost:3000` and `127.0.0.1:3000`; step 3
+  exposed `← Natrag` and `Dalje →`, with status `200` and no page errors.
+- Independent review: PASS, no Critical/Important/Minor findings.
+
+### Commit and journey impact
+
+- Katedra commit: `3e102b6 fix: repair onboarding navigation labels`.
+- Affected journeys: G0 and G8 onboarding clarity; no entitlement or backend
+  behavior changed.
+
+### Remaining issues
+
+- G2-G7, G9 and G10 remain `BLOCKED_EXTERNAL` pending authenticated staging,
+  canonical Lekta deployment and real commerce/provider evidence.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-14aa
 
 ### Root cause selected
