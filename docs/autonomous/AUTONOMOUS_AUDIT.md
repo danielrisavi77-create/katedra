@@ -495,3 +495,45 @@ fail-closed guarantees as `/api/chat`.
 - The required model, billing and rate-limit values still need canonical
   staging deployment and evidence before agent flags can be enabled; see
   `BLOCKERS.md`.
+
+## Cycle: 2026-08-14p
+
+### Root cause selected
+
+Priority: P1 (material upload abuse and request-size handling).
+
+The materials endpoint validated the extracted buffer only after parsing the
+whole multipart request, had no per-user/concurrency reservation, and did not
+fail closed in production when the distributed rate-limit store was absent.
+That left the temporary upload path weaker than the chat and DOCX paths before
+the materials feature flag could safely be enabled.
+
+### Fix
+
+- Reject oversized requests using the content-length budget before multipart
+  parsing, and reject oversized files before reading them into memory.
+- Apply the existing atomic Supabase reservation in production and a bounded
+  local limiter only for development.
+- Return controlled `429`/`503` responses for rate and configuration failures.
+- Release the reservation in a `finally` block and log release failures with a
+  request ID.
+- Preserve project ownership, Pass capability and private temporary-storage
+  checks.
+- Update the prelaunch ledger to mark the already-completed landing migration
+  instead of retaining stale onboarding-only documentation.
+
+### Verification
+
+- Focused material route test: PASS.
+- Full suite: PASS (126 files, 405 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Local HTTP smoke: PASS via `curl`; `/`, `/pisi`, `/racun`, `/prijava`,
+  `/privatnost`, and `/uvjeti` all returned `200`.
+
+### Remaining issues
+
+- Real atomic material reservation and private bucket/RLS behavior still need
+  canonical Lekta staging verification before `KATEDRA_MATERIALS_ENABLED` is
+  enabled; see `BLOCKERS.md`.
