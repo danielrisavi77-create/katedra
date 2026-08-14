@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import { MaterialLibrary } from './material-library'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
@@ -13,8 +13,6 @@ export function AgenticIntervention({ runId, projectId, manuscript, reason, onRe
   const handleMaterialsChange = useCallback((materials: Array<{ id: string }>) => {
     setMaterialIds(materials.map((material) => material.id))
   }, [])
-
-  useEffect(() => setDraft(manuscript), [manuscript])
 
   const updateSectionTitle = (sectionId: string, title: string) => {
     setDraft((current) => ({
