@@ -537,3 +537,40 @@ the materials feature flag could safely be enabled.
 - Real atomic material reservation and private bucket/RLS behavior still need
   canonical Lekta staging verification before `KATEDRA_MATERIALS_ENABLED` is
   enabled; see `BLOCKERS.md`.
+
+## Cycle: 2026-08-14q
+
+### Root cause selected
+
+Priority: P2 (duplicate Tiptap link extension in the manuscript editor).
+
+The running local browser logged repeated `Duplicate extension names found:
+['link']` warnings. `StarterKit` registered its built-in link extension while
+the editor also registered the separately configured safe-link extension.
+That could make link commands and schema behavior ambiguous.
+
+### Fix
+
+- Disable `StarterKit`'s built-in link extension.
+- Keep the explicit link extension as the single owner of safe URL validation
+  and link toolbar behavior.
+- Strengthen the editor regression so it verifies the option is configured on
+  `StarterKit`, not merely that an unrelated `linkOnPaste: false` string exists.
+
+### Verification
+
+- Focused editor test: PASS.
+- Playwright `/pisi` browser smoke: PASS; duplicate link warnings `0`.
+- Full suite: PASS (126 files, 405 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Local HTTP smoke: PASS via `curl`; `/`, `/pisi`, `/racun`, `/prijava`,
+  `/privatnost`, and `/uvjeti` all returned `200`.
+
+### Remaining issues
+
+- Dependency audit could not reach the npm advisory endpoint in this
+  environment; rerun it in a network-enabled release environment.
+- Authenticated commerce, canonical Lekta contracts and staging browser
+  journeys remain the external blockers listed in `BLOCKERS.md`.
