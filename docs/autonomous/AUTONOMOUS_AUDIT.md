@@ -617,6 +617,47 @@ accessible tree, not inferred from a shell display.
   canonical Lekta deployment and real commerce/provider evidence.
 - Dependency audit remains blocked by the unavailable npm advisory endpoint.
 
+## Cycle: 2026-08-15a
+
+### Root cause selected
+
+Priority: P2 (mojibake in a user-facing chat recovery error).
+
+When project AI balance data was unavailable or non-numeric, `/api/chat` did
+return the correct fail-closed `503` and released the reservation, but the
+Croatian message contained the literal mojibake sequence `Ä‡` instead of `ć`.
+The issue was confirmed by inspecting the runtime string code points and a
+response-payload regression assertion.
+
+### Fix
+
+- Replace the malformed character with the actual `U+0107` character.
+- Assert the complete user-facing error payload while preserving status,
+  reservation release, authorization and billing behavior.
+
+### Verification
+
+- TDD regression: PASS; the exact response assertion failed before the copy fix
+  and passed afterward.
+- Focused chat runtime tests: PASS (12 tests).
+- Full suite: PASS (126 files, 421 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Independent review: PASS, no Critical/Important/Minor findings.
+
+### Commit and journey impact
+
+- Katedra commit: `d1ce19c fix: correct chat wallet error copy`.
+- Affected journey: G9 recovery messaging; no access, billing or persistence
+  semantics changed.
+
+### Remaining issues
+
+- G2-G7, G9 and G10 remain `BLOCKED_EXTERNAL` where authenticated provider,
+  commerce or Lekta evidence is required.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-14aa
 
 ### Root cause selected
