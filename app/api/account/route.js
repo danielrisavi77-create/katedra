@@ -24,7 +24,11 @@ export async function GET() {
     projects: projects.data || [],
     passes: normalizePasses(passes.data || []),
     usage: usageSummary,
-    warnings: [...(projects.error ? ['Projekti trenutačno nisu dostupni.'] : []), ...(passes.error ? ['Status Passova trenutačno nije dostupan.'] : [])],
+    warnings: [
+      ...(projects.error ? ['Projekti trenutačno nisu dostupni.'] : []),
+      ...(passes.error ? ['Status Passova trenutačno nije dostupan.'] : []),
+      ...(usage.error ? ['AI potrošnja trenutačno nije dostupna.'] : []),
+    ],
   })
 }
 

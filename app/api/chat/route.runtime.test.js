@@ -79,6 +79,7 @@ beforeEach(() => {
   mocks.estimateChatCharge.mockReturnValue(1_000)
   mocks.maxAffordableOutputTokens.mockReturnValue(8_192)
   mocks.countChatAttachmentChars.mockReturnValue(0)
+  mocks.resolveProjectCapability.mockResolvedValue({ allowed: true, code: 'allowed' })
 })
 
 describe('POST /api/chat runtime guards', () => {
@@ -166,6 +167,7 @@ describe('POST /api/chat runtime guards', () => {
 
   it('fails closed in production when the distributed rate-limit store is missing', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
     mocks.createAdminClient.mockReturnValue({})
     mocks.resolveOwnedProject.mockResolvedValue(project)
@@ -173,14 +175,36 @@ describe('POST /api/chat runtime guards', () => {
     mocks.countChatInputChars.mockReturnValue(3)
     mocks.isDistributedRateLimitConfigured.mockReturnValue(false)
 
-    const response = await POST(request())
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }))
 
     expect(response.status).toBe(503)
     expect(mocks.reserveUserRequest).not.toHaveBeenCalled()
   })
 
+  it('fails closed in production when project-lock enforcement is not enabled', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    vi.stubEnv('KATEDRA_RATE_LIMIT_STORE', 'supabase')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'generate_large_sections',
+      messages: [{ role: 'user', content: 'Generiraj poglavlje.' }],
+    }))
+
+    expect(response.status).toBe(503)
+    expect(mocks.createAdminClient).not.toHaveBeenCalled()
+  })
+
   it('fails closed when the configured distributed reservation RPC is unavailable', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
     mocks.createAdminClient.mockReturnValue({})
@@ -190,7 +214,11 @@ describe('POST /api/chat runtime guards', () => {
     mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
     mocks.reserveDistributedRequest.mockResolvedValue({ allowed: false, reason: 'unavailable' })
 
-    const response = await POST(request())
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }))
 
     expect(response.status).toBe(503)
     expect(mocks.reserveDistributedRequest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ userId: 'user-1' }))
@@ -210,6 +238,7 @@ describe('POST /api/chat runtime guards', () => {
 
   it('streams an authenticated response and settles billing with request identity exactly once', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
     const release = vi.fn().mockResolvedValue(undefined)
     const rpc = vi.fn().mockResolvedValue({ data: { status: 'settled' }, error: null })
@@ -260,9 +289,17 @@ describe('POST /api/chat runtime guards', () => {
       },
     }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
 
-    const response = await POST(request(undefined, { 'x-request-id': 'reused-client-id' }))
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }, { 'x-request-id': 'reused-client-id' }))
     const body = await response.text()
-    const secondResponse = await POST(request(undefined, { 'x-request-id': 'reused-client-id' }))
+    const secondResponse = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }, { 'x-request-id': 'reused-client-id' }))
     await secondResponse.text()
 
     expect(response.status).toBe(200)
@@ -291,6 +328,7 @@ describe('POST /api/chat runtime guards', () => {
 
   it('uses the project-scoped v2 balance without requiring the global wallet', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
     const release = vi.fn().mockResolvedValue(undefined)
     const db = {
@@ -341,7 +379,11 @@ describe('POST /api/chat runtime guards', () => {
       },
     }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
 
-    const response = await POST(request())
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }))
     await response.text()
 
     expect(response.status).toBe(200)
@@ -355,6 +397,7 @@ describe('POST /api/chat runtime guards', () => {
 
   it('fails closed when project access is allowed without a numeric balance', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
     const release = vi.fn().mockResolvedValue(undefined)
     const query = {
@@ -374,7 +417,11 @@ describe('POST /api/chat runtime guards', () => {
     mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: false })
     mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: true, source: 'project_grant' })
 
-    const response = await POST(request())
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }))
 
     expect(response.status).toBe(503)
     const body = await response.json()
@@ -385,6 +432,7 @@ describe('POST /api/chat runtime guards', () => {
 
   it('releases the reservation before provider access when the estimated charge exceeds balance', async () => {
     vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
     const release = vi.fn().mockResolvedValue(undefined)
     const db = {
@@ -409,7 +457,11 @@ describe('POST /api/chat runtime guards', () => {
       .mockReturnValueOnce({ ok: true })
       .mockReturnValueOnce({ ok: false, status: 402, reason: 'insufficient_balance' })
 
-    const response = await POST(request())
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }))
 
     expect(response.status).toBe(402)
     expect(release).toHaveBeenCalledTimes(1)

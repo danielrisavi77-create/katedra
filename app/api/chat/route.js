@@ -84,6 +84,11 @@ async function handlePOST(req, requestContext = {}) {
   if (!user) return json(401, { error: 'Prijavi se za korištenje Katedre.' })
   const userId = user.id
 
+  if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
+    console.error(JSON.stringify({ eventName: 'project_lock_enforcement_unavailable', userId }))
+    return json(503, { error: 'AI usluga još nije konfigurirana za siguran projektni pristup.' })
+  }
+
   // ---------- 2. INPUT ----------
   let body
   try { body = await req.json() } catch { return json(400, { error: 'Neispravan zahtjev.' }) }

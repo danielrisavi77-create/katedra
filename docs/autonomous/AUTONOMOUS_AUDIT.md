@@ -1256,3 +1256,53 @@ therefore logged a route-transition warning on page navigation.
   environment; rerun it in a network-enabled release environment.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
+## Cycle: 2026-08-15g
+
+### Root cause selected
+
+Priority: P0 (production `/api/chat` could reach the legacy path when
+project-lock enforcement was not enabled).
+
+The deployment preflight already required project-lock enforcement, but the
+route itself did not fail closed before parsing the request and creating an
+admin client. A production configuration drift or a missing flag could
+therefore bypass the paid project-capability boundary. The account endpoint
+also represented an unavailable usage query as confirmed zero usage without a
+warning.
+
+### Fix
+
+- Fail closed in production from `/api/chat` with `503` when
+  `KATEDRA_PROJECT_LOCKS_ENABLED` is not exactly `true`.
+- Add a runtime regression proving the route does not create an admin client
+  in that configuration.
+- Add an account warning when the AI usage query is unavailable, while
+  retaining a safe zero-shaped response for existing clients.
+- Update production runtime test fixtures so downstream rate-limit and billing
+  tests explicitly exercise the locked project path.
+
+### Verification
+
+- TDD regression: PASS; the new production lock test failed before the route
+  guard and passed after it. The account warning test also failed before the
+  warning was added and passed afterward.
+- Focused route tests: PASS (18 tests).
+- Full Katedra suite: PASS (129 files, 434 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright local smoke: PASS; `/pisi?tip=d` and `/racun` at 390px and
+  1440px had no horizontal overflow, page errors or console errors.
+- Diff and selected-file review: PASS.
+
+### Commits
+
+- Katedra commit `ce5e1bb fix: fail closed chat project access`.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Production agentic flags remain disabled until the canonical preflight and
+  authenticated staging evidence pass.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.

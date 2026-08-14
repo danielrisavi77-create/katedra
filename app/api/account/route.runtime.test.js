@@ -88,4 +88,19 @@ describe('GET /api/account', () => {
 
     expect(body.passes).toEqual([{ ...passes[0], status: 'expired' }])
   })
+
+  it('does not present unavailable AI usage as a confirmed zero', async () => {
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from(table) {
+        if (table === 'katedra_usage') return query([], new Error('usage unavailable'))
+        return query([])
+      },
+    })
+
+    const body = await (await GET()).json()
+
+    expect(body.usage).toEqual({ requests: 0, inputTokens: 0, outputTokens: 0, charged: 0 })
+    expect(body.warnings).toContain('AI potrošnja trenutačno nije dostupna.')
+  })
 })
