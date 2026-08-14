@@ -1,5 +1,43 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15d
+
+### Root cause selected
+
+Priority: P1 (agent-run context mutation race).
+
+The context endpoint performed a read of the run status and then accepted a
+new private context unless the status was terminal. A `pending` run could be
+claimed by the worker between that read and the storage write, allowing a
+context overwrite while processing was already active. The initial context is
+already stored before `activate_agent_run`, so later context edits do not need
+to be accepted during initialization or pending dispatch.
+
+### Fix
+
+- Add the shared `canEditAgentRunContext` policy helper.
+- Permit context replacement only for `paused` or `blocked` intervention runs.
+- Return `409` for `initializing`, `pending`, `running` and terminal states.
+- Update the route contract and runtime fixtures to distinguish paused
+  intervention from active worker processing.
+
+### Verification
+
+- Regression test: red before the policy module existed, green after the fix.
+- Focused context policy/runtime tests: PASS (7 tests).
+- Full Katedra suite: PASS (129 files, 429 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 generated routes).
+- Browser smoke: PASS; `/pisi?tip=d` and `/racun` returned 200 with no page
+  errors or horizontal overflow.
+
+### Remaining issues
+
+- Authenticated agent-run behavior and canonical RPC deployment remain
+  `BLOCKED_EXTERNAL`; the local policy is not proof of live staging behavior.
+- Other external blockers remain listed in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15c
 
 ### Root cause selected

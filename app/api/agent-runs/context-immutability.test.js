@@ -7,6 +7,7 @@ const source = fs.readFileSync(path.join(process.cwd(), 'app/api/agent-runs/[run
 
 describe('agent run context immutability contract', () => {
   it('rejects context replacement while a worker is actively running', () => {
-    expect(source).toContain("run.status === 'running'")
+    expect(source).toContain('canEditAgentRunContext')
+    expect(source).toContain("'Kontekst se može mijenjati samo tijekom pauzirane intervencije.'")
   })
 })

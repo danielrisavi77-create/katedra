@@ -5,6 +5,7 @@ import { MAX_AGENT_CONTEXT_BYTES } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { attachAgentPayloadsToRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
+import { canEditAgentRunContext } from '@/lib/agents/run-context-policy'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -27,10 +28,7 @@ export async function POST(req, { params }) {
     .maybeSingle()
   if (runError) return Response.json({ error: 'Run nije moguće učitati.' }, { status: 503 })
   if (!run) return Response.json({ error: 'Run nije pronađen.' }, { status: 404 })
-  if (run.status === 'running') return Response.json({ error: 'Kontekst se ne može mijenjati dok worker obrađuje run.' }, { status: 409 })
-  if (['completed', 'failed', 'cancelled'].includes(run.status)) {
-    return Response.json({ error: 'Kontekst se ne može promijeniti nakon završetka runa.' }, { status: 409 })
-  }
+  if (!canEditAgentRunContext(run.status)) return Response.json({ error: 'Kontekst se može mijenjati samo tijekom pauzirane intervencije.' }, { status: 409 })
 
   const lock = await readProjectLock(supabase, { userId: user.id, projectId: run.project_id })
   if (!lock.ok) return Response.json({ error: 'Provjera Passa nije uspjela.' }, { status: 503 })

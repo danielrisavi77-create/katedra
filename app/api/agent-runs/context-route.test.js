@@ -21,8 +21,8 @@ describe('agent run context route contract', () => {
   })
 
   it('allows blocked runs to receive a revised context before resume', () => {
-    expect(source).not.toContain("['completed', 'blocked', 'failed', 'cancelled']")
-    expect(source).toContain("['completed', 'failed', 'cancelled']")
+    expect(source).toContain('canEditAgentRunContext')
+    expect(source).not.toContain("['completed', 'failed', 'cancelled']")
     expect(source).toContain('Svi odabrani materijali nisu potvrđeni')
   })
 })
