@@ -1,0 +1,67 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import { processClaimedAgentStep } from './worker'
+import { ProviderCapabilityError } from './provider-router'
+
+describe('agent worker lease contract', () => {
+  it('claims, verifies and completes a step exactly once', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'verified' }, error: null })
+    const result = await processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockResolvedValue({ output: 'Tekst', citations: [{ id: 's-1', url: 'https://example.test', verified: true }], provider: 'test', usage: { inputTokens: 2, outputTokens: 3 } }),
+      verify: vi.fn().mockReturnValue({ status: 'verified', issues: [], evidence: [] }),
+    })
+    expect(result).toMatchObject({ status: 'verified', stepId: 'step-1' })
+    expect(rpc).toHaveBeenNthCalledWith(1, 'claim_agent_step', { p_run_id: 'run-1', p_worker_id: 'worker-1' })
+    expect(rpc).toHaveBeenNthCalledWith(2, 'complete_agent_step', expect.objectContaining({ p_step_id: 'step-1', p_status: 'verified' }))
+  })
+
+  it('does not complete a missing claim', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null })
+    await expect(processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn(), verify: vi.fn(),
+    })).resolves.toEqual({ status: 'idle' })
+    expect(rpc).toHaveBeenCalledTimes(1)
+  })
+
+  it('requeues a rejected attempt and blocks the third rejection', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
+    const retry = await processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockResolvedValue({ output: 'Tekst', citations: [], provider: 'test', usage: { inputTokens: 1, outputTokens: 1 } }),
+      verify: vi.fn().mockReturnValue({ status: 'needs_revision', issues: [], evidence: [] }),
+    })
+    expect(retry).toMatchObject({ status: 'retrying', stepId: 'step-1' })
+    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({ p_status: 'failed', p_requeue: true }))
+
+    const thirdRpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 3, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'blocked' }, error: null })
+    const blocked = await processClaimedAgentStep({ db: { rpc: thirdRpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockResolvedValue({ output: 'Tekst', citations: [], provider: 'test', usage: { inputTokens: 1, outputTokens: 1 } }),
+      verify: vi.fn().mockReturnValue({ status: 'needs_revision', issues: [], evidence: [] }),
+    })
+    expect(blocked).toMatchObject({ status: 'blocked', stepId: 'step-1' })
+    expect(thirdRpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({ p_status: 'blocked', p_requeue: false }))
+  })
+
+  it('blocks instead of marking a run failed when a required provider capability is unavailable', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'sources', verifier: 'sources_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'blocked' }, error: null })
+
+    const result = await processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockRejectedValue(new ProviderCapabilityError('researcher', 'web_research', 'sources')),
+      verify: vi.fn(),
+    })
+
+    expect(result).toMatchObject({ status: 'blocked', stepId: 'step-1' })
+    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
+      p_status: 'blocked',
+      p_requeue: false,
+      p_verification: expect.objectContaining({ status: 'blocked' }),
+    }))
+  })
+})

@@ -50,9 +50,18 @@ SUPABASE_SERVICE_ROLE_KEY=<Lekta service-role secret>
 ANTHROPIC_API_KEY=<Katedra Anthropic secret>
 STRIPE_SECRET_KEY=<Katedra Stripe secret>
 STRIPE_WEBHOOK_SECRET=<Katedra Stripe webhook signing secret>
+RESEND_API_KEY=<Resend server secret>
+WITHDRAWAL_FROM_EMAIL=<verified production sender address>
+KATEDRA_BILLING_RPC_CONTRACT=v2
+KATEDRA_RATE_LIMIT_STORE=supabase
 ```
 
 The service-role key must come from the same Lekta Supabase project as `NEXT_PUBLIC_SUPABASE_URL`.
+`WITHDRAWAL_FROM_EMAIL` must use a verified production domain. Do not use `onboarding@resend.dev` in production.
+Set the two `KATEDRA_*` flags only after Lekta has deployed and tested the
+idempotent billing, project-access, and atomic rate-limit RPC contracts. If
+they are missing or unsupported, production AI requests fail closed before
+Anthropic is contacted.
 
 ## Supabase Auth redirect configuration
 
@@ -83,6 +92,7 @@ Do not disable Lekta anonymous Auth globally. Lekta intentionally uses anonymous
 8. Add the environment variables above before the production deploy.
 9. Trigger a fresh deploy after any environment-variable change.
 10. If a custom domain is promoted later, update `NEXT_PUBLIC_APP_URL` and Supabase Auth URL configuration in the same release.
+11. Run `npm run preflight:production` in the protected deployment context and require exit code 0 before paid traffic.
 
 ## Deploy Preview policy
 

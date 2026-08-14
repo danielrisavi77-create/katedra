@@ -6,12 +6,6 @@ function base64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(binary, ch => ch.charCodeAt(0))
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary)
-}
-
 function decodeUtf8Base64(value: string): unknown {
   const candidates = [value]
   try {
@@ -29,11 +23,6 @@ function decodeUtf8Base64(value: string): unknown {
     }
   }
   throw lastError || new Error('Unreadable Lekta handoff')
-}
-
-function encodeUtf8Base64(value: unknown): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(value))
-  return encodeURIComponent(bytesToBase64(bytes))
 }
 
 function isSharedLektaResult(value: any): value is LektaResult {
@@ -71,15 +60,7 @@ export function sharedLektaResultToLegacyPayload(result: LektaResult) {
   }
 }
 
-/**
- * Runs before the legacy engine consumes a #lekta= payload. Shared v0.1 links
- * are reconciled and rewritten in-place to the legacy internal shape.
- *
- * `history.replaceState` is intentional: on a live hashchange we must update
- * `location.hash` synchronously without emitting a second hashchange event.
- * The legacy listener, registered after this normalizer, then reads the already
- * normalized fragment from the same original event.
- */
+/** Consumes a shared Lekta result into the local project manifest. */
 export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
   if (typeof window === 'undefined') return false
   const hash = window.location.hash || ''
@@ -90,13 +71,10 @@ export function normalizeLektaHandoffHashForLegacyEngine(): boolean {
     if (!isSharedLektaResult(decoded)) return false
 
     prepareManifestForIncomingLektaResult(decoded)
-
-    const legacy = sharedLektaResultToLegacyPayload(decoded)
-    const normalizedHash = `#lekta=${encodeUtf8Base64(legacy)}`
     window.history.replaceState(
       window.history.state,
       '',
-      `${window.location.pathname}${window.location.search}${normalizedHash}`,
+      `${window.location.pathname}${window.location.search}`,
     )
     return true
   } catch {

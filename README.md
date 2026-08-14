@@ -118,6 +118,8 @@ SUPABASE_SERVICE_ROLE_KEY
 
 **Katedra repo ne smije sadržavati production DDL kao authority.**
 
+`supabase/migrations/20260805010000_academic_suite_foundation_hardening.sql` u ovom repozitoriju je deprecated/no-op migration-history marker. Sadrži samo komentare i nije production DDL; authoritative migration mora nastati i biti primijenjena iz Lekta repozitorija.
+
 Authoritative migrations su u Lekta repou. Academic Suite foundation trenutno čine:
 
 ```text
@@ -182,7 +184,7 @@ Lekta reverse handoff podržava `VITE_KATEDRA_URL`. Katedrin legacy vanilla engi
 ## Razvoj
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -190,14 +192,18 @@ Default lokalno: `http://localhost:3000`.
 
 Bez pravih Lekta Supabase env vrijednosti statične stranice se mogu renderirati, ali auth/kredit/chat funkcionalnosti neće raditi normalno.
 
+Za ponovljivu provjeru prije PR-a koristi [stabilizacijski report](docs/stabilization-report.md) i [stabilizacijski checklist](docs/stabilization-checklist.md).
+
 ## Struktura
 
 ```text
 app/
   page.jsx
-  katedra-engine.js
-  katedra-body.js
   katedra-scoped.css
+  pisi/
+    page.jsx
+    pisi.css
+    components/
   prijava/
   registracija/
   zaboravljena-lozinka/
@@ -208,6 +214,9 @@ app/
   api/webhook/
   api/balance/
   api/state/
+
+lib/
+  manuscript/
 
 lib/
   academic-suite/             shared contracts/adapters/reconciliation
@@ -295,6 +304,8 @@ Katedra branch ima tri relevantna gatea:
 **DB migration smoke sada živi u Lekta CI-ju**, zajedno s migration authorityjem.
 
 Produkcijske migracije primjenjuju se na Lekta Supabase iz Lekta migration historyja.
+
+Lokalni Katedra SQL marker nije zamjena za Lekta migration history i ne smije se koristiti kao production schema authority.
 
 ## Trenutačno namjerno odgođeno
 

@@ -4,16 +4,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getSafeInternalRedirect } from '@/lib/auth/redirect'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const oauthError = searchParams.get('error_description') || searchParams.get('error')
-  const redirectRaw = searchParams.get('redirect') ?? '/pisi'
-  // Sigurnost: dozvoli samo relativne, same-origin putanje (spriječi open redirect)
-  const redirect = (redirectRaw.startsWith('/') && !redirectRaw.startsWith('//') && !redirectRaw.startsWith('/\\'))
-    ? redirectRaw
-    : '/pisi'
+  const redirect = getSafeInternalRedirect(searchParams.get('redirect'))
 
   if (oauthError) {
     return NextResponse.redirect(`${origin}/prijava?error=${encodeURIComponent(oauthError)}`)

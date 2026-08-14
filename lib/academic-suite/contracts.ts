@@ -339,8 +339,8 @@ export interface KatedraProjectState {
 
 // Faza 4 MVP: this shape is NOT yet backed by any Supabase table — no code
 // writes AIUsageLedgerEntry records anywhere. The current local proxy is
-// app/katedra-engine.js's rp_log entries (rpLog(txt, {aiGenerated, tool,
-// stage, model, reviewed}), rendered in the exported "Dnevnik procesa").
+// app/pisi/components/workspace-client.tsx's local process entries, rendered
+// as local manuscript activity rather than a shared backend log.
 // That proxy is intentionally simpler than this interface: no entryId/userId/
 // projectId/aiContribution/userContribution/userApproved, and it lives only
 // in localStorage — the same privacy posture as PRODUCT_CONSTITUTION.md's
@@ -370,8 +370,8 @@ export interface AIUsageLedgerEntry {
 // Mentor feedback loop — LOCAL-ONLY today (Faza 3 MVP)
 // ---------------------------------------------------------------------------
 // Mentor comments are typed by the student in Katedra's UI and tracked as
-// discrete tasks (app/katedra-engine.js: state.mentorTasks), persisted only in
-// localStorage. They deliberately do NOT flow through gatherServerState()/
+// discrete tasks in the /pisi project drawer, persisted only in localStorage.
+// They deliberately do NOT flow through the state sync path/
 // /api/state: PRODUCT_CONSTITUTION.md's privacy rule explicitly bans "mentor
 // comments" from the shared backend, alongside raw .docx and document body
 // text.

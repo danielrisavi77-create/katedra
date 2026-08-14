@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 export default function ZaboravljenaLozinkaPage() {
@@ -32,6 +33,7 @@ export default function ZaboravljenaLozinkaPage() {
   if (done) {
     return (
       <div className="katedra-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div className="theme-page-control"><ThemeToggle /></div>
         <div className="onb-card" style={{ maxWidth: 400 }}>
           <div className="logo-badge" style={{ margin: '0 auto' }}>✉️</div>
           <h2 style={{ margin: '12px 0 4px' }}>Provjeri e-mail</h2>
@@ -43,16 +45,17 @@ export default function ZaboravljenaLozinkaPage() {
 
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="theme-page-control"><ThemeToggle /></div>
       <div className="onb-card" style={{ maxWidth: 400 }}>
         <div className="logo-badge" style={{ margin: '0 auto' }}>🔑</div>
         <h2 style={{ margin: '12px 0 4px' }}>Zaboravljena lozinka</h2>
         <p className="onb-sub">Upiši e-mail — poslat ćemo ti link za reset.</p>
         <form onSubmit={submit} style={{ textAlign: 'left', marginTop: 16 }}>
           <div className="fld">
-            <label>E-mail</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            <label htmlFor="forgot-email">E-mail</label>
+            <input id="forgot-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </div>
-          {error && <p style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+          {error && <p role="alert" aria-live="assertive" style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
           <button type="submit" className="copy-btn" disabled={loading}>
             {loading ? 'Šaljem…' : 'Pošalji link'}
           </button>

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 export const metadata = {
@@ -7,20 +8,35 @@ export const metadata = {
 
 export default function PrivatnostPage() {
   return (
-    <div className="katedra-page" style={{ minHeight: '100vh', padding: '40px 16px 90px' }}>
-      <div className="wrap" style={{ maxWidth: 760 }}>
-        <div className="panel" style={{ background: 'var(--warn)', color: '#2a1a00', marginBottom: 20, fontWeight: 700 }}>
+    <div className="katedra-page legal-page" data-skin="kreda" style={{ minHeight: '100vh', padding: '0 16px 90px' }}>
+      <div className="wrap legal-shell" style={{ maxWidth: 900 }}>
+        <header className="legal-header">
+          <Link href="/" className="legal-brand">
+            <div className="logo-badge">K</div>
+            <div>
+              <strong className="legal-brand-title">Katedra</strong>
+              <span className="legal-brand-subtitle">Od teme do Katedre</span>
+            </div>
+          </Link>
+          <div className="legal-header-actions"><ThemeToggle /><Link href="/pisi" className="legal-header-action">Otvori aplikaciju</Link></div>
+        </header>
+
+        <div className="legal-hero">
+          <p className="legal-kicker">Dokument · Privatnost</p>
+          <h1 className="legal-title">Politika privatnosti</h1>
+          <p className="legal-meta">Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
+        </div>
+
+        <div className="panel legal-alert" style={{ background: 'var(--warn)', color: '#2a1a00', marginBottom: 20, fontWeight: 700 }}>
           ⚠ NACRT — zahtijeva pravnu provjeru prije objave. Ovaj tekst nije pravni savjet niti ga
           je sastavio odvjetnik — istražen je i ojačan konkretnim izvorima (v. dno stranice), ali
           to ne zamjenjuje pravnu reviziju. Ne aktivirati naplatu korisnicima dok stranica ne
           prođe pravnu reviziju i dok se ne popune sva polja u uglatim zagradama.
         </div>
 
-        <Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
-        <h1 style={{ marginTop: 16 }}>Politika privatnosti</h1>
-        <p style={{ color: 'var(--mut)' }}>Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
+        <Link href="/pisi" className="legal-back">← Natrag na Katedru</Link>
 
-        <div className="panel" style={{ marginTop: 20, lineHeight: 1.6 }}>
+        <div className="panel legal-document" style={{ marginTop: 20, lineHeight: 1.6 }}>
           <h3>1. Voditelj obrade podataka</h3>
           <p>
             [PRAVNI NAZIV OBRTA/TVRTKE], [OIB], [ADRESA SJEDIŠTA], Hrvatska
@@ -33,7 +49,7 @@ export default function PrivatnostPage() {
             <li><b>Podaci računa:</b> e-mail adresa i lozinka (lozinku obrađuje Supabase Auth — mi je nikad ne vidimo u čitljivom obliku).</li>
             <li><b>Sadržaj rada:</b> tema, upute fakulteta, napomene, poruke koje upišeš u chat i AI odgovori — dok koristiš &bdquo;Piši ovdje&rdquo; unutar aplikacije. Prije prvog razgovora prikazujemo jednokratnu obavijest da koristimo generativnu umjetnu inteligenciju.</li>
             <li><b>Prilozi:</b> datoteke koje priložiš u chatu (PDF, slike, Word/.docx dokumenti). .docx datoteke obrađujemo <b>privremeno, u memoriji poslužitelja</b>, isključivo radi izdvajanja teksta za AI odgovor — ne spremamo trajnu kopiju priloženog dokumenta.</li>
-            <li><b>Napredak i postavke:</b> checklist, faze, odabrani fakultet i status AI dopuštenja tvoje ustanove — najvećim dijelom lokalno u tvom pregledniku (localStorage); prijavljenima se sinkronizira na račun radi nastavka rada na drugom uređaju. Slobodan tekst (npr. mentorove upute, tekst za poboljšanje, istraživačko pitanje) namjerno <b>ne</b> sinkroniziramo na server — ostaje samo u tvom pregledniku.</li>
+            <li><b>Napredak i postavke:</b> checklist, faze, odabrani fakultet i status AI dopuštenja tvoje ustanove — najvećim dijelom lokalno u tvom pregledniku (localStorage). Prijavljenima se na račun šalju samo projektni metapodaci radi provjere vlasništva i Passa; tekst rukopisa, mentorove upute, izvori i AI prijedlozi ostaju na ovom uređaju i trenutačno se ne mogu nastaviti na drugom uređaju.</li>
             <li><b>Podaci o plaćanju:</b> Stripe obrađuje podatke kartice izravno — mi vidimo samo iznos, status transakcije i identifikator narudžbe, nikad broj kartice. Kupnja Pass paketa vezuje se uz konkretan projekt (radi jednog rada).</li>
             <li><b>Tehnički podaci:</b> IP adresa i standardni podaci poslužiteljskih logova, radi sigurnosti i sprječavanja zlouporabe.</li>
           </ul>
@@ -101,7 +117,7 @@ export default function PrivatnostPage() {
           </p>
         </div>
 
-        <div className="panel" style={{ marginTop: 20, fontSize: 12, color: 'var(--mut)', lineHeight: 1.6 }}>
+        <div className="panel legal-sources" style={{ marginTop: 20, fontSize: 12, color: 'var(--mut)', lineHeight: 1.6 }}>
           <b>Izvori korišteni pri pisanju ovog nacrta</b> (provjereno kolovoz 2026 — prije objave provjeriti nisu li se propisi/uvjeti dobavljača u međuvremenu promijenili):
           <ul style={{ marginTop: 6 }}>
             <li>Supabase DPA — <a href="https://supabase.com/legal/dpa" target="_blank" rel="noopener" style={{ color: 'var(--acc)' }}>supabase.com/legal/dpa</a></li>
@@ -111,7 +127,7 @@ export default function PrivatnostPage() {
           </ul>
         </div>
 
-        <p style={{ marginTop: 20 }}>
+        <p className="legal-footer-links" style={{ marginTop: 20 }}>
           <Link href="/uvjeti" style={{ color: 'var(--acc)' }}>Uvjeti korištenja →</Link>
         </p>
       </div>

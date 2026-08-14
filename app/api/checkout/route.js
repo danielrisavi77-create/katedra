@@ -17,8 +17,10 @@
 // ============================================================
 import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import { KATEDRA_PACKAGES } from '@/lib/stripe/catalog'
+import { validateCheckoutConfirmation, validateCheckoutProject } from '@/lib/stripe/checkout-validation'
+import { katedraPassProductFilter } from '../../../lib/katedra-pass-catalog.js'
+import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 // tokens = obračunski tokeni (input + 5×output) za interni wallet hard cap,
 // NEPROMIJENJENI od prije repricinga — VIZIJA.md: "cijena mora signalizirati
@@ -29,24 +31,22 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // CHECK constraint ('seminarski'|'zavrsni'|'diplomski'|'doktorski') — pkgKey
 // se poklapa 1:1, bez mapiranja. workType (englesko: seminar/final/graduate)
 // je zaseban rječnik za academic_projects.work_type/work_type_canonical.
-const PACKAGES = {
-  seminarski: { eur: 29.9, tokens: 1_500_000, name: 'Katedra Seminarski Pass', workType: 'seminar' },
-  zavrsni: { eur: 79.9, tokens: 4_500_000, name: 'Katedra Završni Pass', workType: 'final' },
-  diplomski: { eur: 129.9, tokens: 12_000_000, name: 'Katedra Diplomski Pass', workType: 'graduate' },
+export async function POST(req) {
+  return withRequestId(await handlePOST(req), getRequestId(req))
 }
 
-export async function POST(req) {
+async function handlePOST(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
 
-  let pkgKey, projectId
+  let pkgKey, projectId, topic, lockConfirmation
   try {
-    ;({ package: pkgKey, projectId } = await req.json())
+    ;({ package: pkgKey, projectId, topic, lockConfirmation } = await req.json())
   } catch {
     return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 })
   }
-  const pkg = PACKAGES[pkgKey]
+  const pkg = KATEDRA_PACKAGES[pkgKey]
   if (!pkg) return Response.json({ error: 'Nepoznat paket.' }, { status: 400 })
   projectId = typeof projectId === 'string' ? projectId.trim() : ''
   if (!projectId) return Response.json({ error: 'Nedostaje projekt. Spremi radni prostor prije kupnje.' }, { status: 400 })
@@ -56,32 +56,29 @@ export async function POST(req) {
   // tražimo TOČNO onaj project_id koji klijent šalje, ne samo najnoviji.
   const { data: project, error: projectError } = await supabase
     .from('katedra_projects')
-    .select('project_id, work_type_canonical')
+    .select('project_id, work_type_canonical, topic')
     .eq('user_id', user.id)
     .eq('project_id', projectId)
     .maybeSingle()
   if (projectError) return Response.json({ error: 'Provjera projekta nije uspjela.' }, { status: 500 })
   if (!project) return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
-  if (project.work_type_canonical !== pkg.workType) {
-    return Response.json({ error: 'Vrsta rada u projektu ne odgovara odabranom paketu.' }, { status: 400 })
-  }
-
-  // entitlements.academic_project_id je uuid FK na academic_projects.id (Lekta
-  // migracija 0035) — mora biti pravi UUID, ne legacy "k..." alias. Katedra
-  // trigger (sync_katedra_project_to_academic_suite) prepisuje project_id na
-  // kanonski UUID nakon prvog /api/state sync-a; ako to još nije stiglo,
-  // odbij kupnju ranije umjesto da webhook kasnije tiho ne poveže Pass s
-  // projektom.
-  if (!UUID_RE.test(project.project_id)) {
-    return Response.json({ error: 'Projekt još nije sinkroniziran s računom — pričekaj trenutak i pokušaj ponovno.' }, { status: 409 })
-  }
+  const validation = validateCheckoutProject({
+    projectId: project.project_id,
+    workTypeCanonical: project.work_type_canonical,
+  }, pkgKey)
+  if (!validation.ok) return Response.json({ error: validation.error }, { status: validation.status })
+  const confirmation = validateCheckoutConfirmation({ topic, projectTopic: project.topic, lockConfirmation })
+  if (!confirmation.ok) return Response.json({ error: confirmation.error }, { status: confirmation.status })
 
   const { data: existing, error: existingError } = await supabase
     .from('entitlements')
     .select('id')
     .eq('user_id', user.id)
     .eq('academic_project_id', project.project_id)
+    .eq('provider', 'stripe')
+    .or(katedraPassProductFilter())
     .eq('status', 'active')
+    .gt('purchase_expires_at', new Date().toISOString())
     .maybeSingle()
   if (existingError) return Response.json({ error: 'Provjera postojećeg Passa nije uspjela.' }, { status: 500 })
   if (existing) return Response.json({ error: 'Ovaj projekt već ima aktivan Pass.' }, { status: 409 })
@@ -105,6 +102,8 @@ export async function POST(req) {
         user_id: user.id,
         academic_project_id: project.project_id,
         product_key: pkgKey,
+        topic: topic.trim(),
+        lock_confirmation: 'true',
         tokens: String(pkg.tokens),
         amount_eur: String(pkg.eur),
       },

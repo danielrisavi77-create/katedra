@@ -103,10 +103,18 @@ Run:
 Minimum code gates are:
 
 ```text
-npx tsc --noEmit
+npm run audit:dependencies
+npm run typecheck
 npm run lint
+npm run test:ci
 npm run build
 ```
+
+`audit:dependencies` provjerava production dependency tree na high/critical
+ranjivosti. Ako npm audit prijavi samo razvojne pakete, rezultat i dalje treba
+pregledati, ali release nije automatski blokiran tim nalazom.
+
+For the complete procedure and current audit evidence, see [the stabilization checklist](stabilization-checklist.md) and [the stabilization report](stabilization-report.md).
 
 Changes touching Auth, `/api/state`, project identity or Katedra ↔ Lekta handoff also require the relevant integration/browser workflow.
 
@@ -170,3 +178,5 @@ For full TypeScript/lint/build verification:
 ```powershell
 .\scripts\dev-doctor.ps1 -Full
 ```
+
+The explicit npm gates remain the canonical verification commands. The doctor script is a convenience wrapper and does not replace the stabilization checklist.

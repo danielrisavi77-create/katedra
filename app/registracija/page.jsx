@@ -2,10 +2,14 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import LegalSummaryModal from '../legal-summary-modal'
+import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 export default function RegistracijaPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [agree, setAgree] = useState(false)
@@ -36,7 +40,7 @@ export default function RegistracijaPage() {
         return
       }
 
-      if (data.session) { window.location.href = '/pisi'; return }
+      if (data.session) { router.push('/pisi'); return }
       setDone(true)
     } catch {
       setError('Registracija trenutno nije dostupna.')
@@ -48,6 +52,7 @@ export default function RegistracijaPage() {
   if (done) {
     return (
       <div className="katedra-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div className="theme-page-control"><ThemeToggle /></div>
         <div className="onb-card" style={{ maxWidth: 400 }}>
           <div className="logo-badge" style={{ margin: '0 auto' }}>✉️</div>
           <h2 style={{ margin: '12px 0 4px' }}>Provjeri e-mail</h2>
@@ -59,30 +64,31 @@ export default function RegistracijaPage() {
 
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="theme-page-control"><ThemeToggle /></div>
       <div className="onb-card" style={{ maxWidth: 400 }}>
         <div className="logo-badge" style={{ margin: '0 auto' }}>K</div>
         <h2 style={{ margin: '12px 0 4px' }}>Registracija</h2>
         <p className="onb-sub">Napravi Katedra račun.</p>
         <form onSubmit={submit} style={{ textAlign: 'left', marginTop: 16 }}>
           <div className="fld">
-            <label>E-mail</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            <label htmlFor="registration-email">E-mail</label>
+            <input id="registration-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </div>
           <div className="fld">
-            <label>Lozinka</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" minLength={8} />
+            <label htmlFor="registration-password">Lozinka</label>
+            <input id="registration-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" minLength={8} />
             <div className="hint">Barem 8 znakova.</div>
           </div>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: 'var(--mut)', marginBottom: 14, cursor: 'pointer' }}>
-            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 2, flex: 'none' }} />
+          <div className="legal-consent">
+            <input id="registrationConsent" type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
             <span>
-              Slažem se s{' '}
-              <Link href="/uvjeti" target="_blank" style={{ color: 'var(--acc)' }}>Uvjetima korištenja</Link>{' '}
+              <label htmlFor="registrationConsent">Slažem se s</label>{' '}
+              <LegalSummaryModal type="uvjeti" />{' '}
               i{' '}
-              <Link href="/privatnost" target="_blank" style={{ color: 'var(--acc)' }}>Politikom privatnosti</Link>.
+              <LegalSummaryModal type="privatnost" />.
             </span>
-          </label>
-          {error && <p style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+          </div>
+          {error && <p role="alert" aria-live="assertive" style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
           <button type="submit" className="copy-btn" disabled={loading || !agree}>
             {loading ? 'Stvaram račun…' : 'Registriraj se'}
           </button>

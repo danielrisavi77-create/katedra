@@ -3,8 +3,8 @@
 // Deliberately NOT in contracts.ts: that file is a MIRROR of the
 // cross-product contract also maintained in the Lekta repo (see its header
 // comment — changes there need a synchronized update on both sides). This
-// allowlist governs Katedra's own legacy wizard field IDs (`GEN_IDS` in
-// app/katedra-engine.js) and has no meaning to Lekta — it doesn't belong in
+// allowlist governs Katedra's legacy wizard field IDs and has no meaning to
+// Lekta — it doesn't belong in
 // a file whose whole point is staying byte-for-byte mirrored.
 //
 // Audit 5: the shared backend (`katedra_projects.gen/hist/log`, a Lekta
@@ -15,10 +15,9 @@
 // excluded from server sync by default until someone deliberately adds it
 // here — fail closed, not fail open.
 //
-// Both the client (app/katedra-engine.js, gatherGenForServer()) and the
-// server (app/api/state/route.js, sanitizeGen()) import this SAME constant
-// so there is no drift risk between what the client intends to send and
-// what the server is willing to persist.
+// The server (app/api/state/route.js, sanitizeGen()) imports this constant.
+// The current React workspace sends only metadata; keeping this allowlist
+// here preserves a fail-closed boundary for legacy clients during migration.
 export const GEN_SERVER_SAFE_KEYS = [
   'f_fakultet',
   'f_kolegij',
@@ -40,15 +39,15 @@ export const GEN_SERVER_SAFE_KEYS = [
 ]
 
 // Same allowlist pattern, applied to `log` entries (Project Ledger v1 —
-// rpLog() in app/katedra-engine.js). `t`/`txt` always pass through (txt is
-// already length-capped, never raw academic content by convention); these
-// are the ADDITIONAL structured fields a log entry may carry — short
-// enums/ids/numbers only, never free text. A field not listed here is
+// local process entries). Only the timestamp `t` and these
+// ADDITIONAL structured fields may pass through — short
+// enums/ids/numbers only, never free text. The free-form `txt` field is
+// intentionally dropped by the server. A field not listed here is
 // dropped on sync, same fail-closed default as GEN_SERVER_SAFE_KEYS.
 //
 // aiGenerated/tool/model/reviewed/stage come from the honest AI ledger
 // (Faze 2-4 review) — all short enums/booleans/model-id strings, never the
-// actual AI response or prompt text (that stays txt-capped, same as before).
+// actual AI response or prompt text.
 export const LOG_SERVER_SAFE_KEYS = [
   'kind',
   'phaseId',

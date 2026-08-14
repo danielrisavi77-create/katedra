@@ -4,9 +4,10 @@
 //
 // POST { reason?: string, referenceId?: string }
 //
-// Zapisuje zahtjev u withdrawal_requests (Lekta migracija 0049 — poslana kao
-// PR na danielrisavi77-create/Lekta, čeka pregled/merge na Lekta strani; dok
-// ne slegne, ovaj insert vraća 500 jer tablica još ne postoji) i automatski
+// Zapisuje zahtjev u withdrawal_requests nakon što Lekta deploya tablicu i
+// durable reservation contract. Trenutni connected schema još nema tu tablicu;
+// ruta zato vraća kontrolirani 503 umjesto da glumi uspješan legalni prijem.
+// Nakon upisa automatski
 // šalje potvrdu na trajnom mediju (e-mail, Resend) s točnim vremenom
 // primitka — to je zakonski zahtjev, ne samo "lijepo imati". Običan e-mail
 // kontakt sam po sebi ne zadovoljava zahtjev za vidljivu, uvijek-dostupnu
@@ -15,24 +16,60 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Resend } from 'resend'
+import { isDistributedWithdrawalConfigured, reserveDistributedWithdrawal } from '@/lib/security/withdrawal-reservation'
+import { reserveWithdrawal } from '@/lib/security/withdrawal-limit'
+import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 // 'onboarding@resend.dev' je Resendov test domain — radi bez verifikacije
 // domene, ali NE smije ići u produkciju. Prije lansiranja postaviti
 // WITHDRAWAL_FROM_EMAIL na verificiranu adresu (@katedra.hr) u Resend
 // dashboardu i ovdje kroz env var.
-const FROM_EMAIL = process.env.WITHDRAWAL_FROM_EMAIL || 'onboarding@resend.dev'
+const FROM_EMAIL = process.env.WITHDRAWAL_FROM_EMAIL || (process.env.NODE_ENV === 'production' ? '' : 'onboarding@resend.dev')
 
 export async function POST(req) {
+  return withRequestId(await handlePOST(req), getRequestId(req))
+}
+
+async function handlePOST(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
 
   let body
-  try { body = await req.json() } catch { body = {} }
+  try {
+    body = await req.json()
+  } catch {
+    return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 })
+  }
   const reason = typeof body?.reason === 'string' ? body.reason.trim().slice(0, 2000) || null : null
   const referenceId = typeof body?.referenceId === 'string' ? body.referenceId.trim().slice(0, 200) || null : null
 
   const db = createAdminClient()
+  const distributedStore = isDistributedWithdrawalConfigured()
+  if (process.env.NODE_ENV === 'production' && !distributedStore) {
+    console.error('[withdrawal] durable reservation store is not configured')
+    return Response.json({ error: 'Zahtjev trenutno nije moguće zaprimiti.' }, { status: 503 })
+  }
+
+  const reservation = distributedStore
+    ? await reserveDistributedWithdrawal(db, { userId: user.id, referenceId })
+    : reserveWithdrawal(user.id, referenceId)
+  if (!reservation.allowed) {
+    if (reservation.reason === 'duplicate') {
+      return Response.json({ error: 'Ovaj zahtjev je već zaprimljen.' }, { status: 409 })
+    }
+    if (reservation.reason === 'unavailable') {
+      return Response.json({ error: 'Zahtjev trenutno nije moguće zaprimiti.' }, { status: 503 })
+    }
+    return Response.json({ error: 'Previše zahtjeva. Pokušaj ponovno kasnije.' }, { status: 429 })
+  }
+
+  if (process.env.NODE_ENV === 'production' && (!process.env.RESEND_API_KEY || !FROM_EMAIL)) {
+    console.error('[withdrawal] production email configuration is incomplete')
+    await safeRelease(reservation, user.id, referenceId)
+    return Response.json({ error: 'Zahtjev trenutno nije moguće zaprimiti.' }, { status: 503 })
+  }
+
   const requestedAt = new Date()
 
   const { data: row, error: insertError } = await db
@@ -50,15 +87,31 @@ export async function POST(req) {
 
   if (insertError) {
     console.error('[withdrawal] insert failed', insertError)
+    await safeRelease(reservation, user.id, referenceId)
+    const missingWithdrawalContract = insertError?.code === '42P01' || insertError?.code === 'PGRST205'
     return Response.json(
-      { error: 'Zahtjev trenutno nije moguće zaprimiti. Pošalji e-mail na podrska@katedra.hr da ne izgubiš rok.' },
-      { status: 500 },
+      {
+        error: missingWithdrawalContract
+          ? 'Zahtjev trenutno nije moguće zaprimiti jer withdrawal sustav nije konfiguriran.'
+          : 'Zahtjev trenutno nije moguće zaprimiti. Pošalji e-mail na podrska@katedra.hr da ne izgubiš rok.',
+      },
+      { status: missingWithdrawalContract ? 503 : 500 },
     )
   }
 
   // Automatska potvrda na trajnom mediju (zakonski zahtjev) — šalje se prije
   // vraćanja odgovora, tako da confirmed_at točno odražava kad je stvarno
   // otišla, ne kad je enqueued.
+  let reservationCommitPending = false
+  try {
+    await reservation.commit(row.id)
+  } catch (commitError) {
+    // The request row is already durable. Keep an explicit reconciliation
+    // signal instead of releasing a possibly live reservation.
+    reservationCommitPending = true
+    console.error('[withdrawal] reservation commit pending', commitError)
+  }
+
   let confirmedAt = null
   if (process.env.RESEND_API_KEY) {
     try {
@@ -89,5 +142,18 @@ export async function POST(req) {
     requestId: row.id,
     requestedAt: row.requested_at,
     emailSent: !!confirmedAt,
+    reconciliationPending: reservationCommitPending,
   })
+}
+
+async function safeRelease(reservation, userId, referenceId) {
+  try {
+    await reservation.release()
+  } catch (error) {
+    console.error('[withdrawal] reservation release pending', {
+      userId,
+      referenceId,
+      error: error?.message,
+    })
+  }
 }

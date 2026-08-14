@@ -1,7 +1,7 @@
 # Katedra — što treba prije prve prave naplate
 
 Živi dokument, ne jednokratan izvještaj — ažuriraj kako se stavke rješavaju.
-Stanje na 2026-08-04.
+Stanje na 2026-08-13.
 
 ## 0. Blokira sve ostalo
 
@@ -21,25 +21,38 @@ Stanje na 2026-08-04.
 
 - [ ] [Lekta PR #29](https://github.com/danielrisavi77-create/Lekta/pull/29) — `withdrawal_requests` tablica. Dok ovo ne sleti, `/api/withdrawal` vraća 500 na insertu — PR #14 je kod-gotov, ali funkcionalno neispravan bez ovoga.
 - [ ] [Lekta PR #31](https://github.com/danielrisavi77-create/Lekta/pull/31) — `katedra_pass_*` retci u products katalogu (samostalan, nije hitan).
+- [ ] Lekta billing contract v2 — `katedra_consume` mora biti idempotentan po
+  `(user_id, request_id)` i primati canonical `project_id`.
+- [ ] Lekta atomic access/rate-limit contract — implementirati
+  `katedra_authorize_project_ai`, `katedra_reserve_request` i
+  `katedra_release_request` prije uključivanja production flagova.
 
 Nakon što #31 sleti: treba **zaseban follow-up Katedra PR** koji mijenja
 `product_id: null` → `'katedra_pass_*'` u `app/api/webhook/route.js`. Namjerno
 nije napravljen u istom koraku (FK bi pukao dok #31 nije spojen). Javi kad je
 #31 spojen pa se to napravi.
 
-## 2. Konfiguracija/tajne (nijedna nije postavljena)
+## 2. Konfiguracija/tajne (nijedna nije potvrđena za produkciju)
+
+Za aktualne environment reference i lokalne verification rezultate vidi [stabilizacijski report](docs/stabilization-report.md) i [stabilizacijski checklist](docs/stabilization-checklist.md).
 
 - [ ] `RESEND_API_KEY` — za automatsku e-mail potvrdu raskida ugovora (zakonska
   obveza, ne "lijepo imati" — v. §3 dolje).
 - [ ] `WITHDRAWAL_FROM_EMAIL` — verificirana `@katedra.hr` adresa u Resend
-  dashboardu. Bez ovoga kod pada natrag na Resendov test domain
-  (`onboarding@resend.dev`), koji **ne smije ići u produkciju**.
+  dashboardu. U produkciji bez ove vrijednosti endpoint fail-closed; lokalni
+  development fallback na Resendov test domain ne smije ići u produkciju.
 - [ ] Supabase env varijable (`NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) — nedostaju u
   lokalnom `.env.local` koji sam imao dostupan; ako nedostaju i u produkcijskom
   deployu, ništa auth-gated ne radi.
 - [ ] Stripe test-mode ključevi za stvarni end-to-end test checkouta prije
   produkcijskih ključeva.
+- [ ] `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY` i `STRIPE_WEBHOOK_SECRET` —
+  protected deployment vrijednosti nisu potvrđene u ovom audit okruženju.
+- [ ] `KATEDRA_BILLING_RPC_CONTRACT=v2` — uključiti tek nakon Lekta v2 RPC
+  rollouta; bez toga production chat namjerno fail-closed.
+- [ ] `KATEDRA_RATE_LIMIT_STORE=supabase` — uključiti tek nakon atomic Lekta
+  reservation RPC rollouta; process-local `Map` nije production-safe.
 
 ## 3. Pravni zahtjevi
 

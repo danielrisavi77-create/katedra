@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 export default function ResetLozinkePage() {
@@ -32,6 +33,7 @@ export default function ResetLozinkePage() {
 
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="theme-page-control"><ThemeToggle /></div>
       <div className="onb-card" style={{ maxWidth: 400 }}>
         <div className="logo-badge" style={{ margin: '0 auto' }}>🔑</div>
         <h2 style={{ margin: '12px 0 4px' }}>Nova lozinka</h2>
@@ -42,10 +44,10 @@ export default function ResetLozinkePage() {
             <p className="onb-sub">Upiši novu lozinku za svoj račun.</p>
             <form onSubmit={submit} style={{ textAlign: 'left', marginTop: 16 }}>
               <div className="fld">
-                <label>Nova lozinka</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" minLength={8} />
+                <label htmlFor="reset-password">Nova lozinka</label>
+                <input id="reset-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" minLength={8} />
               </div>
-              {error && <p style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+              {error && <p role="alert" aria-live="assertive" style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
               <button type="submit" className="copy-btn" disabled={loading}>
                 {loading ? 'Spremam…' : 'Spremi novu lozinku'}
               </button>

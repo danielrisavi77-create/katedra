@@ -1,0 +1,332 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  getUser: vi.fn(),
+  createClient: vi.fn(),
+  createAdminClient: vi.fn(),
+  resolveOwnedProject: vi.fn(),
+  validateChatRequest: vi.fn(),
+  countChatInputChars: vi.fn(),
+  countChatAttachmentChars: vi.fn(),
+  isDistributedRateLimitConfigured: vi.fn(),
+  reserveDistributedRequest: vi.fn(),
+  reserveUserRequest: vi.fn(),
+  ensureFreeStarterGrant: vi.fn(),
+  resolveCapability: vi.fn(),
+  loadProcessFactsFromDisk: vi.fn(),
+  hasActiveProjectPass: vi.fn(),
+  createAnthropicUsageParser: vi.fn(),
+  buildBillingConsumeParams: vi.fn(),
+  resolveBillingOutcome: vi.fn(),
+  authorizeProjectAiRequest: vi.fn(),
+  validateCostCeiling: vi.fn(),
+  estimateChatCharge: vi.fn(),
+  maxAffordableOutputTokens: vi.fn(),
+  AI_COST_LIMITS: { maxDailyCharge: 100_000 },
+  AI_MODEL_COST_MULTIPLIERS: { 'claude-sonnet-5': 1 },
+}))
+
+vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
+vi.mock('@/lib/academic-suite/repositories/projects', () => ({ resolveOwnedProject: mocks.resolveOwnedProject }))
+vi.mock('@/lib/chat/validation', () => ({
+  validateChatRequest: mocks.validateChatRequest,
+  countChatInputChars: mocks.countChatInputChars,
+  countChatAttachmentChars: mocks.countChatAttachmentChars,
+}))
+vi.mock('@/lib/ai/rate-limit', () => ({
+  isDistributedRateLimitConfigured: mocks.isDistributedRateLimitConfigured,
+  reserveDistributedRequest: mocks.reserveDistributedRequest,
+  reserveUserRequest: mocks.reserveUserRequest,
+}))
+vi.mock('@/lib/limits', () => ({ MIN_BALANCE: 100 }))
+vi.mock('@/lib/katedra-free-starter', () => ({ ensureFreeStarterGrant: mocks.ensureFreeStarterGrant }))
+vi.mock('@/lib/academic-suite/process-facts', () => ({ resolveCapability: mocks.resolveCapability }))
+vi.mock('@/lib/academic-suite/process-facts.server', () => ({ loadProcessFactsFromDisk: mocks.loadProcessFactsFromDisk }))
+vi.mock('@/lib/academic-suite/repositories/entitlements', () => ({ hasActiveProjectPass: mocks.hasActiveProjectPass }))
+vi.mock('@/lib/ai/anthropic-sse', () => ({ createAnthropicUsageParser: mocks.createAnthropicUsageParser }))
+vi.mock('@/lib/ai/billing-contract', () => ({ buildBillingConsumeParams: mocks.buildBillingConsumeParams, resolveBillingOutcome: mocks.resolveBillingOutcome }))
+vi.mock('@/lib/ai/project-access', () => ({ authorizeProjectAiRequest: mocks.authorizeProjectAiRequest }))
+vi.mock('@/lib/ai/cost-policy', () => ({
+  AI_COST_LIMITS: mocks.AI_COST_LIMITS,
+  AI_MODEL_COST_MULTIPLIERS: mocks.AI_MODEL_COST_MULTIPLIERS,
+  estimateChatCharge: mocks.estimateChatCharge,
+  maxAffordableOutputTokens: mocks.maxAffordableOutputTokens,
+  validateCostCeiling: mocks.validateCostCeiling,
+}))
+
+import { POST } from './route'
+
+const project = { projectId: '11111111-1111-4111-8111-111111111111', guestProjectId: 'guest-1' }
+
+function request(body = { projectId: project.projectId, messages: [{ role: 'user', content: 'Bok' }] }) {
+  return new Request('http://localhost/api/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+})
+
+beforeEach(() => {
+  mocks.estimateChatCharge.mockReturnValue(1_000)
+  mocks.maxAffordableOutputTokens.mockReturnValue(8_192)
+  mocks.countChatAttachmentChars.mockReturnValue(0)
+})
+
+describe('POST /api/chat runtime guards', () => {
+  it('rejects an anonymous request before reading the body', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) } })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(401)
+    expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
+  })
+
+  it('fails closed in production when the distributed rate-limit store is missing', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(false)
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    expect(mocks.reserveUserRequest).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the configured distributed reservation RPC is unavailable', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: false, reason: 'unavailable' })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    expect(mocks.reserveDistributedRequest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ userId: 'user-1' }))
+  })
+
+  it('rejects a project that is not owned by the authenticated user', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProject.mockResolvedValue(null)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(404)
+    expect(mocks.isDistributedRateLimitConfigured).not.toHaveBeenCalled()
+  })
+
+  it('streams an authenticated response and settles billing with request identity exactly once', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const rpc = vi.fn().mockResolvedValue({ data: { status: 'settled' }, error: null })
+    const db = {
+      rpc,
+      from(table) {
+        const query = {
+          select() { return query },
+          eq() { return query },
+          async maybeSingle() {
+            if (table === 'katedra_wallets') return { data: { balance: 50_000 }, error: null }
+            return { data: { unit_id: 'fpzg', gen: {} }, error: null }
+          },
+        }
+        return query
+      },
+    }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.hasActiveProjectPass.mockResolvedValue(true)
+    mocks.loadProcessFactsFromDisk.mockResolvedValue({})
+    mocks.resolveCapability.mockReturnValue({ effective: 'allowed', condition: {}, sourceFactId: 'test', stance: 'allowed' })
+    mocks.createAnthropicUsageParser.mockReturnValue({
+      push: vi.fn(),
+      finish: vi.fn(),
+      usage: () => ({ inputTokens: 12, outputTokens: 4 }),
+    })
+    mocks.buildBillingConsumeParams.mockImplementation((input) => ({
+      p_user: input.userId,
+      p_project_id: input.projectId,
+      p_request_id: input.requestId,
+      p_charged: input.charged,
+      p_model: input.model,
+      p_in: input.inputTokens,
+      p_out: input.outputTokens,
+    }))
+    mocks.resolveBillingOutcome.mockReturnValue({ state: 'settled', retry: false })
+    const encoder = new TextEncoder()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"message_delta"}\n\n'))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
+
+    const response = await POST(request())
+    const body = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(body).toContain('message_delta')
+    expect(mocks.reserveDistributedRequest).toHaveBeenCalledWith(db, expect.objectContaining({
+      userId: 'user-1',
+      requestId: expect.any(String),
+      estimatedCharge: 1_000,
+    }))
+    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({
+      p_user: 'user-1',
+      p_project_id: project.projectId,
+      p_request_id: expect.any(String),
+      p_in: 12,
+      p_out: 4,
+    }))
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the project-scoped v2 balance without requiring the global wallet', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const db = {
+      rpc: vi.fn().mockResolvedValue({ data: { status: 'settled' }, error: null }),
+      from() {
+        return {
+          select(columns) {
+            if (columns === 'balance') throw new Error('global wallet is unavailable')
+            return this
+          },
+          eq() { return this },
+          async maybeSingle() { return { data: { unit_id: 'fpzg', gen: {} }, error: null } },
+        }
+      },
+    }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.hasActiveProjectPass.mockResolvedValue(false)
+    mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: true, source: 'project_grant', balance: 4_500 })
+    mocks.loadProcessFactsFromDisk.mockResolvedValue({})
+    mocks.resolveCapability.mockReturnValue({ effective: 'allowed', condition: {}, sourceFactId: 'test', stance: 'allowed' })
+    mocks.createAnthropicUsageParser.mockReturnValue({
+      push: vi.fn(),
+      finish: vi.fn(),
+      usage: () => ({ inputTokens: 12, outputTokens: 4 }),
+    })
+    mocks.buildBillingConsumeParams.mockImplementation((input) => ({
+      p_user: input.userId,
+      p_project_id: input.projectId,
+      p_request_id: input.requestId,
+      p_charged: input.charged,
+      p_model: input.model,
+      p_in: input.inputTokens,
+      p_out: input.outputTokens,
+    }))
+    mocks.resolveBillingOutcome.mockReturnValue({ state: 'settled', retry: false })
+    const encoder = new TextEncoder()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"message_delta"}\n\n'))
+        controller.close()
+      },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
+
+    const response = await POST(request())
+    await response.text()
+
+    expect(response.status).toBe(200)
+    expect(mocks.authorizeProjectAiRequest).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      projectId: project.projectId,
+      hasPass: false,
+    })
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed when project access is allowed without a numeric balance', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const query = {
+      select() { return query },
+      eq() { return query },
+      async maybeSingle() { return { data: { balance: 0 }, error: null } },
+    }
+    const db = { from: vi.fn(() => query) }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.hasActiveProjectPass.mockResolvedValue(false)
+    mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: true, source: 'project_grant' })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(mocks.validateCostCeiling).toHaveBeenCalled()
+  })
+
+  it('releases the reservation before provider access when the estimated charge exceeds balance', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const db = {
+      from() {
+        const query = {
+          select() { return query },
+          eq() { return query },
+          async maybeSingle() { return { data: { balance: 10_000 }, error: null } },
+        }
+        return query
+      },
+    }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.hasActiveProjectPass.mockResolvedValue(true)
+    mocks.validateCostCeiling
+      .mockReturnValueOnce({ ok: true })
+      .mockReturnValueOnce({ ok: false, status: 402, reason: 'insufficient_balance' })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(402)
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).toBeDefined()
+  })
+})

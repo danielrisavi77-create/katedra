@@ -6,15 +6,11 @@
 // - new clients may send projectId + workTypeCanonical
 // - server persists BOTH legacy and canonical fields during migration
 //
-// Audit 3 P0 §1: raw document content only enters this route when the
-// client explicitly declares fullSyncConsent=true (user opted in to full
-// cross-device sync in the UI, v. katedra-engine.js hasFullSyncConsent/
-// setFullSyncConsent). The flag is per-request, not a persisted DB column —
-// a new column would need a Lekta-repo migration first (CLAUDE.md
-// "Database authority rule"); this keeps the fail-closed default (sanitize)
-// working today without one. Default/absent/false always sanitizes,
-// regardless of what the client sends — server is the authority, not the
-// client's own filtering (v. sanitizeGen/sanitizeHist/sanitizeLog below).
+// Audit 3 P0 §1: raw document content never enters shared state. The server
+// always applies the allowlists below, even when a legacy client sends
+// fullSyncConsent=true. The client flag is therefore not an authority
+// boundary; the server is the authority and the privacy rule stays
+// fail-closed without a new database migration.
 // ============================================================
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -23,11 +19,17 @@ import {
   isAcademicWorkType,
 } from '@/lib/academic-suite/contracts'
 import { GEN_SERVER_SAFE_KEYS, LOG_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
+import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
+import { readProjectLock, validateLockedProjectMutation } from '../../../lib/academic-suite/project-lock'
+import { stripManuscriptFromStatePayload } from '@/lib/manuscript/privacy'
+import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
   'topic, deadline, ruleset_version, lekta_score, lekta_checked_at, lekta_issues, ' +
   'lekta_fixed_total, checks, gen, hist, log, logf, guest_project_id, updated_at'
+
+const KATEDRA_PROJECT_LOCKS_ENABLED = process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
 
 function rowToCamel(row) {
   if (!row) return {}
@@ -73,14 +75,14 @@ const WRITABLE_FIELDS = {
 }
 
 // Audit 5 — server-side backstop, symmetric with the client-side filtering
-// in app/katedra-engine.js (gatherGenForServer/histForServer/logForServer).
+// in the legacy wizard payload path.
 // A stale/un-migrated client would otherwise keep writing full free-text
 // academic content (mentor instructions, attached-material descriptions,
 // the actual generated prompt/response text) forever — this repeats the
 // SAME allowlist here so the write path is safe even when the client
 // "forgets" to filter, not only when it remembers to.
 function sanitizeGen(raw) {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const safe = {}
   for (const key of GEN_SERVER_SAFE_KEYS) {
     if (Object.prototype.hasOwnProperty.call(raw, key)) safe[key] = raw[key]
@@ -88,13 +90,13 @@ function sanitizeGen(raw) {
   return safe
 }
 function sanitizeHist(raw) {
-  if (!Array.isArray(raw)) return raw
-  return raw.map((e) => ({ t: e?.t, mode: e?.mode, tip: e?.tip, label: typeof e?.label === 'string' ? e.label.slice(0, 80) : e?.label }))
+  if (!Array.isArray(raw)) return []
+  return raw.map((e) => ({ t: e?.t, mode: e?.mode, tip: e?.tip }))
 }
 function sanitizeLog(raw) {
-  if (!Array.isArray(raw)) return raw
+  if (!Array.isArray(raw)) return []
   return raw.map((e) => {
-    const safe = { t: e?.t, txt: typeof e?.txt === 'string' ? e.txt.slice(0, 120) : e?.txt }
+    const safe = { t: e?.t }
     for (const key of LOG_SERVER_SAFE_KEYS) {
       if (e && Object.prototype.hasOwnProperty.call(e, key)) safe[key] = e[key]
     }
@@ -137,24 +139,41 @@ function normalizeNullableInteger(value, min, max = Number.MAX_SAFE_INTEGER) {
   return n
 }
 
-export async function GET() {
+export async function GET(req) {
+  return withRequestId(await handleGET(req), getRequestId(req))
+}
+
+async function handleGET(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+
+  const projectId = cleanOpaqueId(new URL(req.url).searchParams.get('projectId'))
+  if (!projectId) return Response.json({ error: 'Nedostaje ID projekta.' }, { status: 400 })
+
+  const project = await resolveOwnedProject(supabase, { userId: user.id, projectId })
+  if (!project) return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
 
   const { data: row, error } = await supabase
     .from('katedra_projects')
     .select(COLUMNS)
     .eq('user_id', user.id)
-    .order('updated_at', { ascending: false })
-    .limit(1)
+    .eq('project_id', project.projectId)
     .maybeSingle()
 
   if (error) return Response.json({ error: 'Učitavanje nije uspjelo.' }, { status: 500 })
-  return Response.json(rowToCamel(row))
+  if (!KATEDRA_PROJECT_LOCKS_ENABLED) return Response.json(rowToCamel(row))
+
+  const lockResult = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
+  if (!lockResult.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
+  return Response.json({ ...rowToCamel(row), projectLock: lockResult.lock })
 }
 
 export async function PUT(req) {
+  return withRequestId(await handlePUT(req), getRequestId(req))
+}
+
+async function handlePUT(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
@@ -165,6 +184,11 @@ export async function PUT(req) {
   } catch {
     return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 })
   }
+
+  // Product Constitution: document body text is always local-only. This is
+  // unconditional and therefore also applies to requests that explicitly opt
+  // into the legacy full-sync mode for other free-form wizard fields.
+  body = stripManuscriptFromStatePayload(body)
 
   // Guest-first compatibility: today's Katedra already creates guestProjectId in
   // localStorage before login. During v0.1 it is also accepted as the canonical
@@ -178,6 +202,19 @@ export async function PUT(req) {
 
   const canonicalType = canonicalWorkType(body)
   if (!canonicalType) return Response.json({ error: 'Nepoznata vrsta rada.' }, { status: 400 })
+
+  if (KATEDRA_PROJECT_LOCKS_ENABLED) {
+    const lockResult = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
+    if (!lockResult.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
+    if (lockResult.lock) {
+      const lockValidation = validateLockedProjectMutation(lockResult.lock, {
+        projectId: project.projectId,
+        topic: Object.prototype.hasOwnProperty.call(body, 'topic') ? body.topic : undefined,
+        workType: canonicalType,
+      })
+      if (!lockValidation.ok) return Response.json({ error: lockValidation.error }, { status: lockValidation.status })
+    }
+  }
 
   const patch = {
     user_id: user.id,
@@ -231,9 +268,9 @@ export async function PUT(req) {
     patch.lekta_fixed_total = fixedTotal ?? 0
   }
 
-  // fail closed: any value other than the literal boolean true keeps sanitizing.
-  const fullSyncConsent = body?.fullSyncConsent === true
-  const SANITIZERS = fullSyncConsent ? {} : { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog }
+  // Full-sync consent never overrides the Constitution's privacy boundary:
+  // free-form academic text and document-derived strings stay local.
+  const SANITIZERS = { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog }
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
     if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
     const sanitize = SANITIZERS[camel]

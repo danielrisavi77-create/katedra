@@ -42,19 +42,29 @@
 // ============================================================
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getKatedraPackage, PURCHASE_WINDOW_DAYS } from '@/lib/stripe/catalog'
+import { validateCheckoutConfirmation } from '../../../lib/stripe/checkout-validation.js'
+import { refundDuplicateProjectPass } from '../../../lib/stripe/duplicate-refund.js'
+import { katedraPassProductFilter } from '../../../lib/katedra-pass-catalog.js'
+import { lockPaidProject } from '../../../lib/academic-suite/project-lock'
+import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 // purchaseWindowDays: koliko dugo Pass vrijedi za trošenje slota, po tipu
 // rada — diplomski/zavrsni radovi traju dulje od seminarskih, pa dulji
 // prozor. Lektin vlastiti katalog ide 90-180 dana za usporedive tipove
 // (supabase/migrations/0002_products_catalog.sql); Katedrin Pass je
 // namjerno velikodušniji jer pokriva cijeli proces, ne samo jednu provjeru.
-const PURCHASE_WINDOW_DAYS = { seminarski: 120, zavrsni: 240, diplomski: 365 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(req) {
-  const stripe = getStripe()
+  return withRequestId(await handlePOST(req), getRequestId(req))
+}
+
+async function handlePOST(req) {
   const sig = req.headers.get('stripe-signature')
   if (!sig) return new Response('no signature', { status: 400 })
+
+  const stripe = getStripe()
 
   let event
   try {
@@ -72,21 +82,127 @@ export async function POST(req) {
     if (s.mode === 'payment') {
       const userId = s.metadata?.user_id
       const projectId = s.metadata?.academic_project_id
-      const productKey = s.metadata?.product_key
-      const tokens = Number(s.metadata?.tokens ?? 0)
-      const amount = Number(s.metadata?.amount_eur ?? 0)
+       const productKey = s.metadata?.product_key
+       const tokens = Number(s.metadata?.tokens ?? 0)
+       const amount = Number(s.metadata?.amount_eur ?? 0)
 
-      if (userId && projectId && productKey && tokens > 0 && s.payment_status === 'paid') {
-        const db = createAdminClient()
+       if (s.payment_status !== 'paid') return new Response('ignored')
+       const pkg = getKatedraPackage(productKey)
+       if (!userId || !projectId || !pkg || tokens !== pkg.tokens || amount !== pkg.eur) {
+         console.error('invalid paid session metadata', { sessionId: s.id, productKey })
+         return new Response('invalid metadata', { status: 400 })
+       }
 
-        // 1) PRAVI PASS — entitlement vezan uz ovaj projekt. Stvarne kolone
+       if (userId && projectId && pkg && tokens === pkg.tokens && amount === pkg.eur && s.payment_status === 'paid') {
+         const db = createAdminClient()
+
+         if (!UUID_RE.test(projectId)) {
+           console.error('invalid canonical project id in paid session', { projectId, sessionId: s.id })
+           return new Response('invalid project', { status: 400 })
+         }
+         if (s.currency !== 'eur' || s.amount_total !== Math.round(pkg.eur * 100)) {
+           console.error('paid session catalog mismatch', {
+             sessionId: s.id, productKey, currency: s.currency, amountTotal: s.amount_total,
+           })
+           return new Response('catalog mismatch', { status: 400 })
+         }
+
+         const { data: project, error: projectError } = await db
+           .from('katedra_projects')
+           .select('user_id, project_id, topic')
+           .eq('user_id', userId)
+           .eq('project_id', projectId)
+           .maybeSingle()
+         if (projectError || !project) {
+           console.error('paid session project ownership mismatch', { sessionId: s.id, userId, projectId })
+           return new Response('invalid project', { status: 400 })
+         }
+
+         const projectLocksEnabled = process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
+         if (projectLocksEnabled) {
+           const confirmation = validateCheckoutConfirmation({
+             topic: s.metadata?.topic,
+             projectTopic: project.topic,
+             lockConfirmation: s.metadata?.lock_confirmation === 'true',
+           })
+           if (!confirmation.ok) {
+             console.error('paid session lock confirmation mismatch', { sessionId: s.id, userId, projectId })
+             return new Response('invalid lock confirmation', { status: confirmation.status })
+           }
+         }
+
+         // 1) PRAVI PASS — entitlement vezan uz ovaj projekt. Stvarne kolone
         // (v. napomena na vrhu datoteke) — ne scope/capabilities/source_product_id.
-        const windowDays = PURCHASE_WINDOW_DAYS[productKey]
-        if (!windowDays) {
-          console.error('unknown product_key for entitlement window', { productKey })
-          return new Response('unknown product', { status: 400 }) // ne retry-aj, konfiguracijska greška
-        }
-        const { error: insertError } = await db.from('entitlements').insert({
+         const windowDays = PURCHASE_WINDOW_DAYS[productKey]
+          if (!windowDays) {
+           console.error('unknown product_key for entitlement window', { productKey })
+           return new Response('unknown product', { status: 400 }) // ne retry-aj, konfiguracijska greška
+         }
+
+         // Checkout performs the same check optimistically, but Stripe can
+         // deliver two paid sessions created by concurrent tabs. A different
+         // active Pass for the same project must not receive another
+         // entitlement or wallet grant. The Lekta-side unique/RPC contract
+         // remains the atomic authority; this query is defense in depth and
+         // gives the webhook a safe sequential retry behavior.
+         const { data: activePass, error: activePassError } = await db
+           .from('entitlements')
+           .select('id, order_id')
+           .eq('user_id', userId)
+           .eq('academic_project_id', projectId)
+           .eq('provider', 'stripe')
+           .or(katedraPassProductFilter())
+           .eq('status', 'active')
+           .gt('purchase_expires_at', new Date().toISOString())
+           .limit(1)
+           .maybeSingle()
+         if (activePassError) {
+           console.error('active project pass lookup failed', { sessionId: s.id, userId, projectId, error: activePassError.message })
+           return new Response('active pass lookup failed', { status: 500 })
+         }
+         if (activePass && activePass.order_id !== s.id) {
+           const refund = await refundDuplicateProjectPass(stripe, {
+             sessionId: s.id,
+             paymentIntent: s.payment_intent,
+           })
+           if (!refund.ok) {
+             console.error(JSON.stringify({
+               eventName: 'duplicate_project_pass_reconciliation_pending',
+               sessionId: s.id,
+               existingOrderId: activePass.order_id,
+               userId,
+               projectId,
+               reason: refund.reason,
+             }))
+             return new Response('duplicate refund pending', { status: 500 })
+           }
+           console.log(JSON.stringify({
+             eventName: 'duplicate_project_pass_refunded',
+             sessionId: s.id,
+             existingOrderId: activePass.order_id,
+             refundId: refund.refundId,
+             userId,
+             projectId,
+           }))
+           return new Response('ok')
+         }
+         if (projectLocksEnabled) {
+           const lockResult = await lockPaidProject(db, {
+             userId,
+             projectId,
+             topic: String(s.metadata?.topic || project.topic || '').trim(),
+             workType: productKey,
+             productKey,
+             paymentId: s.id,
+             lockedAt: new Date().toISOString(),
+           })
+           if (!lockResult.ok) {
+             console.error('paid project lock failed', { sessionId: s.id, userId, projectId, error: lockResult.error })
+             return new Response('project lock failed', { status: 500 })
+           }
+         }
+
+         const { error: insertError } = await db.from('entitlements').insert({
           user_id: userId,
           work_type: productKey, // 'seminarski'|'zavrsni'|'diplomski' — isti rječnik kao entitlements.work_type CHECK
           slots_total: 1,        // 1 Pass = 1 rad; re-check istog otiska je besplatan (src/report/slot-logic.ts)

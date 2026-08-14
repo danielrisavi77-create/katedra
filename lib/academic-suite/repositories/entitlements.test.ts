@@ -44,6 +44,11 @@ function createEntitlementDb(rows: EntitlementFixture[]) {
           predicates.push((row) => row[column] === value)
           return query
         },
+        or(filter: string) {
+          const allowed: string[] = filter.match(/katedra_pass_[a-z]+/g) || []
+          predicates.push((row) => row.product_id === null || allowed.includes(row.product_id || ''))
+          return query
+        },
         gt(column: keyof EntitlementFixture, value: string) {
           predicates.push((row) => String(row[column]) > value)
           return query
@@ -115,13 +120,25 @@ describe('hasActiveProjectPass', () => {
     ).resolves.toBe(false)
   })
 
-  it('rejects a Stripe entitlement that belongs to a catalog product', async () => {
+  it('rejects an unknown Stripe catalog product', async () => {
     await expect(
       resolvePass([{ ...ACTIVE_PASS, product_id: 'some-catalog-product' }]),
     ).resolves.toBe(false)
   })
 
+  it('accepts a known Katedra catalog Pass product', async () => {
+    await expect(
+      resolvePass([{ ...ACTIVE_PASS, product_id: 'katedra_pass_diplomski' }]),
+    ).resolves.toBe(true)
+  })
+
   it('returns false when there is no matching entitlement', async () => {
     await expect(resolvePass([])).resolves.toBe(false)
+  })
+
+  it('fails closed when the entitlement client throws', async () => {
+    await expect(hasActiveProjectPass({
+      from() { throw new Error('database unavailable') },
+    } as never, { userId: 'user-1', projectId: 'project-1', now: NOW })).resolves.toBe(false)
   })
 })

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 export const metadata = {
@@ -7,9 +8,26 @@ export const metadata = {
 
 export default function UvjetiPage() {
   return (
-    <div className="katedra-page" style={{ minHeight: '100vh', padding: '40px 16px 90px' }}>
-      <div className="wrap" style={{ maxWidth: 760 }}>
-        <div className="panel" style={{ background: 'var(--warn)', color: '#2a1a00', marginBottom: 20, fontWeight: 700 }}>
+    <div className="katedra-page legal-page" data-skin="kreda" style={{ minHeight: '100vh', padding: '0 16px 90px' }}>
+      <div className="wrap legal-shell" style={{ maxWidth: 900 }}>
+        <header className="legal-header">
+          <Link href="/" className="legal-brand">
+            <div className="logo-badge">K</div>
+            <div>
+              <strong className="legal-brand-title">Katedra</strong>
+              <span className="legal-brand-subtitle">Od teme do Katedre</span>
+            </div>
+          </Link>
+          <div className="legal-header-actions"><ThemeToggle /><Link href="/pisi" className="legal-header-action">Otvori aplikaciju</Link></div>
+        </header>
+
+        <div className="legal-hero">
+          <p className="legal-kicker">Dokument · Uvjeti korištenja</p>
+          <h1 className="legal-title">Uvjeti korištenja</h1>
+          <p className="legal-meta">Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
+        </div>
+
+        <div className="panel legal-alert" style={{ background: 'var(--warn)', color: '#2a1a00', marginBottom: 20, fontWeight: 700 }}>
           ⚠ NACRT — zahtijeva pravnu provjeru prije objave. Ovaj tekst nije pravni savjet niti ga
           je sastavio odvjetnik — istražen je i ojačan konkretnim izvorima (v. dno stranice), ali
           to ne zamjenjuje pravnu reviziju. §5 (pravo na odustajanje) sadrži i implementacijski
@@ -17,11 +35,9 @@ export default function UvjetiPage() {
           prije pravne revizije i prije nego funkcija raskida stvarno postoji u aplikaciji.
         </div>
 
-        <Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
-        <h1 style={{ marginTop: 16 }}>Uvjeti korištenja</h1>
-        <p style={{ color: 'var(--mut)' }}>Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
+        <Link href="/pisi" className="legal-back">← Natrag na Katedru</Link>
 
-        <div className="panel" style={{ marginTop: 20, lineHeight: 1.6 }}>
+        <div className="panel legal-document" style={{ marginTop: 20, lineHeight: 1.6 }}>
           <h3>1. Tko smo i što je Katedra</h3>
           <p>
             Katedra je digitalni kopilot koji vodi izradu jednog akademskog rada (seminarski,
@@ -155,7 +171,7 @@ export default function UvjetiPage() {
           </p>
         </div>
 
-        <div className="panel" style={{ marginTop: 20, fontSize: 12, color: 'var(--mut)', lineHeight: 1.6 }}>
+        <div className="panel legal-sources" style={{ marginTop: 20, fontSize: 12, color: 'var(--mut)', lineHeight: 1.6 }}>
           <b>Izvori korišteni pri pisanju ovog nacrta</b> (provjereno kolovoz 2026 — prije objave provjeriti nisu li se propisi u međuvremenu promijenili):
           <ul style={{ marginTop: 6 }}>
             <li>Zakon o izmjenama i dopunama Zakona o zaštiti potrošača, NN 59/2026, čl. 81.a — <a href="https://narodne-novine.nn.hr/clanci/sluzbeni/full/2026_06_59_728.html" target="_blank" rel="noopener" style={{ color: 'var(--acc)' }}>narodne-novine.hr</a></li>
@@ -164,7 +180,7 @@ export default function UvjetiPage() {
           </ul>
         </div>
 
-        <p style={{ marginTop: 20 }}>
+        <p className="legal-footer-links" style={{ marginTop: 20 }}>
           <Link href="/privatnost" style={{ color: 'var(--acc)' }}>← Politika privatnosti</Link>
         </p>
       </div>
