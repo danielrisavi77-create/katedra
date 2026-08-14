@@ -31,6 +31,7 @@ where n.nspname in ('public', 'private')
   and p.proname in (
     'lock_paid_project',
     'create_agent_run',
+    'activate_agent_run',
     'claim_agent_step',
     'complete_agent_step',
     'register_agent_payload',

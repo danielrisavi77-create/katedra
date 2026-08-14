@@ -26,4 +26,9 @@ describe('agent run route contract', () => {
     expect(source).toContain('activateAgentRun')
     expect(source.indexOf('await storeAgentRunContext')).toBeLessThan(source.indexOf('await activateAgentRun'))
   })
+
+  it('attaches selected materials before exposing the run to workers', () => {
+    expect(source).toContain('attachAgentPayloadsToRun')
+    expect(source.indexOf('await attachAgentPayloadsToRun')).toBeLessThan(source.indexOf('await activateAgentRun'))
+  })
 })

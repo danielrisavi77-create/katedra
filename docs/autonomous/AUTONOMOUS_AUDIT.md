@@ -1,5 +1,46 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15e
+
+### Root cause selected
+
+Priority: P1 (agent-run activation race with selected materials).
+
+The agent-run route activated a newly-created run before attaching the user's
+selected temporary materials. Because activation makes the run worker-eligible,
+a worker could claim the first step in the gap and process an incomplete input
+set.
+
+### Fix
+
+- Keep the run in `initializing` after the private manuscript context is stored.
+- Attach and validate every selected material while the run is still
+  `initializing`.
+- Call `activate_agent_run` only after context and material attachment succeed;
+  cancel the run on any failure.
+- Add a route regression test that requires material attachment before
+  activation.
+- Synchronize the release preflight documentation with the runtime-required
+  `activate_agent_run` RPC.
+
+### Verification
+
+- Regression route test: PASS (4 tests).
+- Related agent-run/backend tests: PASS (31 files, 96 tests).
+- Full Katedra suite: PASS (129 files, 430 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 generated routes).
+- Local Playwright smoke: PASS; `/pisi?tip=d` and `/racun` at desktop/mobile
+  widths had no page errors or horizontal overflow.
+
+### Remaining issues
+
+- Authenticated agent-run behavior and canonical RPC deployment remain
+  `BLOCKED_EXTERNAL`; local ordering tests are not proof of live worker
+  concurrency behavior.
+- Other external blockers remain listed in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15d
 
 ### Root cause selected

@@ -67,11 +67,9 @@ export async function POST(req) {
     await cancelAgentRun(supabase, { userId: user.id, runId: created.runId }).catch(() => undefined)
     return Response.json({ error: context.error }, { status: context.status })
   }
-  const activated = await activateAgentRun(supabase, { userId: user.id, runId: created.runId })
-  if (!activated.ok) {
-    await cancelAgentRun(supabase, { userId: user.id, runId: created.runId }).catch(() => undefined)
-    return Response.json({ error: 'Agent run nije moguće aktivirati.' }, { status: 503 })
-  }
+
+  // Keep the run in `initializing` until every selected payload is attached.
+  // Otherwise a worker could claim the first step before its inputs exist.
   if (parsed.value.materialIds?.length) {
     const attached = await attachAgentPayloadsToRun(supabase, {
       userId: user.id,
@@ -83,6 +81,12 @@ export async function POST(req) {
       await cancelAgentRun(supabase, { userId: user.id, runId: created.runId }).catch(() => undefined)
       return Response.json({ error: attached.ok ? 'Jedan ili više materijala više nije dostupan.' : 'Povezivanje materijala nije uspjelo.' }, { status: attached.ok ? 409 : 503 })
     }
+  }
+
+  const activated = await activateAgentRun(supabase, { userId: user.id, runId: created.runId })
+  if (!activated.ok) {
+    await cancelAgentRun(supabase, { userId: user.id, runId: created.runId }).catch(() => undefined)
+    return Response.json({ error: 'Agent run nije moguće aktivirati.' }, { status: 503 })
   }
 
   const { data: run, error: runError } = await supabase.from('agent_runs')
