@@ -31,6 +31,47 @@ const COLUMNS =
 
 const KATEDRA_PROJECT_LOCKS_ENABLED = process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
 
+const LEKTA_ISSUE_MAX_COUNT = 250
+const LEKTA_ISSUE_STRING_FIELDS = {
+  id: 200,
+  ruleId: 200,
+  checkId: 200,
+  category: 80,
+  fixerId: 200,
+  label: 280,
+}
+const LEKTA_ISSUE_SEVERITIES = new Set(['critical', 'error', 'warning', 'info'])
+const LEKTA_ISSUE_STATUSES = new Set(['OPEN', 'USER_CHANGED', 'RECHECK_REQUIRED', 'VERIFIED_FIXED', 'SKIPPED'])
+
+function boundedIssueString(value, maxLength) {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  if (!normalized || normalized.length > maxLength) return undefined
+  return normalized
+}
+
+function sanitizeLektaIssues(raw) {
+  if (!Array.isArray(raw)) return []
+  const safeIssues = []
+  for (const issue of raw.slice(0, LEKTA_ISSUE_MAX_COUNT)) {
+    if (!issue || typeof issue !== 'object' || Array.isArray(issue)) continue
+    const id = boundedIssueString(issue.id, LEKTA_ISSUE_STRING_FIELDS.id)
+    if (!id) continue
+
+    const safe = { id }
+    for (const [key, maxLength] of Object.entries(LEKTA_ISSUE_STRING_FIELDS)) {
+      if (key === 'id') continue
+      const value = boundedIssueString(issue[key], maxLength)
+      if (value !== undefined) safe[key] = value
+    }
+    if (LEKTA_ISSUE_SEVERITIES.has(issue.severity)) safe.severity = issue.severity
+    if (typeof issue.fixable === 'boolean') safe.fixable = issue.fixable
+    if (LEKTA_ISSUE_STATUSES.has(issue.status)) safe.status = issue.status
+    safeIssues.push(safe)
+  }
+  return safeIssues
+}
+
 function rowToCamel(row) {
   if (!row) return {}
   return {
@@ -46,7 +87,7 @@ function rowToCamel(row) {
     rulesetVersion: row.ruleset_version,
     lektaScore: row.lekta_score,
     lektaCheckedAt: row.lekta_checked_at,
-    lektaIssues: row.lekta_issues,
+    lektaIssues: sanitizeLektaIssues(row.lekta_issues),
     lektaFixedTotal: row.lekta_fixed_total,
     checks: row.checks,
     gen: row.gen,
@@ -278,7 +319,7 @@ async function handlePUT(req) {
 
   // Full-sync consent never overrides the Constitution's privacy boundary:
   // free-form academic text and document-derived strings stay local.
-  const SANITIZERS = { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog }
+  const SANITIZERS = { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog, lektaIssues: sanitizeLektaIssues }
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
     if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
     const sanitize = SANITIZERS[camel]
