@@ -303,3 +303,37 @@ revocation.
 
 - Agent runs remain disabled until the canonical Lekta contract and staging
   worker are deployed and verified; see `BLOCKERS.md`.
+
+## Cycle: 2026-08-14k
+
+### Root cause selected
+
+Priority: P1 (project-specific Pass enforcement on agent context).
+
+After the previous expiry check, the context route still accepted any active
+Katedra Pass. A Seminarski entitlement could therefore authorize a context
+update for a project locked as Završni if the canonical run RPC or another
+layer did not reject it first.
+
+### Fix
+
+- Normalize and validate the locked product key against the locked work type.
+- Use `lookupActiveProjectPassForProduct` with the exact catalog product ID.
+- Reject mismatched or malformed lock metadata fail-closed before storing the
+  manuscript context.
+- Added a regression proving an active wrong-tier Pass cannot authorize the
+  run.
+
+### Verification
+
+- Focused context route tests: PASS (3 tests).
+- Full suite: PASS (128 files, 394 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS.
+- Local HTTP smoke: all six primary routes returned `200`.
+
+### Remaining issues
+
+- Canonical Lekta RPC/RLS and authenticated staging still need to verify the
+  same project/tier invariant across the real worker and database boundary.
