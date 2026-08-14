@@ -18,6 +18,9 @@ export function createProviderBackedExecutor(input: {
 }) {
   return async (step: AgentStepRecord): Promise<Omit<AgentResultV1, 'agent'>> => {
     const manuscript = await input.loadContext()
+    const activeSection = step.sectionId
+      ? manuscript.sections.find((section) => section.id === step.sectionId)
+      : undefined
     const materials = input.loadMaterials ? await input.loadMaterials() : []
     const provider = input.router.providerFor(step.agent, capabilityFor(step.agent, input.sourcePolicy, materials))
     const agentInput: AgentInput = {
@@ -39,6 +42,7 @@ export function createProviderBackedExecutor(input: {
       citations: manuscript.sources
         .filter((source) => source.verified && Boolean(source.urlOrDoi))
         .map((source) => ({ id: source.id, title: source.title, url: source.urlOrDoi, verified: true })),
+      ...(activeSection ? { sectionId: activeSection.id, baseRevision: activeSection.updatedAt } : {}),
     }
   }
 }

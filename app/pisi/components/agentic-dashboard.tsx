@@ -1,17 +1,22 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import { createAgenticDraft, upsertSectionRevision, type AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
+import { plainTextDocument } from '../../../lib/manuscript/model'
+import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import { AgenticTimeline, type AgenticTimelineStep } from './agentic-timeline'
+import { AgenticReview } from './agentic-review'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 
 type RunStatus = 'pending' | 'running' | 'paused' | 'completed' | 'blocked' | 'failed' | 'cancelled'
 type AgenticRun = { runId: string; status: RunStatus; mode?: string; steps: AgenticTimelineStep[] }
 
-export function AgenticDashboard({ runId, projectId, manuscript, onReset, onIntervention }: { runId: string; projectId: string; manuscript: ManuscriptV1; onReset?: () => void; onIntervention?: () => void }) {
+export function AgenticDashboard({ runId, projectId, manuscript, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
   const [run, setRun] = useState<AgenticRun | null>(null)
+  const [draft, setDraft] = useState<AgenticDraftV1 | null>(null)
   const [message, setMessage] = useState('')
+  const resultSignature = useRef('')
 
   const refresh = useCallback(async () => {
     const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
@@ -22,7 +27,13 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
     const body = await response.json().catch(() => ({}))
     if (!body.run) return
     setRun(normalizeRun(body))
-  }, [projectId, runId])
+    const nextDraft = normalizeDraft(body, manuscript, projectId, runId)
+    const nextSignature = JSON.stringify(body.results || [])
+    if (nextSignature !== resultSignature.current) {
+      resultSignature.current = nextSignature
+      setDraft(nextDraft)
+    }
+  }, [manuscript, projectId, runId])
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +66,12 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
 
   const activeStep = useMemo(() => run?.steps.find((step) => ['running', 'retrying'].includes(step.status)) || run?.steps.find((step) => step.status === 'pending'), [run?.steps])
   const blocked = run?.status === 'blocked' || run?.status === 'failed'
+  const editDraft = (sectionId: string, content: TiptapNode) => {
+    setDraft((current) => current ? { ...current, sections: current.sections.map((revision) => revision.sectionId === sectionId ? { ...revision, proposedContent: content, updatedAt: new Date().toISOString() } : revision), updatedAt: new Date().toISOString() } : current)
+  }
+  const rejectDraft = (sectionId: string) => {
+    setDraft((current) => current ? { ...current, sections: current.sections.map((revision) => revision.sectionId === sectionId ? { ...revision, status: 'rejected' as const, updatedAt: new Date().toISOString() } : revision), updatedAt: new Date().toISOString() } : current)
+  }
 
   return <section className="pis-agentic-dashboard" aria-live="polite">
     <header className="pis-agentic-dashboard-heading">
@@ -73,8 +90,35 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
       <AgenticTimeline steps={run?.steps || []} />
       <ReadOnlyManuscriptPreview manuscript={manuscript} />
     </div>
+    {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={(sectionIds) => onAcceptDraft ? onAcceptDraft(draft, sectionIds) : Promise.resolve()} onEdit={editDraft} onReject={rejectDraft} />}
     {message && <p className="pis-agent-message" role="alert">{message}</p>}
   </section>
+}
+
+function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1, projectId: string, runId: string): AgenticDraftV1 | null {
+  const rawResults = Array.isArray(body.results) ? body.results : []
+  let draft = createAgenticDraft({ projectId, runId, base: manuscript })
+  for (const value of rawResults) {
+    if (!value || typeof value !== 'object') continue
+    const result = value as Record<string, unknown>
+    const sectionId = typeof result.sectionId === 'string' ? result.sectionId : ''
+    const output = typeof result.output === 'string' ? result.output.trim() : ''
+    if (!sectionId || !output || !manuscript.sections.some((section) => section.id === sectionId)) continue
+    const verification = result.verification && typeof result.verification === 'object' ? result.verification as Record<string, unknown> : {}
+    const verificationStatus = verification.status
+    const status = verificationStatus === 'verified' ? 'verified' : verificationStatus === 'blocked' ? 'blocked' : 'generated'
+    const issues = Array.isArray(verification.issues) ? verification.issues.map((issue) => issue && typeof issue === 'object' && typeof (issue as Record<string, unknown>).message === 'string' ? String((issue as Record<string, unknown>).message) : '').filter(Boolean) : []
+    const updatedAt = typeof result.createdAt === 'string' ? result.createdAt : new Date().toISOString()
+    draft = upsertSectionRevision(draft, {
+      sectionId,
+      baseRevision: typeof result.baseRevision === 'string' ? result.baseRevision : '__missing_base_revision__',
+      proposedContent: plainTextDocument(output),
+      status,
+      verificationMessage: issues.join(' '),
+      updatedAt,
+    })
+  }
+  return draft.sections.length ? draft : null
 }
 
 function normalizeRun(body: Record<string, unknown>): AgenticRun {

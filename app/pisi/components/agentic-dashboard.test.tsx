@@ -73,4 +73,20 @@ describe('AgenticDashboard', () => {
     expect(screen.getByText('Nedostaje provjeren izvor.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeTruthy()
   })
+
+  it('shows verified worker output in review before it can enter the manuscript', async () => {
+    const user = userEvent.setup()
+    const onAcceptDraft = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onAcceptDraft={onAcceptDraft} />)
+
+    expect(await screen.findByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
+    expect(screen.getByDisplayValue('Verificirani novi uvod.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Prihvati sve provjerene' }))
+    expect(onAcceptDraft).toHaveBeenCalledTimes(1)
+  })
 })

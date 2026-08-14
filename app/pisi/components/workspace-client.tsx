@@ -6,6 +6,8 @@ import { normalizeLektaHandoffHashForLegacyEngine } from '../../../lib/academic-
 import { ensureGuestProjectIdentity } from '../../../lib/academic-suite/guest-project'
 import { useAuth } from '../../../lib/hooks/useAuth'
 import { createTextDeltaParser } from '../../../lib/manuscript/client-sse'
+import { mergeVerifiedAgenticSections } from '../../../lib/manuscript/agentic-merge'
+import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import { shouldShowManuscriptOnboarding } from '../../../lib/manuscript/onboarding-state'
 import { buildAiMessages, capabilityForAction, type ManuscriptAiAction } from '../../../lib/manuscript/context'
 import { exportManuscriptDocx } from '../../../lib/manuscript/export-docx'
@@ -298,6 +300,24 @@ export default function WorkspaceClient() {
     }))
   }
 
+  const acceptAgenticDraft = async (draft: AgenticDraftV1, sectionIds?: string[]) => {
+    if (!manuscript) return
+    const merged = mergeVerifiedAgenticSections({ manuscript, draft, sectionIds })
+    if (merged.ok === false) {
+      setAssistantError(merged.error)
+      return
+    }
+    try {
+      await storeRef.current?.snapshot(manuscript, 'Prije prihvata verificiranog agenticnog rezultata')
+      setManuscript(merged.manuscript)
+      setSaveStatus('saving')
+      clearAiContext()
+      merged.acceptedSectionIds.forEach((sectionId) => appendProcessLog(manuscript.projectId, 'Verificirani agenticni rezultat', sectionId))
+    } catch {
+      setAssistantError('Verificirani rezultat nije moguće spremiti u lokalnu verziju.')
+    }
+  }
+
   const runAi = async (action: ManuscriptAiAction, instruction?: string) => {
     if (!manuscript || !activeSection || assistantBusy) return
     if (!user) {
@@ -462,7 +482,7 @@ export default function WorkspaceClient() {
         view={(agenticMode ? agenticView : 'writing') as WorkspaceView}
         projectLocked={agenticMode && passStatus === 'active'}
         activeAgentLabel={agenticMode && agenticView === 'dashboard' ? 'Autonomni agenti' : undefined}
-        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} /> : undefined}
+        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} onAcceptDraft={acceptAgenticDraft} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>

@@ -9,6 +9,7 @@ export interface AgentWorkerDependencies {
   db: { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data?: unknown; error?: { message?: string } | null }> }
   workerId: string
   runId: string
+  storeResult?: (input: { step: AgentStepRecord; result: Omit<AgentResultV1, 'agent'>; verification: VerificationResultV1 }) => Promise<{ manifestId: string }>
 }
 
 export async function processClaimedAgentStep(
@@ -36,10 +37,23 @@ export async function processClaimedAgentStep(
     result = { output: '', citations: [], provider: 'unknown', usage: { inputTokens: 0, outputTokens: 0 } }
   }
 
+  let completionVerification = verification
+  if (dependencies.storeResult) {
+    try {
+      const stored = await dependencies.storeResult({ step, result, verification })
+      completionVerification = { ...verification, resultPayloadId: stored.manifestId }
+    } catch (error) {
+      completionVerification = {
+        status: 'failed',
+        issues: [...verification.issues, { code: 'invalid_output', message: error instanceof Error ? error.message : 'Rezultat agenta nije moguće spremiti.' }],
+        evidence: verification.evidence,
+      }
+    }
+  }
   const hasUsage = Boolean(result.usage && (result.usage.inputTokens > 0 || result.usage.outputTokens > 0))
-  const status: 'verified' | 'blocked' | 'failed' = verification.status === 'verified' && hasUsage
+  const status: 'verified' | 'blocked' | 'failed' = completionVerification.status === 'verified' && hasUsage
     ? 'verified'
-    : verification.status === 'blocked' || (verification.status === 'needs_revision' && step.attempt >= 3)
+    : completionVerification.status === 'blocked' || (completionVerification.status === 'needs_revision' && step.attempt >= 3)
       ? 'blocked'
       : 'failed'
   const completion = await completeAgentStep(dependencies.db, {
@@ -50,8 +64,8 @@ export async function processClaimedAgentStep(
     attempt: step.attempt,
     provider: result.provider,
     usage: result.usage || { inputTokens: 0, outputTokens: 0 },
-    verification,
-    requeue: status === 'failed' && verification.status === 'needs_revision' && step.attempt < 3,
+    verification: completionVerification,
+    requeue: status === 'failed' && completionVerification.status === 'needs_revision' && step.attempt < 3,
   })
   if (completion.ok === false) return { status: 'failed', stepId: step.id, error: completion.error }
   if ('value' in completion && (completion.value.status === 'paused' || completion.value.status === 'cancelled')) {

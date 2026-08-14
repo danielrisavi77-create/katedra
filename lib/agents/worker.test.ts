@@ -17,6 +17,21 @@ describe('agent worker lease contract', () => {
     expect(rpc).toHaveBeenNthCalledWith(2, 'complete_agent_step', expect.objectContaining({ p_step_id: 'step-1', p_status: 'verified' }))
   })
 
+  it('persists the result before completing the step and stores only a manifest pointer', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'verified' }, error: null })
+    const storeResult = vi.fn().mockResolvedValue({ manifestId: 'manifest-result-1' })
+    const result = await processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1', storeResult }, {
+      execute: vi.fn().mockResolvedValue({ output: 'Tekst', citations: [], provider: 'test', usage: { inputTokens: 2, outputTokens: 3 } }),
+      verify: vi.fn().mockReturnValue({ status: 'verified', issues: [], evidence: [] }),
+    })
+
+    expect(result).toMatchObject({ status: 'verified', stepId: 'step-1' })
+    expect(storeResult).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({ p_verification: expect.objectContaining({ resultPayloadId: 'manifest-result-1' }) }))
+  })
+
   it('does not complete a missing claim', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: [], error: null })
     await expect(processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {

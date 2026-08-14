@@ -62,6 +62,8 @@ export interface AgentResultV1 {
   claims?: ClaimEvidence[]
   provider: string
   usage?: UsageRecord
+  sectionId?: string
+  baseRevision?: string
 }
 
 export interface VerificationIssue {
@@ -76,6 +78,7 @@ export interface VerificationResultV1 {
   status: VerificationStatus
   issues: VerificationIssue[]
   evidence: CitationEvidence[]
+  resultPayloadId?: string
 }
 
 export interface AgentContract {

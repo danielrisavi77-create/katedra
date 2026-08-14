@@ -9,6 +9,7 @@ import { createSupabaseRunPayloadManifestStore, loadRunManuscriptContext, loadRu
 import { runContextStoragePaths } from '@/lib/agents/run-context'
 import { AGENT_IDS } from '@/lib/agents/contracts'
 import { verifyAgentResult } from '@/lib/agents/verifier'
+import { storeAgentStepResult } from '@/lib/agents/run-result-storage'
 
 export const runtime = 'nodejs'
 
@@ -62,9 +63,21 @@ export async function POST(req) {
     router,
     billing: { db, userId: run.user_id, model: MODEL },
   })
+  const storeResult = ({ step, result, verification }) => storeAgentStepResult({ db, storage }, {
+    userId: run.user_id,
+    projectId: run.project_id,
+    runId,
+    step,
+    result,
+    verification,
+    bucket: BUCKET,
+  }).then((stored) => {
+    if (!stored.ok) throw new Error(stored.error)
+    return { manifestId: stored.value.manifestId }
+  })
   const result = await runAgentWorkerLoop(
     { db, workerId: process.env.KATEDRA_AGENT_WORKER_ID || 'katedra-web-worker', runId },
-    { execute, verify: verifyAgentResult },
+    { execute, verify: verifyAgentResult, storeResult },
     { maxSteps: 1 },
   )
   return Response.json({ runId, ...result })

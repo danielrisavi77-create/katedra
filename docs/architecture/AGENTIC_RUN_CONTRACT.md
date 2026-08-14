@@ -10,6 +10,8 @@ Katedra koristi postojeći Lekta Supabase kao canonical backend. Ovaj dokument j
 
 `agent_steps` mora sadržavati `step_id`, `run_id`, `project_id`, `agent`, `verifier`, `section_id`, `step_order`, `attempt`, `status`, `last_verification`, `lease_owner`, `lease_expires_at`, `created_at` i `updated_at`.
 
+Worker rezultat nije canonical rukopis niti nova tablica u Katedri. Worker ga sprema kao privatni temporary payload s `material_id` prefiksom `agent-result:`, a u `last_verification` zapisuje samo `resultPayloadId`. GET run endpoint učitava payload samo nakon provjere vlasništva runa i projekta te ga vraća `/pisi` za pregled. Prihvat rezultata uvijek radi lokalni snapshot i stale-check prije mergea u rukopis.
+
 ## Required invariants
 
 - RLS ograničava sve redove na vlasnika projekta.
