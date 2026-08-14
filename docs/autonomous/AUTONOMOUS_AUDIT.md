@@ -612,6 +612,54 @@ made the full Lekta gate report unrelated syntax and snapshot-like failures.
   RPC/RLS, worker, TTL cleanup and authenticated staging preflight are
   deployed and verified.
 
+## Cycle: 2026-08-14u
+
+### Root cause selected
+
+Priority: P0 (shared-state privacy boundary bypass).
+
+`PUT /api/state` copied `lektaIssues` into the compatibility backend without a
+server-side allowlist, while `GET /api/state` returned the stored JSON as-is.
+That allowed document-derived `detail`, `location`, source passages, mentor
+comments, document text and unknown fields to cross the local-first boundary
+despite the Product Constitution and shared schema forbidding them.
+
+### Fix
+
+- Add one bounded, fail-closed `lektaIssues` sanitizer.
+- Apply it before PUT persistence and again when mapping GET responses.
+- Add PUT and GET regressions for prohibited fields, unknown keys and oversized
+  labels.
+- Keep the fix in Katedra route state only; no competing database migration was
+  introduced.
+
+### Verification
+
+- TDD regression: PASS; the route-only sanitizer was reversibly removed and
+  both new tests failed for the expected leakage before restoration.
+- Focused state tests: PASS (6 passed, 1 staging integration skipped).
+- Full Katedra suite: PASS (126 files, 408 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS.
+- Diff check: PASS; only unrelated pre-existing CRLF normalization warnings.
+- Task review and scoped re-review: PASS; no Critical or Important findings.
+
+### Commit
+
+- `002e643 fix: sanitize Lekta state issues`
+
+### Remaining issues
+
+- The canonical Lekta backend still needs the corresponding one-time cleanup
+  and deployed contract verification if contaminated legacy rows exist there;
+  Katedra now redacts such rows on read and prevents new writes.
+- Authenticated commerce, canonical Lekta deployment and staging browser
+  journeys remain the external blockers listed in `BLOCKERS.md`.
+- A separate P1 remains in the canonical `resume_agent_run` RPC: direct
+  authenticated RPC callers need active project-specific Pass/expiry checks;
+  Katedra's HTTP route already checks this boundary.
+
 ## Cycle: 2026-08-14s
 
 ### Root cause selected
