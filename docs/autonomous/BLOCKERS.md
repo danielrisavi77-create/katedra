@@ -10,6 +10,10 @@ Evidence: `npm.cmd run preflight:agentic` currently reports missing
 `KATEDRA_AGENT_WORKER_CRON_SECRET`, `KATEDRA_AGENT_MODEL`,
 `KATEDRA_AGENT_RUNS_ENABLED` and `KATEDRA_PROJECT_LOCKS_ENABLED`.
 
+The production preflight also intentionally fails without
+`KATEDRA_PROJECT_LOCKS_ENABLED`; checkout and webhook have the same runtime
+fail-closed guard.
+
 Required owner action: deploy and verify Lekta migrations/RPCs, RLS, worker
 lease/claim, payload cleanup and staging credentials. Then rerun the read-only
 preflight and the authenticated agentic E2E before enabling flags.

@@ -32,3 +32,33 @@ product promise that Katedra knows where the student stopped.
   agentic staging remain external blockers; see `BLOCKERS.md` and
   `GOLDEN_JOURNEYS.md`.
 - Do not enable agentic feature flags until the canonical preflight passes.
+
+## Cycle: 2026-08-14b
+
+### Root cause selected
+
+Priority: P0 (commerce / project entitlement safety).
+
+The production preflight only required project locks when agentic runs were
+enabled. A deployment could therefore pass the preflight, accept a paid Pass,
+and grant entitlement without server-side topic/project locking.
+
+### Fix
+
+- Production preflight now requires `KATEDRA_PROJECT_LOCKS_ENABLED=true` for
+  every paid production deployment.
+- `/api/checkout` refuses to create a Stripe session when production locks are
+  unavailable.
+- `/api/webhook` refuses to grant a paid entitlement when production locks are
+  unavailable.
+- Added runtime tests for both fail-closed paths and the preflight invariant.
+
+### Verification
+
+- checkout/webhook/preflight focused tests: PASS (13 tests)
+- `npm run test:ci`: PASS (121 files, 379 passed, 4 skipped)
+- typecheck: PASS
+- lint: PASS
+- build: PASS
+- production preflight without deployment secrets: FAIL closed, including
+  `KATEDRA_PROJECT_LOCKS_ENABLED` in the missing variables.
