@@ -575,6 +575,43 @@ That could make link commands and schema behavior ambiguous.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14t
+
+### Root cause selected
+
+Priority: P2 (cross-platform Lekta release-gate instability).
+
+On Windows, two Lekta Node ESM generator files were checked out with CRLF
+line endings even though the Vite-driven tests require LF. A generated
+real-corpus comparison also treated CRLF and LF as different output, which
+made the full Lekta gate report unrelated syntax and snapshot-like failures.
+
+### Fix
+
+- Add a Lekta `.gitattributes` rule that keeps `*.mjs` files on LF across
+  checkouts.
+- Normalize the real-corpus comparison to LF before asserting generated
+  markdown equality.
+- Record the coordinated Lekta fix in commit `cd7233f`.
+
+### Verification
+
+- Lekta focused agentic tests: PASS (4 files, 11 tests).
+- Lekta full `npm run check`: PASS (TypeScript, full Vitest suite and Vite
+  production build; exit `0`).
+- Katedra gates from the preceding cycle remain PASS (full suite, typecheck,
+  lint, production build and Playwright smoke).
+
+### Remaining issues
+
+- Dependency audit could not reach the npm advisory endpoint in this
+  environment; rerun it in a network-enabled release environment.
+- Authenticated commerce, canonical Lekta deployment and staging browser
+  journeys remain the external blockers listed in `BLOCKERS.md`.
+- Agentic feature flags remain disabled until the canonical Lekta migrations,
+  RPC/RLS, worker, TTL cleanup and authenticated staging preflight are
+  deployed and verified.
+
 ## Cycle: 2026-08-14s
 
 ### Root cause selected
