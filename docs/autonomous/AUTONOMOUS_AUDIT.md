@@ -602,7 +602,9 @@ accessible tree, not inferred from a shell display.
 - Lint: PASS.
 - Production build: PASS (exit `0`).
 - Browser verification: PASS on `localhost:3000` and `127.0.0.1:3000`; step 3
-  exposed `← Natrag` and `Dalje →`, with status `200` and no page errors.
+  exposed `← Natrag` and `Dalje →`, with status `200` and no page errors. A
+  final route matrix also passed 7 routes × 2 hosts × 2 viewports × 2 themes
+  with no overflow, page errors or failed Next asset requests.
 - Independent review: PASS, no Critical/Important/Minor findings.
 
 ### Commit and journey impact
