@@ -1,5 +1,45 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15f
+
+### Root cause selected
+
+Priority: P1 (stale `initializing` agent run after a server crash).
+
+The new readiness state was correctly hidden from workers, but it was included
+in the per-project active-run uniqueness index without a recovery path. A
+process failure between `create_agent_run` and `activate_agent_run` could leave
+an old `initializing` row that blocked the next run indefinitely.
+
+### Fix
+
+- Add the owner-scoped `cleanup_stale_initializing_agent_run` Lekta RPC.
+- Cancel only an owned project run whose `initializing` state is older than ten
+  minutes; active `pending`, `running` and `paused` runs are untouched.
+- Call the cleanup RPC before creating a replacement run and fail closed if the
+  canonical recovery contract is unavailable.
+- Add the RPC to the agent contract preflight and architecture documentation.
+
+### Verification
+
+- TDD regression: red before the cleanup wrapper/route contract/migration
+  existed; green after implementation.
+- Focused root tests: PASS (13 tests across backend and route contracts).
+- Focused Lekta readiness contract tests: PASS (3 tests).
+- Full Katedra suite: PASS (129 files, 432 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 generated routes).
+- Lekta `npm.cmd run check`: PASS.
+- Local Playwright smoke: PASS; `/pisi?tip=d` and `/racun` at desktop/mobile
+  widths had no page errors or horizontal overflow.
+
+### Remaining issues
+
+- The new recovery RPC, like the rest of the agent contract, is not deployed
+  or concurrency-tested against canonical Supabase; agent flags remain off.
+- Other external blockers remain listed in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15e
 
 ### Root cause selected

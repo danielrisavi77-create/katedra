@@ -34,6 +34,8 @@ Implementirati atomic `lock_paid_project`, `create_agent_run`, `claim_agent_step
 
 Katedra poziva RPC-e ovim parametrima:
 
+- `cleanup_stale_initializing_agent_run(p_user_id, p_project_id)` — owner-scoped recovery cancels only an `initializing` run older than ten minutes before a replacement run is created.
+
 - `activate_agent_run(p_user_id, p_run_id)` — prelazi samo pripremljeni run iz `initializing` u worker-eligible `pending` nakon provjere konteksta, locka i entitlementa.
 
 - `lock_paid_project(p_user_id, p_project_id, p_topic, p_work_type, p_product_key, p_payment_id, p_locked_at)` — mora biti idempotentan po `payment_id` i `project_id`.

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
-import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, createAgentRun } from '@/lib/agents/backend-contract'
+import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun } from '@/lib/agents/backend-contract'
 import { parseAgentRunRequest } from '@/lib/agents/run-request'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { resolveProjectCapability } from '@/lib/product/server-capabilities'
@@ -43,6 +43,15 @@ export async function POST(req) {
     return Response.json({ error: decision.code === 'policy_unverified'
       ? 'Institucijska pravila za web istraživanje još nisu verificirana.'
       : 'Ova agenticna mogućnost nije dostupna za ovaj projekt.' }, { status })
+  }
+
+  const recovered = await cleanupStaleInitializingAgentRun(supabase, {
+    userId: user.id,
+    projectId: project.projectId,
+  })
+  if (!recovered.ok) {
+    console.error('canonical cleanup_stale_initializing_agent_run failed', { userId: user.id, projectId: project.projectId, error: recovered.error })
+    return Response.json({ error: 'Prethodni agent run trenutno nije moguće sigurno zatvoriti.' }, { status: 503 })
   }
 
   const created = await createAgentRun(supabase, {

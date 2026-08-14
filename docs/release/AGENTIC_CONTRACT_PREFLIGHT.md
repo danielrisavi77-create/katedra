@@ -32,6 +32,7 @@ where n.nspname in ('public', 'private')
     'lock_paid_project',
     'create_agent_run',
     'activate_agent_run',
+    'cleanup_stale_initializing_agent_run',
     'claim_agent_step',
     'complete_agent_step',
     'register_agent_payload',

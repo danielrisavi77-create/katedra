@@ -22,6 +22,11 @@ describe('agent run route contract', () => {
     expect(source).toContain("'autonomous_run'")
   })
 
+  it('cleans stale initialization before creating a replacement run', () => {
+    expect(source).toContain('cleanupStaleInitializingAgentRun')
+    expect(source.indexOf('await cleanupStaleInitializingAgentRun')).toBeLessThan(source.indexOf('await createAgentRun'))
+  })
+
   it('activates an initializing run only after its private context is ready', () => {
     expect(source).toContain('activateAgentRun')
     expect(source.indexOf('await storeAgentRunContext')).toBeLessThan(source.indexOf('await activateAgentRun'))

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, completeAgentStep, createAgentRun, pauseAgentRun, registerAgentPayload, resumeAgentRun } from './backend-contract'
+import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, cleanupStaleInitializingAgentRun, completeAgentStep, createAgentRun, pauseAgentRun, registerAgentPayload, resumeAgentRun } from './backend-contract'
 
 describe('canonical agent backend contract', () => {
   it('creates a run through the Lekta RPC and normalizes its id', async () => {
@@ -11,6 +11,16 @@ describe('canonical agent backend contract', () => {
     expect(rpc).toHaveBeenCalledWith('create_agent_run', {
       p_user_id: 'user-1', p_project_id: 'project-1', p_mode: 'autonomous', p_source_policy: 'web_research',
       p_section_ids: ['intro', 'analysis'],
+    })
+  })
+
+  it('cleans up only a stale initializing run for the owned project', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [{ run_id: 'run-stale', status: 'cancelled' }], error: null })
+    await expect(cleanupStaleInitializingAgentRun({ rpc }, {
+      userId: 'user-1', projectId: 'project-1',
+    })).resolves.toEqual({ ok: true, value: { runId: 'run-stale', status: 'cancelled' } })
+    expect(rpc).toHaveBeenCalledWith('cleanup_stale_initializing_agent_run', {
+      p_user_id: 'user-1', p_project_id: 'project-1',
     })
   })
 

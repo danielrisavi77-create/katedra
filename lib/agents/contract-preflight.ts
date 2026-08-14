@@ -1,5 +1,5 @@
 export const REQUIRED_AGENTIC_TABLES = ['katedra_project_locks', 'agent_runs', 'agent_steps', 'agent_payload_manifests'] as const
-export const REQUIRED_AGENTIC_FUNCTIONS = ['lock_paid_project', 'create_agent_run', 'activate_agent_run', 'claim_agent_step', 'complete_agent_step', 'register_agent_payload', 'attach_agent_payloads_to_run', 'cleanup_expired_agent_payloads', 'pause_agent_run', 'resume_agent_run', 'cancel_agent_run'] as const
+export const REQUIRED_AGENTIC_FUNCTIONS = ['lock_paid_project', 'create_agent_run', 'activate_agent_run', 'cleanup_stale_initializing_agent_run', 'claim_agent_step', 'complete_agent_step', 'register_agent_payload', 'attach_agent_payloads_to_run', 'cleanup_expired_agent_payloads', 'pause_agent_run', 'resume_agent_run', 'cancel_agent_run'] as const
 
 export interface AgenticContractInspector {
   hasTable: (name: string) => Promise<boolean>

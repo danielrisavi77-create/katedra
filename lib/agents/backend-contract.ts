@@ -31,6 +31,19 @@ export async function createAgentRun(db: RpcClient, input: {
   return runId ? { ok: true, runId } : { ok: false, error: 'Lekta create_agent_run nije vratio runId.' }
 }
 
+export async function cleanupStaleInitializingAgentRun(db: RpcClient, input: { userId: string; projectId: string }): Promise<AgentBackendResult<{ runId: string; status: string } | null>> {
+  const result = await callRpc(db, 'cleanup_stale_initializing_agent_run', {
+    p_user_id: input.userId,
+    p_project_id: input.projectId,
+  })
+  if (result.ok === false) return { ok: false, error: result.error }
+  const row = firstRecord(result.data)
+  if (!row) return { ok: true, value: null }
+  const runId = String(row.run_id ?? row.runId ?? '')
+  const status = String(row.status ?? '')
+  return runId && status ? { ok: true, value: { runId, status } } : { ok: false, error: 'Lekta cleanup_stale_initializing_agent_run nije vratio stanje runa.' }
+}
+
 export async function activateAgentRun(db: RpcClient, input: { userId: string; runId: string }): Promise<AgentBackendResult<{ runId: string; status: string }>> {
   return transitionAgentRun(db, 'activate_agent_run', input)
 }
