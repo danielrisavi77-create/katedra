@@ -574,3 +574,36 @@ That could make link commands and schema behavior ambiguous.
   environment; rerun it in a network-enabled release environment.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
+
+## Cycle: 2026-08-14r
+
+### Root cause selected
+
+Priority: P2 (Next.js route-transition warning caused by global smooth scrolling).
+
+The global stylesheet intentionally enables smooth scrolling, but the root
+`html` element did not declare that behavior for Next.js. The local browser
+therefore logged a route-transition warning on page navigation.
+
+### Fix
+
+- Declare `data-scroll-behavior="smooth"` on the root `html` element.
+- Add a source-level regression assertion so the declaration cannot disappear
+  while the global scroll-to-top behavior remains enabled.
+
+### Verification
+
+- TDD regression: PASS (red before the layout change, green after it).
+- Full suite: PASS (126 files, 405 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Playwright local browser smoke: PASS; `/`, `/pisi`, `/racun`, `/prijava`,
+  `/privatnost`, and `/uvjeti` all returned `200` with zero scroll warnings.
+
+### Remaining issues
+
+- Dependency audit could not reach the npm advisory endpoint in this
+  environment; rerun it in a network-enabled release environment.
+- Authenticated commerce, canonical Lekta contracts and staging browser
+  journeys remain the external blockers listed in `BLOCKERS.md`.
