@@ -69,4 +69,23 @@ describe('GET /api/account', () => {
     expect(passQuery.filter).toContain('katedra_pass_zavrsni')
     expect(passQuery.filter).toContain('katedra_pass_diplomski')
   })
+
+  it('does not report an expired active entitlement as active', async () => {
+    const passes = [{
+      id: 'expired-pass',
+      status: 'active',
+      purchase_expires_at: '2020-01-01T00:00:00.000Z',
+    }]
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from(table) {
+        if (table === 'entitlements') return query(passes)
+        return query([])
+      },
+    })
+
+    const body = await (await GET()).json()
+
+    expect(body.passes).toEqual([{ ...passes[0], status: 'expired' }])
+  })
 })

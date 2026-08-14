@@ -159,3 +159,29 @@ show a non-Katedra Stripe entitlement as an active Katedra Pass.
 
 - The authenticated account and entitlement behavior still needs real staging
   Supabase data for the full G2-G6 proof.
+## Cycle: 2026-08-14f
+
+### Root cause selected
+
+Priority: P1 (expired entitlement presentation).
+
+The account API exposed database `status: "active"` without applying the
+same expiry check used by server capability authorization. An entitlement
+past `purchase_expires_at` could therefore be counted as an active Pass in
+the account UI.
+
+### Fix
+
+- Normalize active account entitlements to `expired` when their expiry is not
+  in the future, including a missing/invalid expiry.
+- Preserve non-active historical statuses for account history.
+- Added a runtime regression test for an expired active entitlement.
+
+### Verification
+
+- Account route runtime tests: PASS (4 tests).
+
+### Remaining issues
+
+- Full entitlement proof still requires authenticated staging data and a real
+  webhook/refresh journey.

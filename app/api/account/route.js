@@ -22,9 +22,19 @@ export async function GET() {
   return Response.json({
     user: { id: user.id, email: user.email || null },
     projects: projects.data || [],
-    passes: passes.data || [],
+    passes: normalizePasses(passes.data || []),
     usage: usageSummary,
     warnings: [...(projects.error ? ['Projekti trenutačno nisu dostupni.'] : []), ...(passes.error ? ['Status Passova trenutačno nije dostupan.'] : [])],
+  })
+}
+
+function normalizePasses(rows) {
+  return rows.map((row) => {
+    if (row?.status !== 'active') return row
+    const expiresAt = Date.parse(row.purchase_expires_at || '')
+    return Number.isFinite(expiresAt) && expiresAt > Date.now()
+      ? row
+      : { ...row, status: 'expired' }
   })
 }
 
