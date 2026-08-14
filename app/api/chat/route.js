@@ -205,7 +205,7 @@ async function handlePOST(req, requestContext = {}) {
         projectId: canonicalProjectId,
       }))
       await releaseReservation()
-      return json(503, { error: 'Projektni wallet trenutno nije moguÄ‡e provjeriti.' })
+      return json(503, { error: 'Projektni wallet trenutno nije moguće provjeriti.' })
     }
   }
 

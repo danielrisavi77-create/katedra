@@ -377,6 +377,8 @@ describe('POST /api/chat runtime guards', () => {
     const response = await POST(request())
 
     expect(response.status).toBe(503)
+    const body = await response.json()
+    expect(body.error).toBe(`Projektni wallet trenutno nije mogu${String.fromCodePoint(0x0107)}e provjeriti.`)
     expect(release).toHaveBeenCalledTimes(1)
     expect(mocks.validateCostCeiling).toHaveBeenCalled()
   })
