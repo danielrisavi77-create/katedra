@@ -14,7 +14,7 @@ External dependencies are explicitly marked `BLOCKED_EXTERNAL`.
 | G5 | Zavrsni purchase unlocks the same project and workflow | BLOCKED_EXTERNAL | Same external checkout/entitlement dependency |
 | G6 | Diplomski purchase unlocks the same project and workflow | BLOCKED_EXTERNAL | Same external checkout/entitlement dependency |
 | G7 | Lekta check, sanitized handoff, remediation and fresh re-check | BLOCKED_EXTERNAL | Browser E2E exists, but a complete run requires configured Lekta preview and DOCX fixture execution |
-| G8 | Returning user resumes the last active project phase | PASS (local) | Workspace view persistence regression and Playwright reload check reopen `writing` |
+| G8 | Returning user resumes the last active project phase | PASS (local) | Workspace view persistence regression, explicit account-project selection test, and Playwright reload check reopen `writing` |
 | G9 | Network, session, provider, balance, checkout and malformed-state failures recover honestly | PARTIAL | Route/unit failure tests pass; authenticated provider and payment failures require staging |
 | G10 | Student reaches completion, submission and applicable defense workflow | BLOCKED_EXTERNAL | Requires the full paid workflow, canonical Lekta result and staging credentials |
 

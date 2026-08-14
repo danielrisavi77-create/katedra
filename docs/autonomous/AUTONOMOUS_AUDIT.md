@@ -101,3 +101,36 @@ was implicit rather than explicit.
 
 - Authenticated staging still remains required to prove the full paid and
   Lekta journeys; see `BLOCKERS.md`.
+
+## Cycle: 2026-08-14d
+
+### Root cause selected
+
+Priority: P1 (project continuity / account project selection).
+
+The account center linked to `/pisi?projectId=...`, but the workspace bootstrap
+always selected the global `rp_manifest`. Opening another account project could
+therefore display the wrong local manuscript.
+
+### Fix
+
+- Added a tested workspace-project selector.
+- An explicit `projectId` now wins over the current global manifest.
+- Legacy `rp_state` is not reused when opening a different project, preventing
+  one project's metadata from being applied to another.
+- The active project's local metadata remains intact when the requested ID is
+  the same project.
+
+### Verification
+
+- Workspace project selector tests: PASS (3 tests).
+- Workspace observability regression tests: PASS (3 tests).
+- Full regression and browser validation will be recorded after this cycle's
+  final gates.
+
+### Remaining issues
+
+- The account center can list server projects, but a manuscript that has never
+  been stored on the current device still requires onboarding before local
+  writing can continue; cross-device manuscript sync remains intentionally out
+  of V1 scope.

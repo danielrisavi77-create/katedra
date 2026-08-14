@@ -23,6 +23,7 @@ import { createManuscriptStore } from '../../../lib/manuscript/storage'
 import { getBrowserStorage, readStorage, writeStorage } from '../../../lib/manuscript/browser-storage'
 import { syncMetadata, type SyncStatus } from '../../../lib/manuscript/sync-status'
 import { initialWorkspaceView, parseWorkspaceView, type WorkspaceViewPreference } from '../../../lib/manuscript/workspace-view'
+import { selectWorkspaceProject } from '../../../lib/manuscript/workspace-project'
 import type {
   AiProposalV1,
   LegacyWorkType,
@@ -121,9 +122,18 @@ export default function WorkspaceClient() {
       if (queryTip === 's' || queryTip === 'z' || queryTip === 'd') setInitialTip(queryTip)
       setScanMode(params.get('screen') === 'scan')
 
-      const identity = ensureGuestProjectIdentity()
-      const manifest = readJson<Record<string, unknown>>('rp_manifest') || { projectId: identity.projectId }
-      const legacyState = readJson<{ checks?: Record<string, boolean>; gen?: Record<string, unknown>; mentorTasks?: MentorTask[] }>('rp_state')
+      const requestedProjectId = params.get('projectId')
+      const localManifest = readJson<Record<string, unknown>>('rp_manifest')
+      const identity = requestedProjectId ? { projectId: requestedProjectId } : ensureGuestProjectIdentity()
+      const selectedProject = selectWorkspaceProject({
+        requestedProjectId,
+        localManifest,
+        fallbackProjectId: identity.projectId,
+      })
+      const manifest = selectedProject.manifest
+      const legacyState = selectedProject.useLegacyState
+        ? readJson<{ checks?: Record<string, boolean>; gen?: Record<string, unknown>; mentorTasks?: MentorTask[] }>('rp_state')
+        : null
       const migrated = migrateLegacyProject({ manifest, legacyState })
       storeRef.current = createManuscriptStore()
       let stored: ManuscriptV1 | null = null
