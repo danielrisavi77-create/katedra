@@ -17,6 +17,7 @@ export type ProjectCapability =
   | 'completion_scan'
   | 'basic_plan'
   | 'lekta_free_check'
+  | 'contextual_ai'
   | 'section_writing'
   | 'full_generation'
   | 'source_suggestions'

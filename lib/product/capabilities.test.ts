@@ -4,9 +4,10 @@ import { decideProjectCapability, hasProductCapability, PRODUCT_CAPABILITIES } f
 import { productTierForWorkType } from './lifecycle'
 
 describe('product capability matrix', () => {
-  it('keeps the free tier limited to planning and free checks', () => {
-    expect(PRODUCT_CAPABILITIES.free).toEqual(['completion_scan', 'basic_plan', 'lekta_free_check'])
+  it('keeps the free tier limited to planning, free checks and contextual coaching', () => {
+    expect(PRODUCT_CAPABILITIES.free).toEqual(['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai'])
     expect(hasProductCapability('free', 'section_writing')).toBe(false)
+    expect(hasProductCapability('free', 'contextual_ai')).toBe(true)
   })
 
   it('gives seminarski a writing workflow without methodology or defense', () => {

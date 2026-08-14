@@ -9,7 +9,7 @@ External dependencies are explicitly marked `BLOCKED_EXTERNAL`.
 | G0 | Cold visitor understands Katedra, starts free and receives a Completion Plan | PASS (local) | Playwright landing smoke and five-step `/pisi` onboarding; `lib/project/completion-scan.test.ts` |
 | G1 | Guest project survives refresh and manuscript text survives reload | PASS (local) | Playwright guest flow; `lib/manuscript/storage.test.ts`; workspace view regression test |
 | G2 | Guest registration continues the same project without duplication | BLOCKED_EXTERNAL | Requires authenticated Supabase staging credentials and real attach flow |
-| G3 | Registered Free user sees roadmap, free capabilities and paid gates | PARTIAL | Capability/unit tests and local guest dashboard pass; authenticated AI path requires staging auth/provider |
+| G3 | Registered Free user sees roadmap, free capabilities and paid gates | PARTIAL | Capability matrix now proves bounded `contextual_ai` and unknown chat capabilities fail closed; authenticated AI path requires staging auth/provider |
 | G4 | Seminarski purchase unlocks the same project | BLOCKED_EXTERNAL | Requires Stripe test checkout, webhook and canonical Lekta entitlement staging |
 | G5 | Zavrsni purchase unlocks the same project and workflow | BLOCKED_EXTERNAL | Same external checkout/entitlement dependency |
 | G6 | Diplomski purchase unlocks the same project and workflow | BLOCKED_EXTERNAL | Same external checkout/entitlement dependency |

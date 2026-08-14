@@ -62,3 +62,42 @@ and grant entitlement without server-side topic/project locking.
 - build: PASS
 - production preflight without deployment secrets: FAIL closed, including
   `KATEDRA_PROJECT_LOCKS_ENABLED` in the missing variables.
+
+## Cycle: 2026-08-14c
+
+### Root cause selected
+
+Priority: P1 (capability authorization / paid chat bypass).
+
+When the project-lock gate was enabled, `/api/chat` only resolved a server
+capability when the client-supplied capability happened to map to a known paid
+action. Empty or unknown values fell through to the legacy chat path. The
+editor also sent an empty value for review/coaching actions, so the contract
+was implicit rather than explicit.
+
+### Fix
+
+- Added the explicit `contextual_ai` capability to the product matrix,
+  including the bounded Free contextual intervention.
+- Every manuscript editor action now declares either
+  `generate_large_sections` or `contextual_ai`.
+- With project locks enabled, `/api/chat` rejects missing or unknown capability
+  values before wallet, rate-limit or provider access.
+- Documented the capability contract and preserved the legacy fallback only
+  while project locks are disabled for local development.
+
+### Verification
+
+- Chat runtime regression tests: PASS; missing and unknown capabilities return
+  `400` before the capability/provider path.
+- Capability and manuscript-context tests: PASS.
+- `npm.cmd run test:ci`: PASS (121 files, 382 passed, 4 skipped).
+- `npm.cmd run typecheck`: PASS.
+- `npm.cmd run lint`: PASS.
+- `npm.cmd run build`: PASS.
+- Local Playwright `/pisi` smoke: PASS; no page errors.
+
+### Remaining issues
+
+- Authenticated staging still remains required to prove the full paid and
+  Lekta journeys; see `BLOCKERS.md`.

@@ -1,18 +1,18 @@
 import type { ProjectCapability, ProductTier } from './lifecycle'
 
 export const PRODUCT_CAPABILITIES: Record<ProductTier, readonly ProjectCapability[]> = {
-  free: ['completion_scan', 'basic_plan', 'lekta_free_check'],
+  free: ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai'],
   seminarski: [
-    'completion_scan', 'basic_plan', 'lekta_free_check', 'section_writing',
+    'completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing',
     'full_generation', 'source_suggestions', 'mentor_review',
   ],
   zavrsni: [
-    'completion_scan', 'basic_plan', 'lekta_free_check', 'section_writing',
+    'completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing',
     'full_generation', 'source_suggestions', 'web_research', 'mentor_review',
     'methodology', 'defense_simulator', 'autonomous_run',
   ],
   diplomski: [
-    'completion_scan', 'basic_plan', 'lekta_free_check', 'section_writing',
+    'completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing',
     'full_generation', 'source_suggestions', 'web_research', 'mentor_review',
     'methodology', 'research_design', 'data_analysis', 'multiple_reviews',
     'defense_simulator', 'autonomous_run',
@@ -52,7 +52,7 @@ export function decideProjectCapability(
     return { allowed: false, code: 'project_not_owned', projectId: context.projectId, tier }
   }
 
-  const freeCapability = tier === 'free' && ['completion_scan', 'basic_plan', 'lekta_free_check'].includes(capability)
+  const freeCapability = tier === 'free' && ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai'].includes(capability)
   if (!freeCapability && !context.lockedProductKey) {
     return { allowed: false, code: 'pass_required', projectId: context.projectId, tier }
   }
