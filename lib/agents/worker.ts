@@ -3,6 +3,7 @@ import { claimAgentStep, completeAgentStep, type AgentBackendResult, type AgentR
 import type { AgentStepRecord } from './run-state'
 import { ProviderCapabilityError } from './provider-router'
 import { isRetryableAgentProviderError } from './provider-execution'
+import { AgentBillingReconciliationError } from './billed-provider-execution'
 
 export type WorkerStepStatus = 'idle' | 'verified' | 'retrying' | 'blocked' | 'failed' | AgentRunControlStatus
 
@@ -32,12 +33,28 @@ export async function processClaimedAgentStep(
     result = await handlers.execute(step)
     verification = handlers.verify({ ...result, agent: step.agent })
   } catch (error) {
-    verification = error instanceof ProviderCapabilityError
+    verification = error instanceof AgentBillingReconciliationError
+      ? {
+        status: 'failed',
+        billingState: error.billingState,
+        issues: [{
+          code: error.billingState === 'pending_reconciliation' ? 'billing_reconciliation_pending' : 'billing_released',
+          message: error.message,
+        }],
+        evidence: [],
+      }
+      : error instanceof ProviderCapabilityError
       ? { status: 'blocked', issues: [{ code: 'provider_capability_unavailable', message: error.message }], evidence: [] }
       : isRetryableAgentProviderError(error)
         ? { status: 'needs_revision', issues: [{ code: 'invalid_output', message: error instanceof Error ? error.message : 'Provider je privremeno nedostupan.' }], evidence: [] }
       : { status: 'failed', issues: [{ code: 'invalid_output', message: error instanceof Error ? error.message : 'Agent nije uspio.' }], evidence: [] }
-    result = { output: '', citations: [], provider: 'unknown', usage: { inputTokens: 0, outputTokens: 0 } }
+    result = {
+      output: '',
+      citations: [],
+      provider: 'unknown',
+      usage: { inputTokens: 0, outputTokens: 0 },
+      ...(verification.billingState ? { billingState: verification.billingState } : {}),
+    }
   }
 
   let completionVerification = verification
@@ -46,11 +63,13 @@ export async function processClaimedAgentStep(
       const stored = await dependencies.storeResult({ step, result, verification })
       completionVerification = { ...verification, resultPayloadId: stored.manifestId }
     } catch (error) {
+      const billingState = verification.billingState
       completionVerification = {
         status: 'failed',
         issues: [...verification.issues, { code: 'invalid_output', message: error instanceof Error ? error.message : 'Rezultat agenta nije moguće spremiti.' }],
         evidence: verification.evidence,
       }
+      if (billingState) completionVerification.billingState = billingState
     }
   }
   const hasUsage = Boolean(result.usage && (result.usage.inputTokens > 0 || result.usage.outputTokens > 0))

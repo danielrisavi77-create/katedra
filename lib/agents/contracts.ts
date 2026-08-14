@@ -1,3 +1,5 @@
+import type { BillingAttemptState } from '../ai/billing-contract'
+
 export const AGENT_IDS = ['intake', 'sources', 'structure', 'planning', 'writing', 'citation', 'review', 'export'] as const
 export type AgentId = typeof AGENT_IDS[number]
 
@@ -63,12 +65,13 @@ export interface AgentResultV1 {
   claims?: ClaimEvidence[]
   provider: string
   usage?: UsageRecord
+  billingState?: Exclude<BillingAttemptState, 'reserved'>
   sectionId?: string
   baseRevision?: string
 }
 
 export interface VerificationIssue {
-  code: 'missing_source' | 'missing_claim_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable'
+  code: 'missing_source' | 'missing_claim_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending'
   message: string
   citationId?: string
 }
@@ -79,6 +82,7 @@ export interface VerificationResultV1 {
   status: VerificationStatus
   issues: VerificationIssue[]
   evidence: CitationEvidence[]
+  billingState?: Exclude<BillingAttemptState, 'reserved'>
   resultPayloadId?: string
 }
 

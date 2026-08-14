@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { processClaimedAgentStep } from './worker'
 import { ProviderCapabilityError } from './provider-router'
+import { AgentBillingReconciliationError } from './billed-provider-execution'
 
 describe('agent worker lease contract', () => {
   it('claims, verifies and completes a step exactly once', async () => {
@@ -106,5 +107,27 @@ describe('agent worker lease contract', () => {
 
     expect(result).toMatchObject({ status: 'failed', stepId: 'step-1' })
     expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({ p_status: 'failed', p_requeue: false }))
+  })
+
+  it('persists pending billing reconciliation without blindly retrying the provider call', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
+
+    const result = await processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockRejectedValue(new AgentBillingReconciliationError('Billing finalizacija je nejasna.', 'pending_reconciliation')),
+      verify: vi.fn(),
+    })
+
+    expect(result).toMatchObject({ status: 'failed', stepId: 'step-1' })
+    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
+      p_status: 'failed',
+      p_requeue: false,
+      p_verification: expect.objectContaining({
+        status: 'failed',
+        billingState: 'pending_reconciliation',
+        issues: [expect.objectContaining({ code: 'billing_reconciliation_pending' })],
+      }),
+    }))
   })
 })

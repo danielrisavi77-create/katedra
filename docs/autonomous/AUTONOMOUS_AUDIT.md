@@ -414,3 +414,45 @@ not requeued.
 - Real retry, billing reconciliation and worker lease behavior still require
   the canonical Lekta RPC/RLS and authenticated staging environment described
   in `BLOCKERS.md`.
+
+## Cycle: 2026-08-14n
+
+### Root cause selected
+
+Priority: P1 (agent billing ambiguity was not persisted as a reconciliation
+state).
+
+The canonical billing contract requires every AI attempt to end as
+`settled`, `released` or `pending_reconciliation`. When the agent worker
+received an unknown `katedra_consume` response, an RPC error, or an unusable
+billing outcome, it only propagated a generic exception. The step was then
+completed without an explicit billing state, making it impossible to
+distinguish a safe release from a charge that needs reconciliation.
+
+### Fix
+
+- Add an explicit `AgentBillingReconciliationError` carrying the billing
+  state.
+- Mark reservation/usage failures as `released` and unknown, failed or
+  ambiguous consume results as `pending_reconciliation`.
+- Persist the billing state in the worker verification and private result
+  payload, and complete the step without blindly reissuing the same debit.
+- Preserve the existing idempotent `settled`/`already_settled` path.
+- Add regressions for ambiguous consume responses and worker reconciliation
+  handling.
+
+### Verification
+
+- Focused billing/worker/storage tests: PASS (3 files, 14 tests).
+- Full suite: PASS (129 files, 401 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Local HTTP smoke: PASS via `curl`; `/`, `/pisi`, `/racun`, `/prijava`,
+  `/privatnost`, and `/uvjeti` all returned `200`.
+
+### Remaining issues
+
+- The real billing reconciliation result and idempotency behavior still need
+  canonical Lekta RPC/RLS and authenticated staging verification described in
+  `BLOCKERS.md`.
