@@ -14,7 +14,8 @@ export const PRODUCT_CAPABILITIES: Record<ProductTier, readonly ProjectCapabilit
   diplomski: [
     'completion_scan', 'basic_plan', 'lekta_free_check', 'section_writing',
     'full_generation', 'source_suggestions', 'web_research', 'mentor_review',
-    'methodology', 'defense_simulator', 'autonomous_run',
+    'methodology', 'research_design', 'data_analysis', 'multiple_reviews',
+    'defense_simulator', 'autonomous_run',
   ],
 }
 

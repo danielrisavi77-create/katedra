@@ -23,6 +23,9 @@ export type ProjectCapability =
   | 'web_research'
   | 'mentor_review'
   | 'methodology'
+  | 'research_design'
+  | 'data_analysis'
+  | 'multiple_reviews'
   | 'defense_simulator'
   | 'autonomous_run'
 

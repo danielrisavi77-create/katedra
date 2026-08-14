@@ -11,7 +11,7 @@ otključava capabilityje za jedan canonical `projectId`.
 | `free` | procjena i plan | scan, osnovni plan, Lekta Free Check |
 | `seminarski` | kraći rad | struktura, literatura, pisanje i revizija |
 | `zavrsni` | završni rad | istraživačko pitanje, metodologija, mentor i obrana |
-| `diplomski` | napredni istraživački rad | istraživački dizajn, podatci, revizije i obrana |
+| `diplomski` | napredni istraživački rad | istraživački dizajn, podatci, više revizija i obrana |
 
 `resolveProjectCapability()` na serveru prvo provjerava vlasništvo projekta,
 zatim canonical lock i aktivni Project Pass. Klijentski payload ne određuje

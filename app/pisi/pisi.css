@@ -247,6 +247,8 @@ body:has(.pis-boot) {
 .pis-project-home-links button { color: var(--pis-ink); background: transparent; border: 0; text-align: left; cursor: pointer; font: inherit; }
 .pis-project-home-links b, .pis-project-home-links span { display: block; }
 .pis-project-home-links span { margin-top: 8px; color: var(--pis-muted); font-size: 13px; line-height: 1.5; }
+.pis-pass-includes { display: grid; gap: 5px; margin: 18px 0; padding-left: 20px; color: var(--pis-muted); font-size: 13px; line-height: 1.5; }
+.pis-pass-includes li::marker { color: var(--pis-yellow); }
 html[data-theme='dark'] .pis-catalog-menu button:hover, html[data-theme='dark'] .pis-catalog-menu button:focus-visible { background: #334750; }
 .pis-two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
 .pis-onboarding-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 48px; border-top: 1px solid var(--pis-line); padding-top: 22px; }

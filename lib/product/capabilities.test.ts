@@ -16,11 +16,13 @@ describe('product capability matrix', () => {
   })
 
   it('gives zavrsni and diplomski the research and defense capabilities', () => {
-    for (const tier of ['zavrsni', 'diplomski'] as const) {
-      expect(hasProductCapability(tier, 'methodology')).toBe(true)
-      expect(hasProductCapability(tier, 'defense_simulator')).toBe(true)
-      expect(hasProductCapability(tier, 'autonomous_run')).toBe(true)
-    }
+    expect(hasProductCapability('zavrsni', 'methodology')).toBe(true)
+    expect(hasProductCapability('zavrsni', 'defense_simulator')).toBe(true)
+    expect(hasProductCapability('zavrsni', 'autonomous_run')).toBe(true)
+    expect(hasProductCapability('zavrsni', 'research_design')).toBe(false)
+    expect(hasProductCapability('diplomski', 'research_design')).toBe(true)
+    expect(hasProductCapability('diplomski', 'data_analysis')).toBe(true)
+    expect(hasProductCapability('diplomski', 'multiple_reviews')).toBe(true)
   })
 
   it('maps legacy and canonical work types to the same product tier', () => {
