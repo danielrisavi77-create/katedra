@@ -702,6 +702,45 @@ performed a similar check, but the canonical database RPC remained a bypass.
 - Authenticated commerce, canonical deployment and staging browser journeys
   remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14w
+
+### Root cause selected
+
+Priority: P2 (agentic staging preflight did not match worker safety
+requirements).
+
+The preflight accepted a configuration with worker/model/feature-flag values
+even when the worker's mandatory billing RPC v2 and distributed Supabase
+rate-limit contracts were missing or set to legacy values. The environment
+template and blocker evidence also omitted two required worker variables.
+
+### Fix
+
+- Require `KATEDRA_BILLING_RPC_CONTRACT=v2` and
+  `KATEDRA_RATE_LIMIT_STORE=supabase` in the preflight.
+- Distinguish missing from invalid values without exposing secrets.
+- Add worker URL and cron-secret placeholders to `.env.example`.
+- Synchronize release/blocker documentation and test exclusive bucket
+  classification.
+
+### Verification
+
+- TDD regressions: PASS; four new missing/invalid cases were red before the
+  preflight change and green afterward.
+- Focused preflight tests: PASS (8 tests).
+- Katedra full suite/typecheck/lint/build: PASS on implementation commit
+  `0b72706` (412 passed, 4 skipped).
+- Local preflight: intentionally FAIL-CLOSED, now listing all eight missing
+  staging variables/contracts without values.
+- Commit/diff review: PASS after the documentation and assertion fix in
+  `5a033b9`.
+
+### Remaining issues
+
+- Canonical Lekta deployment, live Supabase RPC/RLS proof, authenticated
+  commerce and staging browser journeys remain external blockers.
+- Local feature flags remain disabled.
+
 ## Cycle: 2026-08-14s
 
 ### Root cause selected
