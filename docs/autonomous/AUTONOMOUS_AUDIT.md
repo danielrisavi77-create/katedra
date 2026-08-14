@@ -456,3 +456,42 @@ distinguish a safe release from a charge that needs reconciliation.
 - The real billing reconciliation result and idempotency behavior still need
   canonical Lekta RPC/RLS and authenticated staging verification described in
   `BLOCKERS.md`.
+
+## Cycle: 2026-08-14o
+
+### Root cause selected
+
+Priority: P1 (agent worker could run with incomplete safety configuration).
+
+The internal agent worker checked its feature flag, worker token and Anthropic
+key, but still supplied a fallback model and did not require the canonical
+billing v2 contract or distributed Supabase rate-limit store. Enabling only
+the agent flag could therefore reach provider execution without the same
+fail-closed guarantees as `/api/chat`.
+
+### Fix
+
+- Add a pure worker configuration gate requiring
+  `KATEDRA_AGENT_MODEL`, `KATEDRA_BILLING_RPC_CONTRACT=v2` and
+  `KATEDRA_RATE_LIMIT_STORE=supabase`.
+- Return `503` before loading a run or calling the provider when any contract
+  is missing or invalid.
+- Remove the fallback model and use only the configured server-side model.
+- Add configuration and route-contract regressions for missing and legacy
+  safety settings.
+
+### Verification
+
+- Focused worker configuration/route tests: PASS (2 files, 6 tests).
+- Full suite: PASS (126 files, 405 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Local HTTP smoke: PASS via `curl`; `/`, `/pisi`, `/racun`, `/prijava`,
+  `/privatnost`, and `/uvjeti` all returned `200`.
+
+### Remaining issues
+
+- The required model, billing and rate-limit values still need canonical
+  staging deployment and evidence before agent flags can be enabled; see
+  `BLOCKERS.md`.
