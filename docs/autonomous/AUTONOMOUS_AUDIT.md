@@ -269,3 +269,37 @@ local validation was rerun from the current working tree:
 This second audit found no new local code-fixable P0, P1, or P2 issue. V1 is
 not declared complete while the external staging journeys remain unexecuted;
 the exact blockers and owner actions remain in `BLOCKERS.md`.
+
+## Cycle: 2026-08-14j
+
+### Root cause selected
+
+Priority: P1 (agentic entitlement lifecycle).
+
+`POST /api/agent-runs/:runId/context` checked that a project had a historical
+lock, but did not re-check that its Project Pass was still active. A run could
+therefore accept and store a new manuscript context after expiry or
+revocation.
+
+### Fix
+
+- Reused the strict `lookupActiveProjectPass` repository in the context route.
+- Return `402` for an inactive Pass and `503` when entitlement state cannot be
+  verified.
+- Reject the request before storing or attaching any new payload.
+- Added runtime regressions for both inactive and unavailable Pass state.
+
+### Verification
+
+- Focused agent context/contract/entitlement tests: PASS (24 tests).
+- Full suite: PASS (128 files, 393 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS.
+- Local HTTP smoke: `/`, `/pisi`, `/racun`, `/prijava`, `/privatnost`, and
+  `/uvjeti` all returned `200`.
+
+### Remaining issues
+
+- Agent runs remain disabled until the canonical Lekta contract and staging
+  worker are deployed and verified; see `BLOCKERS.md`.
