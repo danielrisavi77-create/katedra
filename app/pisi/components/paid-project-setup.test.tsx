@@ -30,12 +30,14 @@ describe('paid project setup', () => {
 
   it('starts a run with the selected mode and source policy', async () => {
     const user = userEvent.setup()
+    const onPhaseChange = vi.fn()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ runId: 'run-1' }) }))
-    render(<PaidProjectSetup projectId="project-1" passActive sectionIds={['intro', 'analysis']} manuscript={manuscript} />)
+    render(<PaidProjectSetup projectId="project-1" passActive sectionIds={['intro', 'analysis']} manuscript={manuscript} onPhaseChange={onPhaseChange} />)
     await user.click(screen.getByRole('radiogroup', { name: 'Način rada agenata' }).querySelectorAll('label')[2])
     await user.click(screen.getByRole('radiogroup', { name: 'Pravila izvora' }).querySelectorAll('label')[2])
     await user.click(screen.getByRole('button', { name: 'Pokreni autonomni tijek' }))
     expect(fetch).toHaveBeenCalledWith('/api/agent-runs?projectId=project-1', expect.objectContaining({ method: 'POST', body: JSON.stringify({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro', 'analysis'], materialIds: [], manuscript }) }))
+    expect(onPhaseChange).toHaveBeenCalledWith('dashboard')
     vi.unstubAllGlobals()
   })
 })

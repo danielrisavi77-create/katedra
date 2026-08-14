@@ -435,6 +435,8 @@ html[data-theme='dark'] .pis-custom-prompt textarea::placeholder { color: var(--
 .pis-phase-state span { color: var(--pis-success); font-size: 9px; }
 .pis-phase-state small { color: var(--pis-muted); font-size: 9px; }
 html[data-theme='dark'] .pis-phase-state b { color: var(--pis-yellow); }
+.pis-agentic-main { min-height: calc(100vh - 74px); overflow-y: auto; padding: 56px clamp(24px, 7vw, 110px) 90px; background: var(--pis-bg); }
+.pis-agentic-main > * { width: min(1120px, 100%); margin: 0 auto; }
 .pis-agentic-preparation.is-locked { align-content: start; min-height: 260px; }
 .pis-agentic-preparation.is-locked h2 { max-width: 390px; margin: 8px 0 12px; font: 500 clamp(30px, 5vw, 48px)/.98 Georgia, 'Times New Roman', serif; letter-spacing: -.04em; }
 .pis-agentic-preparation.is-locked p:last-child { max-width: 430px; margin: 0; color: var(--pis-muted); font-size: 12px; line-height: 1.6; }
@@ -670,6 +672,11 @@ html[data-theme='dark'] .pis-pass-warning strong { color: var(--pis-yellow); }
   .pis-account { display: none; }
   .pis-account-group .pis-pass-status { display: none; }
   .pis-columns { height: calc(100vh - 112px - env(safe-area-inset-bottom)); display: block; }
+  .pis-workspace[data-workspace-view='preparation'] .pis-mobile-nav,
+  .pis-workspace[data-workspace-view='dashboard'] .pis-mobile-nav,
+  .pis-workspace[data-workspace-view='intervention'] .pis-mobile-nav,
+  .pis-workspace[data-workspace-view='review'] .pis-mobile-nav { display: none; }
+  .pis-agentic-main { min-height: calc(100vh - 60px); padding: 30px 20px 50px; }
   .pis-columns > * { display: none; height: 100%; }
   .pis-columns[data-mobile-view='outline'] .pis-outline-column,
   .pis-columns[data-mobile-view='editor'] .pis-editor-column,

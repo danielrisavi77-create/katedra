@@ -96,7 +96,7 @@ export function AgenticPreparation({
 
       <div className="pis-preparation-step pis-preparation-start">
         <div className="pis-preparation-step-label"><span>03</span><div><b>Pokreni izradu</b><small>Run se izvršava po checkpointima. Možeš zatvoriti preglednik, pauzirati ga i kasnije urediti kontekst.</small></div></div>
-        <button type="button" className="is-primary" disabled={busy} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : 'Pokreni autonomni tijek'}</button>
+        <button type="button" className="is-primary" disabled={busy} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : mode === 'autonomous' ? 'Pokreni autonomni tijek' : 'Pokreni tijek'}</button>
       </div>
       {message && <p className="pis-agent-message" role="alert">{message}</p>}
     </section>

@@ -71,11 +71,13 @@ describe('WorkspaceShell', () => {
       view="dashboard"
       projectLocked
       activeAgentLabel="Sources"
+      agenticContent={<p>Agentic screen</p>}
     /></ThemeProvider>)
 
     expect(screen.getByText('Autonomni tijek')).toBeTruthy()
     expect(screen.getByText('Projekt zaključan')).toBeTruthy()
     expect(screen.getByText('Sources')).toBeTruthy()
     expect(screen.getByTestId('pis-workspace-root').getAttribute('data-workspace-view')).toBe('dashboard')
+    expect(screen.getByRole('main', { name: 'Agentički workspace' }).textContent).toContain('Agentic screen')
   })
 })

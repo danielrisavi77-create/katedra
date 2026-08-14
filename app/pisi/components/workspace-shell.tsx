@@ -27,6 +27,9 @@ export function WorkspaceShell({
   view = 'writing',
   projectLocked = false,
   activeAgentLabel,
+  agenticContent,
+  onOpenAgents,
+  onCloseAgents,
 }: {
   manuscript: ManuscriptV1
   saveStatus: SaveStatus
@@ -43,6 +46,9 @@ export function WorkspaceShell({
   onViewChange?: (view: WorkspaceView) => void
   projectLocked?: boolean
   activeAgentLabel?: string
+  agenticContent?: ReactNode
+  onOpenAgents?: () => void
+  onCloseAgents?: () => void
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
 
@@ -59,13 +65,17 @@ export function WorkspaceShell({
         view={view}
         projectLocked={projectLocked}
         activeAgentLabel={activeAgentLabel}
+        onOpenAgents={onOpenAgents}
+        onCloseAgents={onCloseAgents}
       />
 
-      <div className="pis-columns" data-mobile-view={activeMobileView}>
-        <nav className="pis-outline-column" aria-label="Struktura rada">{outline}</nav>
-        <main className="pis-editor-column">{editor}</main>
-        <aside className="pis-assistant-column" aria-label="Katedra urednik">{assistant}</aside>
-      </div>
+      {view !== 'writing' && agenticContent
+        ? <main className="pis-agentic-main" aria-label="Agentički workspace">{agenticContent}</main>
+        : <div className="pis-columns" data-mobile-view={activeMobileView}>
+          <nav className="pis-outline-column" aria-label="Struktura rada">{outline}</nav>
+          <main className="pis-editor-column">{editor}</main>
+          <aside className="pis-assistant-column" aria-label="Katedra urednik">{assistant}</aside>
+        </div>}
 
       <MobileWorkspaceNav activeMobileView={activeMobileView} onMobileViewChange={onMobileViewChange} />
     </div>
