@@ -8,7 +8,8 @@ complete.
 Evidence: `npm.cmd run preflight:agentic` currently reports missing
 `KATEDRA_WORKER_APP_URL`, `KATEDRA_AGENT_WORKER_TOKEN`,
 `KATEDRA_AGENT_WORKER_CRON_SECRET`, `KATEDRA_AGENT_MODEL`,
-`KATEDRA_AGENT_RUNS_ENABLED` and `KATEDRA_PROJECT_LOCKS_ENABLED`.
+`KATEDRA_AGENT_RUNS_ENABLED`, `KATEDRA_PROJECT_LOCKS_ENABLED`,
+`KATEDRA_BILLING_RPC_CONTRACT` and `KATEDRA_RATE_LIMIT_STORE`.
 
 The production preflight also intentionally fails without
 `KATEDRA_PROJECT_LOCKS_ENABLED`; checkout and webhook have the same runtime
