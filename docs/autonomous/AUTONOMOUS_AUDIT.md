@@ -134,3 +134,28 @@ therefore display the wrong local manuscript.
   been stored on the current device still requires onboarding before local
   writing can continue; cross-device manuscript sync remains intentionally out
   of V1 scope.
+## Cycle: 2026-08-14e
+
+### Root cause selected
+
+Priority: P1 (entitlement presentation consistency).
+
+`GET /api/account` listed every Stripe entitlement for the user, while the
+server access checks recognize only the Katedra Pass catalog (plus its
+explicit legacy compatibility shape). The account screen could therefore
+show a non-Katedra Stripe entitlement as an active Katedra Pass.
+
+### Fix
+
+- Reused `katedraPassProductFilter()` in the account entitlement query.
+- Added a runtime regression test that asserts all three Katedra Pass product
+  IDs are present in the query filter.
+
+### Verification
+
+- Account route runtime tests: PASS (3 tests).
+
+### Remaining issues
+
+- The authenticated account and entitlement behavior still needs real staging
+  Supabase data for the full G2-G6 proof.
