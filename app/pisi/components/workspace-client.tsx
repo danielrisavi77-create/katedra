@@ -22,6 +22,7 @@ import { canApplyProposal, isCurrentAiRequest } from '../../../lib/manuscript/pr
 import { createManuscriptStore } from '../../../lib/manuscript/storage'
 import { getBrowserStorage, readStorage, writeStorage } from '../../../lib/manuscript/browser-storage'
 import { syncMetadata, type SyncStatus } from '../../../lib/manuscript/sync-status'
+import { initialWorkspaceView, parseWorkspaceView, type WorkspaceViewPreference } from '../../../lib/manuscript/workspace-view'
 import type {
   AiProposalV1,
   LegacyWorkType,
@@ -44,6 +45,7 @@ import { WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } 
 const READY_PREFIX = 'katedra_manuscript_ready:'
 const PROJECT_SETUP_PREFIX = 'katedra_project_setup_v1:'
 const MENTOR_PREFIX = 'katedra_mentor_tasks:'
+const WORKSPACE_VIEW_PREFIX = 'katedra_workspace_view_v1:'
 
 type MentorTask = { id: string; text: string; done: boolean; sectionId?: string }
 type PassStatus = 'idle' | 'checking' | 'active' | 'needed' | 'error'
@@ -135,18 +137,22 @@ export default function WorkspaceClient() {
       if (cancelled) return
       const storage = getBrowserStorage()
       const projectSetupConfirmed = readStorage(storage, `${PROJECT_SETUP_PREFIX}${migrated.projectId}`) === '1'
-        setManuscript(stored || migrated)
-      setLegacyChecks(legacyState?.checks || {})
-      setLektaSummary(readLektaSummary(manifest))
-      setMentorTasks(readJson<MentorTask[]>(`${MENTOR_PREFIX}${migrated.projectId}`) || legacyState?.mentorTasks || [])
+      const restoredManuscript = stored || migrated
+      const persistedView = parseWorkspaceView(readStorage(storage, `${WORKSPACE_VIEW_PREFIX}${migrated.projectId}`))
       const needsOnboarding = shouldShowManuscriptOnboarding({
         hasStoredManuscript: Boolean(stored),
         hasWorkspaceReadyMarker: readStorage(storage, `${READY_PREFIX}${migrated.projectId}`) === '1',
         hasLegacyOnboardingMarker: readStorage(storage, 'rp_onb') === '1',
         hasProjectSetupConfirmed: projectSetupConfirmed,
       })
+      const restoredView = initialWorkspaceView({ needsOnboarding, persistedView })
+      setManuscript(restoredManuscript)
+      setLegacyChecks(legacyState?.checks || {})
+      setLektaSummary(readLektaSummary(manifest))
+      setMentorTasks(readJson<MentorTask[]>(`${MENTOR_PREFIX}${migrated.projectId}`) || legacyState?.mentorTasks || [])
       setShowOnboarding(needsOnboarding)
-      setProjectHome(!needsOnboarding)
+      setProjectHome(!needsOnboarding && restoredView === 'home')
+      setAgenticMode(!needsOnboarding && restoredView === 'agents')
       setBooting(false)
     }
     void bootstrap().catch(() => {
@@ -300,6 +306,7 @@ export default function WorkspaceClient() {
     const storage = getBrowserStorage()
     writeStorage(storage, `${READY_PREFIX}${next.projectId}`, '1')
     writeStorage(storage, `${PROJECT_SETUP_PREFIX}${next.projectId}`, '1')
+    persistWorkspaceView(next.projectId, 'home')
     persistManifest(next)
     setManuscript(next)
     setCompletionScan(scan)
@@ -499,14 +506,14 @@ export default function WorkspaceClient() {
         onMobileViewChange={setMobileView}
         onExport={() => void exportDocx()}
         onOpenTools={() => setDrawerOpen(true)}
-        onOpenAgents={() => { setDrawerOpen(false); setProjectHome(false); setAgenticMode(true); setAgenticView('preparation') }}
-        onCloseAgents={() => { setAgenticMode(false); setProjectHome(false); setAgenticView('preparation') }}
-        onOpenWriting={() => { setProjectHome(false); setAgenticMode(false) }}
+        onOpenAgents={() => { setDrawerOpen(false); setProjectHome(false); setAgenticMode(true); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'agents') }}
+        onCloseAgents={() => { setAgenticMode(false); setProjectHome(false); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'writing') }}
+        onOpenWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }}
         view={(projectHome ? 'home' : agenticMode ? agenticView : 'writing') as WorkspaceView}
         projectLocked={agenticMode && passStatus === 'active'}
         activeAgentLabel={agenticMode && agenticView === 'dashboard' ? 'Autonomni agenti' : undefined}
         agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} onAcceptDraft={acceptAgenticDraft} /> : undefined}
-        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => setProjectHome(false)} onPrepare={() => { setProjectHome(false); setAgenticMode(true); setAgenticView('preparation') }} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
+        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }} onPrepare={() => { setProjectHome(false); setAgenticMode(true); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'agents') }} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>
@@ -597,6 +604,11 @@ function readLektaSummary(manifest: Record<string, unknown>): LektaWorkspaceSumm
 function persistManifest(manuscript: ManuscriptV1) {
   const previous = readJson<Record<string, unknown>>('rp_manifest') || {}
   writeStorage(getBrowserStorage(), 'rp_manifest', JSON.stringify({ ...previous, v: 1, projectId: manuscript.projectId, topic: manuscript.title, workType: manuscript.workType, institution: manuscript.meta.institution || '', program: manuscript.meta.program || '', mentor: manuscript.meta.mentor || '', citationStyle: manuscript.meta.citationStyle || '', unitId: manuscript.meta.unitId || '', profileId: manuscript.meta.profileId || '', deadline: manuscript.meta.deadline || '' }))
+}
+
+function persistWorkspaceView(projectId: string, view: WorkspaceViewPreference) {
+  if (!projectId) return
+  writeStorage(getBrowserStorage(), `${WORKSPACE_VIEW_PREFIX}${projectId}`, view)
 }
 
 async function responseMessage(response: Response): Promise<string> {
