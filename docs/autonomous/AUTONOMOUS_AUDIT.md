@@ -575,6 +575,53 @@ That could make link commands and schema behavior ambiguous.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14aa
+
+### Root cause selected
+
+Priority: P0 (paid project lock accepted malformed canonical RPC output).
+
+`lockPaidProject` previously synthesized a successful immutable lock snapshot
+when the RPC returned only a lock ID, a string, or another unexpected shape.
+That could let the webhook continue toward entitlement creation without proof
+that Lekta had returned the requested user, project, topic, product and payment
+identity.
+
+### Fix
+
+- Require exactly one canonical lock row for array RPC responses.
+- Require `lock_id`, project/user identity, topic, work type, product key,
+  payment ID and `locked_at` before accepting a lock.
+- Compare the returned immutable fields with the checkout request.
+- Fail closed for malformed RPC and read envelopes, malformed stored rows and
+  identity mismatches.
+- Align webhook and capability test doubles with the real Lekta RPC contract.
+
+### Verification
+
+- TDD regression: PASS; malformed lock tests failed before the strict parser and
+  pass after it.
+- Focused project-lock/webhook/capability tests: PASS (24 tests).
+- Full suite: PASS (126 files, 420 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Playwright smoke: PASS on `localhost:3000` and `127.0.0.1:3000`, desktop and
+  mobile, light and dark; target routes returned `200`, with no overflow, page
+  errors or failed Next asset requests.
+- Independent review: no Critical or Important Katedra-wrapper findings.
+
+### Remaining issues
+
+- Lekta's canonical `lock_paid_project` implementation still performs a
+  read-before-insert without atomic conflict handling. Two concurrent duplicate
+  webhooks can produce one successful insert and one unique-constraint error;
+  this remains an external blocker in `BLOCKERS.md`.
+- Dependency audit could not reach the npm advisory endpoint in this
+  environment; rerun it in a network-enabled release environment.
+- Authenticated commerce, canonical Lekta deployment and staging browser
+  journeys remain external blockers.
+
 ## Cycle: 2026-08-14y
 
 ### Root cause selected

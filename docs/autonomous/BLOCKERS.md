@@ -45,3 +45,18 @@ missing release verification signal, not evidence that dependencies are safe.
 
 Required owner action: rerun the dependency audit from a network-enabled CI or
 release environment and triage any high-severity findings before promotion.
+
+## BLOCKED_EXTERNAL: atomic paid project-lock idempotency
+
+Evidence: the local Lekta contract in
+`Lekta/supabase/migrations/0067_agentic_run_contract.sql` performs a read-before-
+insert in `lock_paid_project`. Concurrent duplicate webhook calls can therefore
+race: one lock insert succeeds while the other receives a unique-constraint
+error instead of atomically returning the existing matching lock. Katedra now
+fails closed on malformed or mismatched responses, but this canonical race
+cannot be fixed safely in the Katedra wrapper.
+
+Required owner action: update the canonical Lekta RPC to use an atomic
+conflict-safe insert/claim path that verifies the existing immutable snapshot,
+then add a database concurrency test and staging proof for two simultaneous
+identical payment/project requests before enabling paid production traffic.

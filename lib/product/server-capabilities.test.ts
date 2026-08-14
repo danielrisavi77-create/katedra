@@ -25,29 +25,43 @@ function createDb({ userId = 'u1', projectId = 'p1', lock = null, entitlement = 
   }
 }
 
+function lockFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    lock_id: 'lock-1',
+    user_id: 'u1',
+    project_id: 'p1',
+    topic: 'Digitalizacija javne uprave',
+    work_type: 'zavrsni',
+    product_key: 'zavrsni',
+    payment_id: 'cs_test_123',
+    locked_at: '2026-08-14T10:00:00.000Z',
+    ...overrides,
+  }
+}
+
 describe('resolveProjectCapability', () => {
   it('rejects a mismatched authenticated user', async () => {
     await expect(resolveProjectCapability(createDb({ userId: 'u2' }) as never, { userId: 'u1', projectId: 'p1', capability: 'basic_plan' })).resolves.toMatchObject({ allowed: false, code: 'unauthenticated' })
   })
 
   it('requires the canonical lock and matching product entitlement', async () => {
-    const db = createDb({ lock: { user_id: 'u1', project_id: 'p1', work_type: 'zavrsni', product_key: 'zavrsni' } })
+    const db = createDb({ lock: lockFixture() })
     await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toEqual({ allowed: true, tier: 'zavrsni', projectId: 'p1' })
   })
 
   it('fails closed when the lock work type and product key disagree', async () => {
-    const db = createDb({ lock: { user_id: 'u1', project_id: 'p1', work_type: 'diplomski', product_key: 'zavrsni' } })
+    const db = createDb({ lock: lockFixture({ work_type: 'diplomski' }) })
     await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toMatchObject({ allowed: false, code: 'capability_unavailable' })
   })
 
   it('never allows web research from a caller-supplied policy flag', async () => {
-    const db = createDb({ lock: { user_id: 'u1', project_id: 'p1', work_type: 'zavrsni', product_key: 'zavrsni' } })
+    const db = createDb({ lock: lockFixture() })
     await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'web_research' })).resolves.toMatchObject({ allowed: false, code: 'policy_unverified' })
   })
 
   it('fails closed as unavailable when entitlement lookup errors', async () => {
     const db = createDb({
-      lock: { user_id: 'u1', project_id: 'p1', work_type: 'zavrsni', product_key: 'zavrsni' },
+      lock: lockFixture(),
       entitlementError: { message: 'entitlements unavailable' },
     })
     await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toMatchObject({ allowed: false, code: 'capability_unavailable' })

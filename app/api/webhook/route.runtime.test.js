@@ -168,7 +168,7 @@ describe('POST /api/webhook runtime guards', () => {
       rpc(name, params) {
         calls.push(['rpc', name, params])
         if (name === 'lock_paid_project') return Promise.resolve({ data: {
-          user_id: 'user-1', project_id: projectId, topic: 'Digitalizacija javne uprave', work_type: 'diplomski', product_key: 'diplomski', payment_id: 'cs_first', locked_at: '2026-08-14T10:00:00.000Z', status: 'locked',
+          lock_id: 'lock-1', user_id: 'user-1', project_id: projectId, topic: 'Digitalizacija javne uprave', work_type: 'diplomski', product_key: 'diplomski', payment_id: 'cs_first', locked_at: '2026-08-14T10:00:00.000Z', status: 'locked',
         }, error: null })
         return Promise.resolve({ data: null, error: null })
       },
