@@ -660,6 +660,48 @@ despite the Product Constitution and shared schema forbidding them.
   authenticated RPC callers need active project-specific Pass/expiry checks;
   Katedra's HTTP route already checks this boundary.
 
+## Cycle: 2026-08-14v
+
+### Root cause selected
+
+Priority: P1 (canonical direct-RPC resume authorization gap).
+
+Lekta's original `resume_agent_run` updated any paused run owned by the caller
+without rechecking that the project's lock was still active and that the exact
+project-specific Katedra Pass was active and unexpired. Katedra's HTTP route
+performed a similar check, but the canonical database RPC remained a bypass.
+
+### Fix
+
+- Add Lekta migration `0073_harden_katedra_agent_resume_scope.sql`.
+- Require the paused run owner, locked project, exact `katedra_pass_` product,
+  active entitlement and `purchase_expires_at > now()` in the atomic UPDATE.
+- Harden the SECURITY DEFINER search path with `public, pg_temp` and assert it
+  in the contract test.
+- Keep all database authority in Lekta; no Katedra migration was added.
+
+### Verification
+
+- TDD regression: PASS; the new contract test failed before migration 0073 and
+  passed after it; the fix-round search-path assertion also had a red/green
+  cycle.
+- Focused Lekta tests: PASS (7 tests).
+- Lekta full `npm.cmd run check`: PASS (309 files, 3,780 tests, Vite build).
+- Scoped review and re-review: PASS for SQL behavior and fix diff.
+
+### Commits
+
+- Lekta `c2b0777` initial resume entitlement guard.
+- Lekta `22ab983` SECURITY DEFINER search-path hardening.
+
+### Remaining issues
+
+- Live positive/negative RPC behavior is not proven because the migration is
+  not applied to canonical Supabase staging; this remains `BLOCKED_EXTERNAL`,
+  not a claim of release readiness.
+- Authenticated commerce, canonical deployment and staging browser journeys
+  remain the external blockers listed in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-14s
 
 ### Root cause selected
