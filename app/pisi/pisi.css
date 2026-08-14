@@ -495,6 +495,17 @@ html[data-theme='dark'] .pis-custom-prompt textarea::placeholder { color: var(--
 .pis-readonly-content { color: var(--pis-ink); font: 14px/1.65 Georgia, 'Times New Roman', serif; white-space: pre-wrap; }
 .pis-readonly-content .is-empty { color: var(--pis-faint); font-style: italic; }
 .pis-readonly-note { margin: 14px 0 0; color: var(--pis-muted); font-size: 10px; line-height: 1.5; }
+.pis-agentic-intervention { display: grid; gap: 22px; }
+.pis-intervention-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); gap: 28px; align-items: start; }
+.pis-intervention-outline { display: grid; gap: 0; margin: 16px 0 0; padding: 0; list-style: none; }
+.pis-intervention-outline li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--pis-line); }
+.pis-intervention-outline li > span { color: var(--pis-yellow); font: 700 10px/1.2 Arial, sans-serif; }
+.pis-intervention-outline input { width: 100%; min-width: 0; padding: 0 0 5px; border: 0; border-bottom: 1px solid var(--pis-line-strong); outline: 0; background: transparent; color: var(--pis-ink); font: 500 16px/1.2 Georgia, 'Times New Roman', serif; }
+.pis-intervention-outline input:focus { border-color: var(--pis-blue); }
+.pis-intervention-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 15px; border-top: 1px solid var(--pis-line-strong); color: var(--pis-muted); font-size: 10px; }
+.pis-intervention-actions button { padding: 12px 15px; border: 1px solid var(--pis-blue-dark); background: var(--pis-blue-dark); color: var(--pis-on-accent); cursor: pointer; font-size: 11px; font-weight: 700; }
+.pis-intervention-actions button:disabled { opacity: .55; cursor: wait; }
+.pis-intervention-actions button:focus-visible { outline: 2px solid var(--pis-yellow); outline-offset: 3px; }
 html[data-theme='dark'] .pis-agent-run-mode,
 html[data-theme='dark'] .pis-readonly-preview-heading > span { color: var(--pis-yellow); }
 html[data-theme='dark'] .pis-agentic-dashboard-actions button { color: var(--pis-yellow); }
@@ -677,6 +688,9 @@ html[data-theme='dark'] .pis-pass-warning strong { color: var(--pis-yellow); }
   .pis-agentic-dashboard-actions button { flex: 1 1 120px; }
   .pis-agentic-dashboard-grid { grid-template-columns: 1fr; }
   .pis-readonly-paper { max-height: 46vh; }
+  .pis-intervention-grid { grid-template-columns: 1fr; }
+  .pis-intervention-actions { align-items: stretch; flex-direction: column; }
+  .pis-intervention-actions button { width: 100%; }
   .pis-help-steps li { grid-template-columns: 1fr; gap: 7px; }
   .pis-pass-dialog,
   .legal-modal { padding: 36px 24px 28px; }
