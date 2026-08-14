@@ -36,3 +36,12 @@ does not claim deletion succeeded.
 
 Required owner action: define and connect the canonical identity deletion
 workflow, then add its authenticated integration test.
+
+## BLOCKED_EXTERNAL: npm dependency advisory service
+
+Evidence: `npm.cmd run audit:dependencies` could not reach the npm bulk
+advisory endpoint and exited with `audit endpoint returned an error`. This is a
+missing release verification signal, not evidence that dependencies are safe.
+
+Required owner action: rerun the dependency audit from a network-enabled CI or
+release environment and triage any high-severity findings before promotion.

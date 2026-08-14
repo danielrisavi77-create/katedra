@@ -623,6 +623,31 @@ without a fresh billing attempt.
 - Authenticated commerce and remaining Golden Journeys remain the external
   blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14z
+
+### Independent UX and release audit
+
+The post-P0 audit found no new code-fixable P0, P1 or P2 defect. Fresh browser
+checks covered `/`, `/pisi?tip=d`, `/racun`, `/prijava`, `/privatnost` and
+`/uvjeti` on both `localhost` and `127.0.0.1`, at desktop and mobile widths,
+with light and dark theme rendering.
+
+### Evidence
+
+- All inspected routes rendered successfully without horizontal overflow in
+  either theme or viewport.
+- `/pisi` onboarding and Completion Scan rendered with a clear next action.
+- The only console 401 responses came from expected anon calls to
+  auth-protected account/balance endpoints; there were no page errors.
+- `npm.cmd run audit:dependencies` remains `BLOCKED_EXTERNAL` because the npm
+  advisory endpoint was unavailable; this is recorded in `BLOCKERS.md`.
+
+### Remaining issues
+
+- G2-G7, G9-G10 still require authenticated Supabase/Stripe/Lekta staging.
+- Agentic flags remain disabled until canonical RPC/RLS/worker preflight passes.
+- Dependency security status requires a network-enabled advisory audit.
+
 ## Cycle: 2026-08-14x
 
 ### Root cause selected
