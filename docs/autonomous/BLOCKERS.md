@@ -48,13 +48,14 @@ release environment and triage any high-severity findings before promotion.
 
 ## BLOCKED_EXTERNAL: atomic paid project-lock idempotency
 
-Evidence: the local Lekta contract in
-`Lekta/supabase/migrations/0067_agentic_run_contract.sql` performs a read-before-
-insert in `lock_paid_project`. Concurrent duplicate webhook calls can therefore
-race: one lock insert succeeds while the other receives a unique-constraint
-error instead of atomically returning the existing matching lock. Katedra now
-fails closed on malformed or mismatched responses, but this canonical race
-cannot be fixed safely in the Katedra wrapper.
+Evidence: the original local Lekta contract in
+`Lekta/supabase/migrations/0067_agentic_run_contract.sql` performed a
+read-before-insert in `lock_paid_project`. A local follow-up fix now exists in
+`Lekta/supabase/migrations/0074_atomic_project_lock_idempotency.sql` (Lekta
+commit `cb1b16f`), with a source-contract test, but it has not been deployed or
+proven against the canonical Supabase project. Katedra fails closed on
+malformed or mismatched responses, but production safety still depends on the
+canonical migration and a real concurrency test.
 
 Required owner action: update the canonical Lekta RPC to use an atomic
 conflict-safe insert/claim path that verifies the existing immutable snapshot,

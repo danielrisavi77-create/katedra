@@ -613,10 +613,10 @@ identity.
 
 ### Remaining issues
 
-- Lekta's canonical `lock_paid_project` implementation still performs a
-  read-before-insert without atomic conflict handling. Two concurrent duplicate
-  webhooks can produce one successful insert and one unique-constraint error;
-  this remains an external blocker in `BLOCKERS.md`.
+- A local Lekta follow-up migration (`0074_atomic_project_lock_idempotency.sql`)
+  now adds atomic conflict handling and deterministic row-lock reconciliation
+  for `lock_paid_project`. It is committed in Lekta as `cb1b16f`, but has not
+  been deployed or proven against the canonical Supabase project.
 - Dependency audit could not reach the npm advisory endpoint in this
   environment; rerun it in a network-enabled release environment.
 - Authenticated commerce, canonical Lekta deployment and staging browser
