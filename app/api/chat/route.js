@@ -68,11 +68,16 @@ Ako korisnik traži da napišeš odlomak, poglavlje ili cijeli rad umjesto njega
 `.trim()
 
 export async function POST(req) {
-  const requestId = getRequestId(req)
-  return withRequestId(await handlePOST(req, requestId), requestId)
+  // The incoming ID is useful for tracing, but it is client-controlled and
+  // must never become the idempotency key for a billable AI attempt.
+  const traceRequestId = getRequestId(req)
+  const billingRequestId = crypto.randomUUID()
+  return withRequestId(await handlePOST(req, { traceRequestId, billingRequestId }), traceRequestId)
 }
 
-async function handlePOST(req, requestIdOverride) {
+async function handlePOST(req, requestContext = {}) {
+  const requestId = requestContext.traceRequestId || crypto.randomUUID()
+  const billingRequestId = requestContext.billingRequestId || crypto.randomUUID()
   // ---------- 1. AUTH ----------
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -127,7 +132,6 @@ async function handlePOST(req, requestIdOverride) {
   })
   if (!inputPolicy.ok) return json(inputPolicy.status, { error: 'Zahtjev je prevelik.', reason: inputPolicy.reason })
 
-  const requestId = requestIdOverride || crypto.randomUUID()
   // Reserve a bounded baseline before the wallet lookup. The final provider
   // output limit is tightened to the actual project balance below.
   const reservationEstimatedCharge = estimateChatCharge({
@@ -142,7 +146,7 @@ async function handlePOST(req, requestIdOverride) {
     return json(503, { error: 'Naplate AI usluga još nije konfigurirana za siguran rad.' })
   }
   const reservation = useDistributedRateLimit
-    ? await reserveDistributedRequest(db, { userId, requestId, estimatedCharge: reservationEstimatedCharge })
+    ? await reserveDistributedRequest(db, { userId, requestId: billingRequestId, estimatedCharge: reservationEstimatedCharge })
     : reserveUserRequest(userId)
   if (!reservation.allowed) {
     if (reservation.reason === 'unavailable') {
@@ -350,7 +354,7 @@ async function handlePOST(req, requestIdOverride) {
   // calling the provider until the Lekta-side contract is deployed.
   if (!billingContractEnabled) {
     console.error(JSON.stringify({
-      eventName: 'billing_contract_unavailable', requestId, userId, projectId: canonicalProjectId,
+      eventName: 'billing_contract_unavailable', requestId, billingRequestId, userId, projectId: canonicalProjectId,
     }))
     await releaseReservation()
     return json(503, { error: 'Naplate AI usluga još nije konfigurirana za siguran rad.' })
@@ -400,7 +404,7 @@ async function handlePOST(req, requestIdOverride) {
       const { inputTokens, outputTokens } = usageParser.usage()
       if (inputTokens <= 0 && outputTokens <= 0) {
         console.error(JSON.stringify({
-          eventName: 'billing_usage_unavailable', requestId, userId, projectId: canonicalProjectId,
+          eventName: 'billing_usage_unavailable', requestId, billingRequestId, userId, projectId: canonicalProjectId,
         }))
         throw new Error('Billing usage unavailable')
       }
@@ -410,7 +414,7 @@ async function handlePOST(req, requestIdOverride) {
       let error
       try {
         ({ data, error } = await db.rpc('katedra_consume', buildBillingConsumeParams({
-          requestId,
+          requestId: billingRequestId,
           userId,
           projectId: canonicalProjectId,
           charged,
@@ -423,7 +427,7 @@ async function handlePOST(req, requestIdOverride) {
       }
       if (error) {
         console.error(JSON.stringify({
-          eventName: 'billing_pending_reconciliation', requestId, userId, projectId: canonicalProjectId,
+          eventName: 'billing_pending_reconciliation', requestId, billingRequestId, userId, projectId: canonicalProjectId,
           inputTokens, outputTokens, error: error.message,
         }))
         throw new Error('Billing finalization failed')
@@ -435,13 +439,13 @@ async function handlePOST(req, requestIdOverride) {
       })
       if (outcome.state !== 'settled') {
         console.error(JSON.stringify({
-          eventName: 'billing_pending_reconciliation', requestId, userId, projectId: canonicalProjectId,
+          eventName: 'billing_pending_reconciliation', requestId, billingRequestId, userId, projectId: canonicalProjectId,
           inputTokens, outputTokens, reason: outcome.reason,
         }))
         throw new Error('Billing finalization pending reconciliation')
       }
       console.log(JSON.stringify({
-        eventName: 'billing_settled', requestId, userId, projectId: canonicalProjectId,
+        eventName: 'billing_settled', requestId, billingRequestId, userId, projectId: canonicalProjectId,
         inputTokens, outputTokens, charged,
       }))
     })().finally(async () => {
@@ -468,7 +472,7 @@ async function handlePOST(req, requestIdOverride) {
          usageParser.finish()
         await consume().catch((billingError) => {
           console.error(JSON.stringify({
-            eventName: 'billing_finalization_failed', requestId, userId, projectId: canonicalProjectId,
+            eventName: 'billing_finalization_failed', requestId, billingRequestId, userId, projectId: canonicalProjectId,
             error: billingError?.message,
           }))
         })
@@ -480,7 +484,7 @@ async function handlePOST(req, requestIdOverride) {
        usageParser.finish()
       await consume().catch((billingError) => {
         console.error(JSON.stringify({
-          eventName: 'billing_finalization_failed', requestId, userId, projectId: canonicalProjectId,
+          eventName: 'billing_finalization_failed', requestId, billingRequestId, userId, projectId: canonicalProjectId,
           error: billingError?.message,
         }))
       })

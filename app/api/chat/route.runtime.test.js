@@ -61,10 +61,10 @@ import { POST } from './route'
 
 const project = { projectId: '11111111-1111-4111-8111-111111111111', guestProjectId: 'guest-1' }
 
-function request(body = { projectId: project.projectId, messages: [{ role: 'user', content: 'Bok' }] }) {
+function request(body = { projectId: project.projectId, messages: [{ role: 'user', content: 'Bok' }] }, extraHeaders = {}) {
   return new Request('http://localhost/api/chat', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...extraHeaders },
     body: JSON.stringify(body),
   })
 }
@@ -260,16 +260,22 @@ describe('POST /api/chat runtime guards', () => {
       },
     }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
 
-    const response = await POST(request())
+    const response = await POST(request(undefined, { 'x-request-id': 'reused-client-id' }))
     const body = await response.text()
 
     expect(response.status).toBe(200)
     expect(body).toContain('message_delta')
-    expect(mocks.reserveDistributedRequest).toHaveBeenCalledWith(db, expect.objectContaining({
+    expect(response.headers.get('x-request-id')).toBe('reused-client-id')
+    const reservationInput = mocks.reserveDistributedRequest.mock.calls[0][1]
+    expect(reservationInput).toEqual(expect.objectContaining({
       userId: 'user-1',
       requestId: expect.any(String),
       estimatedCharge: 1_000,
     }))
+    expect(reservationInput.requestId).not.toBe('reused-client-id')
+    const billingInput = rpc.mock.calls.find(([name]) => name === 'katedra_consume')?.[1]
+    expect(billingInput?.p_request_id).toEqual(expect.any(String))
+    expect(billingInput?.p_request_id).not.toBe('reused-client-id')
     expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({
       p_user: 'user-1',
       p_project_id: project.projectId,
