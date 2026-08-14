@@ -221,3 +221,28 @@ That could incorrectly enter starter-wallet logic instead of stopping safely.
 
 - Authenticated staging is still required to prove real entitlement failure,
   webhook, checkout, and Lekta-backed journeys; see `BLOCKERS.md`.
+
+## Cycle: 2026-08-14h
+
+### Audit result
+
+The current local audit found no new code-fixable P0, P1, or P2 issue after
+cycle `2026-08-14g`. The remaining incomplete Golden Journey evidence is now
+explicitly classified as `BLOCKED_EXTERNAL` where it requires authenticated
+Supabase/Stripe/AI or canonical Lekta staging state, rather than being counted
+as a partial local pass.
+
+### Evidence
+
+- `G0`, `G1`, and `G8` remain locally evidenced.
+- `G2`, `G3`, `G4`, `G5`, `G6`, `G7`, `G9`, and `G10` require external staging
+  state documented in `BLOCKERS.md`.
+- Local regression suite, typecheck, lint, build, and the `/pisi` HTTP smoke
+  remain green from the preceding verified cycle.
+
+### Remaining issues
+
+- Do not enable agentic/project-lock/material feature flags until the Lekta
+  contract, worker, RLS, cleanup, and authenticated staging journeys pass.
+- Do not declare V1 Product Complete until the required external journeys are
+  executed and the double-full-pass audit is completed.
