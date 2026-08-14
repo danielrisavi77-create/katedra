@@ -9,6 +9,7 @@ import { MobileWorkspaceNav } from './mobile-workspace-nav'
 import { WorkspaceNavigation, type SaveStatus } from './workspace-navigation'
 
 export type MobileView = 'outline' | 'editor' | 'assistant'
+export type WorkspaceView = 'preparation' | 'dashboard' | 'intervention' | 'review' | 'writing'
 export type { SaveStatus } from './workspace-navigation'
 
 export function WorkspaceShell({
@@ -23,6 +24,9 @@ export function WorkspaceShell({
   outline,
   editor,
   assistant,
+  view = 'writing',
+  projectLocked = false,
+  activeAgentLabel,
 }: {
   manuscript: ManuscriptV1
   saveStatus: SaveStatus
@@ -35,11 +39,15 @@ export function WorkspaceShell({
   outline: ReactNode
   editor: ReactNode
   assistant: ReactNode
+  view?: WorkspaceView
+  onViewChange?: (view: WorkspaceView) => void
+  projectLocked?: boolean
+  activeAgentLabel?: string
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
 
   return (
-    <div className="pis-workspace">
+    <div className="pis-workspace" data-testid="pis-workspace-root" data-workspace-view={view} data-project-locked={projectLocked ? 'true' : 'false'}>
       <WorkspaceNavigation
         projectTitle={manuscript.title}
         saveStatus={saveStatus}
@@ -48,6 +56,9 @@ export function WorkspaceShell({
         account={account}
         onOpenTools={onOpenTools}
         onExport={onExport}
+        view={view}
+        projectLocked={projectLocked}
+        activeAgentLabel={activeAgentLabel}
       />
 
       <div className="pis-columns" data-mobile-view={activeMobileView}>

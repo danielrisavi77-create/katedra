@@ -56,4 +56,26 @@ describe('WorkspaceShell', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Katedra' }))
     expect(onMobileViewChange).toHaveBeenCalledWith('assistant')
   })
+
+  it('announces the current agentic phase and project lock', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'z' })
+    render(<ThemeProvider><WorkspaceShell
+      manuscript={manuscript}
+      saveStatus="saved"
+      activeMobileView="editor"
+      onMobileViewChange={vi.fn()}
+      onExport={vi.fn()}
+      outline={<p>Outline</p>}
+      editor={<p>Editor</p>}
+      assistant={<p>Assistant</p>}
+      view="dashboard"
+      projectLocked
+      activeAgentLabel="Sources"
+    /></ThemeProvider>)
+
+    expect(screen.getByText('Autonomni tijek')).toBeTruthy()
+    expect(screen.getByText('Projekt zaključan')).toBeTruthy()
+    expect(screen.getByText('Sources')).toBeTruthy()
+    expect(screen.getByTestId('pis-workspace-root').getAttribute('data-workspace-view')).toBe('dashboard')
+  })
 })

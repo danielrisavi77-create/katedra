@@ -6,6 +6,7 @@ import { expect, it } from 'vitest'
 const css = readFileSync(resolve(process.cwd(), 'app/pisi/pisi.css'), 'utf8')
 const shell = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-shell.tsx'), 'utf8')
 const navigation = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-navigation.tsx'), 'utf8')
+const passDialog = readFileSync(resolve(process.cwd(), 'app/pisi/components/pass-dialog.tsx'), 'utf8')
 
 it('defines explicit dark-mode contrast for interactive manuscript surfaces', () => {
   expect(css).toContain("html[data-theme='dark'] .pis-proposal textarea")
@@ -45,4 +46,21 @@ it('constrains the desktop action zone so account controls cannot overflow', () 
   expect(css).toContain('.pis-desktop-account { min-width: 0; max-width: clamp(150px, 18vw, 260px); overflow: hidden; }')
   expect(css).toContain('.pis-desktop-account .pis-account { min-width: 0; display: block; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
   expect(css).toContain('.pis-account-group .pis-pass-status { flex: 0 0 auto; }')
+})
+
+it('defines the paid project lock confirmation surface', () => {
+  expect(passDialog).toContain('lockConfirmation: true')
+  expect(passDialog).toContain('pis-pass-warning')
+  expect(css).toContain('.pis-pass-summary')
+  expect(css).toContain('.pis-pass-warning')
+  expect(css).toContain("html[data-theme='dark'] .pis-pass-warning")
+})
+
+it('defines phase-aware agentic workspace surfaces', () => {
+  expect(shell).toContain('data-workspace-view={view}')
+  expect(navigation).toContain('pis-phase-state')
+  expect(css).toContain('.pis-agentic-dashboard-grid')
+  expect(css).toContain('.pis-intervention-grid')
+  expect(css).toContain('.pis-review-actions')
+  expect(css).toContain("html[data-theme='dark'] .pis-phase-state b")
 })
