@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveProjectCapability } from './server-capabilities'
 
-function createDb({ userId = 'u1', projectId = 'p1', lock = null, entitlement = true }: { userId?: string; projectId?: string; lock?: Record<string, unknown> | null; entitlement?: boolean } = {}) {
+function createDb({ userId = 'u1', projectId = 'p1', lock = null, entitlement = true, entitlementError = null }: { userId?: string; projectId?: string; lock?: Record<string, unknown> | null; entitlement?: boolean; entitlementError?: { message: string } | null } = {}) {
   return {
     auth: { async getUser() { return { data: { user: { id: userId } }, error: null } } },
     from(table: string) {
@@ -16,7 +16,7 @@ function createDb({ userId = 'u1', projectId = 'p1', lock = null, entitlement = 
         async maybeSingle() {
           if (table === 'katedra_projects') return { data: filters.some(([key, value]) => key === 'project_id' && value === projectId) ? { user_id: userId, project_id: projectId, guest_project_id: null } : null, error: null }
           if (table === 'katedra_project_locks') return { data: lock, error: null }
-          if (table === 'entitlements') return { data: entitlement ? { id: 'e1', product_id: 'katedra_pass_zavrsni' } : null, error: null }
+          if (table === 'entitlements') return { data: entitlement ? { id: 'e1', product_id: 'katedra_pass_zavrsni' } : null, error: entitlementError }
           return { data: null, error: null }
         },
       }
@@ -43,5 +43,13 @@ describe('resolveProjectCapability', () => {
   it('never allows web research from a caller-supplied policy flag', async () => {
     const db = createDb({ lock: { user_id: 'u1', project_id: 'p1', work_type: 'zavrsni', product_key: 'zavrsni' } })
     await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'web_research' })).resolves.toMatchObject({ allowed: false, code: 'policy_unverified' })
+  })
+
+  it('fails closed as unavailable when entitlement lookup errors', async () => {
+    const db = createDb({
+      lock: { user_id: 'u1', project_id: 'p1', work_type: 'zavrsni', product_key: 'zavrsni' },
+      entitlementError: { message: 'entitlements unavailable' },
+    })
+    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toMatchObject({ allowed: false, code: 'capability_unavailable' })
   })
 })

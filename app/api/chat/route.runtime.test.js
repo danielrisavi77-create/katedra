@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   ensureFreeStarterGrant: vi.fn(),
   resolveCapability: vi.fn(),
   loadProcessFactsFromDisk: vi.fn(),
-  hasActiveProjectPass: vi.fn(),
+  lookupActiveProjectPass: vi.fn(),
   createAnthropicUsageParser: vi.fn(),
   buildBillingConsumeParams: vi.fn(),
   resolveBillingOutcome: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@/lib/limits', () => ({ MIN_BALANCE: 100 }))
 vi.mock('@/lib/katedra-free-starter', () => ({ ensureFreeStarterGrant: mocks.ensureFreeStarterGrant }))
 vi.mock('@/lib/academic-suite/process-facts', () => ({ resolveCapability: mocks.resolveCapability }))
 vi.mock('@/lib/academic-suite/process-facts.server', () => ({ loadProcessFactsFromDisk: mocks.loadProcessFactsFromDisk }))
-vi.mock('@/lib/academic-suite/repositories/entitlements', () => ({ hasActiveProjectPass: mocks.hasActiveProjectPass }))
+vi.mock('@/lib/academic-suite/repositories/entitlements', () => ({ lookupActiveProjectPass: mocks.lookupActiveProjectPass }))
 vi.mock('@/lib/ai/anthropic-sse', () => ({ createAnthropicUsageParser: mocks.createAnthropicUsageParser }))
 vi.mock('@/lib/ai/billing-contract', () => ({ buildBillingConsumeParams: mocks.buildBillingConsumeParams, resolveBillingOutcome: mocks.resolveBillingOutcome }))
 vi.mock('@/lib/ai/project-access', () => ({ authorizeProjectAiRequest: mocks.authorizeProjectAiRequest }))
@@ -113,6 +113,26 @@ describe('POST /api/chat runtime guards', () => {
 
     expect(response.status).toBe(400)
     expect(mocks.resolveProjectCapability).not.toHaveBeenCalled()
+  })
+
+  it('fails closed and releases the reservation when Pass lookup is unavailable', async () => {
+    const release = vi.fn().mockResolvedValue(undefined)
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: false, error: 'entitlements unavailable' })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).toBeDefined()
   })
 
   it('uses the strict project capability gate for paid generation when locks are enabled', async () => {
@@ -214,7 +234,7 @@ describe('POST /api/chat runtime guards', () => {
     mocks.countChatInputChars.mockReturnValue(3)
     mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
     mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
-    mocks.hasActiveProjectPass.mockResolvedValue(true)
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: true })
     mocks.loadProcessFactsFromDisk.mockResolvedValue({})
     mocks.resolveCapability.mockReturnValue({ effective: 'allowed', condition: {}, sourceFactId: 'test', stance: 'allowed' })
     mocks.createAnthropicUsageParser.mockReturnValue({
@@ -285,7 +305,7 @@ describe('POST /api/chat runtime guards', () => {
     mocks.validateCostCeiling.mockReturnValue({ ok: true })
     mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
     mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
-    mocks.hasActiveProjectPass.mockResolvedValue(false)
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: false })
     mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: true, source: 'project_grant', balance: 4_500 })
     mocks.loadProcessFactsFromDisk.mockResolvedValue({})
     mocks.resolveCapability.mockReturnValue({ effective: 'allowed', condition: {}, sourceFactId: 'test', stance: 'allowed' })
@@ -342,7 +362,7 @@ describe('POST /api/chat runtime guards', () => {
     mocks.validateCostCeiling.mockReturnValue({ ok: true })
     mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
     mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
-    mocks.hasActiveProjectPass.mockResolvedValue(false)
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: false })
     mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: true, source: 'project_grant' })
 
     const response = await POST(request())
@@ -373,7 +393,7 @@ describe('POST /api/chat runtime guards', () => {
     mocks.countChatInputChars.mockReturnValue(3)
     mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
     mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
-    mocks.hasActiveProjectPass.mockResolvedValue(true)
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: true })
     mocks.validateCostCeiling
       .mockReturnValueOnce({ ok: true })
       .mockReturnValueOnce({ ok: false, status: 402, reason: 'insufficient_balance' })

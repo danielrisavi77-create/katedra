@@ -7,12 +7,19 @@ export type TypedAdminClient = SupabaseClient<Database>
 
 const KATEDRA_PASS_PROVIDER = 'stripe'
 
-export async function hasActiveProjectPass(
+export type ProjectPassLookup =
+  | { ok: true; active: boolean }
+  | { ok: false; error: string }
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
+export async function lookupActiveProjectPass(
   db: TypedAdminClient,
   input: { userId: string; projectId: string; now?: Date },
-): Promise<boolean> {
+): Promise<ProjectPassLookup> {
   const { userId, projectId, now = new Date() } = input
-
   let result
   try {
     result = await db
@@ -27,26 +34,29 @@ export async function hasActiveProjectPass(
       .limit(1)
       .maybeSingle()
   } catch (error) {
-    console.error(JSON.stringify({
-      eventName: 'project_pass_lookup_failed', userId, projectId, error: error?.message,
-    }))
-    return false
+    const message = errorMessage(error, 'Project Pass lookup failed.')
+    console.error(JSON.stringify({ eventName: 'project_pass_lookup_failed', userId, projectId, error: message }))
+    return { ok: false, error: message }
   }
-  const { data, error } = result
-
-  if (error) {
-    console.error(JSON.stringify({
-      eventName: 'project_pass_lookup_failed', userId, projectId, error: error.message,
-    }))
-    return false
+  if (result.error) {
+    console.error(JSON.stringify({ eventName: 'project_pass_lookup_failed', userId, projectId, error: result.error.message }))
+    return { ok: false, error: result.error.message || 'Project Pass lookup failed.' }
   }
-  return Boolean(data)
+  return { ok: true, active: Boolean(result.data) }
 }
 
-export async function hasActiveProjectPassForProduct(
+export async function hasActiveProjectPass(
+  db: TypedAdminClient,
+  input: { userId: string; projectId: string; now?: Date },
+): Promise<boolean> {
+  const result = await lookupActiveProjectPass(db, input)
+  return result.ok && result.active
+}
+
+export async function lookupActiveProjectPassForProduct(
   db: TypedAdminClient,
   input: { userId: string; projectId: string; productId: string; now?: Date },
-): Promise<boolean> {
+): Promise<ProjectPassLookup> {
   const { userId, projectId, productId, now = new Date() } = input
   let result
   try {
@@ -62,12 +72,21 @@ export async function hasActiveProjectPassForProduct(
       .limit(1)
       .maybeSingle()
   } catch (error) {
-    console.error(JSON.stringify({ eventName: 'project_pass_product_lookup_failed', userId, projectId, productId, error: error?.message }))
-    return false
+    const message = errorMessage(error, 'Project Pass product lookup failed.')
+    console.error(JSON.stringify({ eventName: 'project_pass_product_lookup_failed', userId, projectId, productId, error: message }))
+    return { ok: false, error: message }
   }
   if (result.error) {
     console.error(JSON.stringify({ eventName: 'project_pass_product_lookup_failed', userId, projectId, productId, error: result.error.message }))
-    return false
+    return { ok: false, error: result.error.message || 'Project Pass product lookup failed.' }
   }
-  return result.data?.product_id === productId
+  return { ok: true, active: result.data?.product_id === productId }
+}
+
+export async function hasActiveProjectPassForProduct(
+  db: TypedAdminClient,
+  input: { userId: string; projectId: string; productId: string; now?: Date },
+): Promise<boolean> {
+  const result = await lookupActiveProjectPassForProduct(db, input)
+  return result.ok && result.active
 }

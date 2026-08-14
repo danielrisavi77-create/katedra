@@ -185,3 +185,39 @@ the account UI.
 
 - Full entitlement proof still requires authenticated staging data and a real
   webhook/refresh journey.
+
+## Cycle: 2026-08-14g
+
+### Root cause selected
+
+Priority: P0 (entitlement fail-open on storage errors).
+
+The shared Project Pass repository returned only `false` when the entitlement
+query failed. Chat, balance, and server capability authorization could then
+interpret an unavailable entitlement store as an ordinary free/no-Pass state.
+That could incorrectly enter starter-wallet logic instead of stopping safely.
+
+### Fix
+
+- Added tri-state `lookupActiveProjectPass` and product-specific lookup helpers.
+- Kept boolean wrappers for legacy pure callers, but made server routes use the
+  strict result.
+- `/api/chat` and `/api/balance` now return `503` and release any reservation
+  when Pass state cannot be checked.
+- `resolveProjectCapability` now returns `capability_unavailable` when the
+  entitlement lookup fails.
+- Added route, repository, and capability regression tests.
+
+### Verification
+
+- Focused entitlement/chat/balance/capability tests: PASS (30 tests).
+- Full test suite: PASS (123 files, 390 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS.
+- Local HTTP `/pisi` smoke: PASS (`200`).
+
+### Remaining issues
+
+- Authenticated staging is still required to prove real entitlement failure,
+  webhook, checkout, and Lekta-backed journeys; see `BLOCKERS.md`.

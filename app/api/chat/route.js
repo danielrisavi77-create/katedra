@@ -16,7 +16,7 @@ import { MIN_BALANCE } from '@/lib/limits'
 import { ensureFreeStarterGrant } from '@/lib/katedra-free-starter'
 import { resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
-import { hasActiveProjectPass } from '@/lib/academic-suite/repositories/entitlements'
+import { lookupActiveProjectPass } from '@/lib/academic-suite/repositories/entitlements'
 import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
 import { createAnthropicUsageParser } from '@/lib/ai/anthropic-sse'
 import { buildBillingConsumeParams, resolveBillingOutcome } from '@/lib/ai/billing-contract'
@@ -164,7 +164,13 @@ async function handlePOST(req, requestIdOverride) {
 
   // ---------- 4. PASS ENTITLEMENT (primarni gate) ----------
   const canonicalProjectId = project.projectId
-  const hasPass = await hasActiveProjectPass(db, { userId, projectId: canonicalProjectId })
+  const passLookup = await lookupActiveProjectPass(db, { userId, projectId: canonicalProjectId })
+  if (!passLookup.ok) {
+    console.error(JSON.stringify({ eventName: 'project_pass_lookup_unavailable', requestId, userId, projectId: canonicalProjectId, error: passLookup.error }))
+    await releaseReservation()
+    return json(503, { error: 'Status Passa trenutno nije moguće provjeriti.' })
+  }
+  const hasPass = passLookup.active
   let projectAccess = null
 
   // A user-global wallet cannot authorize a no-Pass project. Once the v2
