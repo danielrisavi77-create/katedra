@@ -619,6 +619,38 @@ accessible tree, not inferred from a shell display.
   canonical Lekta deployment and real commerce/provider evidence.
 - Dependency audit remains blocked by the unavailable npm advisory endpoint.
 
+## Completion audit: 2026-08-15b
+
+### Result
+
+`V1 PRODUCT COMPLETE` is **not yet proven**. The current local audit found no
+new code-fixable P0, P1 or P2 issue after the onboarding and chat-copy fixes,
+but G2-G7 and G9-G10 still require the authenticated canonical staging proof
+listed in `GOLDEN_JOURNEYS.md` and `BLOCKERS.md`.
+
+### Current evidence
+
+- `npm.cmd test`: PASS (126 files, 421 passed, 4 skipped).
+- `npm.cmd run typecheck`: PASS.
+- `npm.cmd run lint`: PASS.
+- `npm.cmd run build`: PASS.
+- Final browser matrix: PASS (7 routes, 2 loopback hosts, desktop/mobile,
+  light/dark; no overflow, page errors or failed Next asset requests).
+- Source audit: no remaining actual mojibake sequences in `app` or `lib`; the
+  only remaining matching test string is an intentional assertion rejecting
+  the old malformed arrow.
+- `npm.cmd run preflight:agentic`: expected fail-closed; eight staging/worker/
+  billing variables remain absent.
+- `npm.cmd run audit:dependencies`: BLOCKED_EXTERNAL because the npm advisory
+  endpoint was unreachable and npm could not write its local log directory.
+
+### Completion decision
+
+Keep the autonomous goal active. Do not enable agentic flags or claim V1
+complete until the canonical Lekta migration/RPC deployment, real concurrent
+lock proof, authenticated Stripe/Supabase/provider journeys and dependency
+audit are available.
+
 ## Cycle: 2026-08-15a
 
 ### Root cause selected
