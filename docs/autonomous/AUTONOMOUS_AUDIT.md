@@ -337,3 +337,36 @@ layer did not reject it first.
 
 - Canonical Lekta RPC/RLS and authenticated staging still need to verify the
   same project/tier invariant across the real worker and database boundary.
+
+## Cycle: 2026-08-14l
+
+### Root cause selected
+
+Priority: P1 (resuming an agentic run after entitlement expiry).
+
+The resume route authenticated only the user and delegated directly to the
+resume RPC. It did not re-read the run's project lock or active product Pass,
+so a paused run could potentially resume after the Pass expired or changed.
+
+### Fix
+
+- Load the run through the authenticated user's project scope.
+- Require a valid lock and matching work-type/product tier.
+- Re-check the exact `katedra_pass_*` entitlement before calling
+  `resume_agent_run`.
+- Return `402` for inactive access and `503` for unavailable or malformed
+  authorization state.
+- Added a runtime regression proving an expired Pass cannot resume a run.
+
+### Verification
+
+- Full suite: PASS (129 files, 395 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Local HTTP smoke: all six primary routes returned `200`.
+
+### Remaining issues
+
+- Real resume/worker behavior still requires the canonical Lekta RPC/RLS and
+  authenticated staging environment described in `BLOCKERS.md`.
