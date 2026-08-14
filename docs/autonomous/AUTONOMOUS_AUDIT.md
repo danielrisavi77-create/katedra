@@ -575,6 +575,50 @@ That could make link commands and schema behavior ambiguous.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14s
+
+### Root cause selected
+
+Priority: P2 (misleading state-sync error for canonical project ownership
+conflicts).
+
+When the compatibility write path reached the canonical Academic Suite trigger
+with a project identity already owned by another account, the database returned
+the expected unique/ownership conflict (`23505`), but `/api/state` collapsed it
+into a generic `500`. The client could not distinguish a project conflict from
+a temporary server failure and had no safe recovery message.
+
+### Fix
+
+- Map only the canonical unique/ownership conflict code to `409`.
+- Return a generic Croatian conflict message without exposing database details.
+- Keep all other persistence failures as `500`.
+- Add a runtime regression test for the conflict response.
+
+### Verification
+
+- TDD regression: PASS (red before the route change, green after it).
+- Focused state tests: PASS (7 tests).
+- Full Katedra suite: PASS (126 files, 406 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Playwright smoke: PASS; desktop/mobile `/pisi` and mobile `/racun` had no
+  horizontal overflow, page errors, scroll warnings or duplicate-link warnings.
+- Lekta agentic contract tests: PASS (4 files, 11 tests). Full Lekta `npm run
+  check` remains non-green because of pre-existing unrelated title-page test
+  parsing and generated real-corpus markdown drift; no Lekta files were changed
+  in this cycle.
+
+### Remaining issues
+
+- Dependency audit could not reach the npm advisory endpoint in this
+  environment; rerun it in a network-enabled release environment.
+- Authenticated commerce, canonical Lekta deployment and staging browser
+  journeys remain the external blockers listed in `BLOCKERS.md`.
+- Lekta's unrelated full-gate failures remain open and must be resolved in the
+  Lekta repository before the cross-repo release gate can be called green.
+
 ## Cycle: 2026-08-14r
 
 ### Root cause selected
