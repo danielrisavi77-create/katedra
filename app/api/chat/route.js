@@ -162,7 +162,7 @@ async function handlePOST(req, requestContext = {}) {
     try {
       await reservation.release()
     } catch (error) {
-      console.error(JSON.stringify({ eventName: 'rate_limit_release_failed', requestId, userId, error: error?.message }))
+      console.error(JSON.stringify({ eventName: 'rate_limit_release_failed', requestId, billingRequestId, userId, error: error?.message }))
     }
   }
 

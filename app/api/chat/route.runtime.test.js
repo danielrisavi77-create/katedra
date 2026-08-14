@@ -253,7 +253,7 @@ describe('POST /api/chat runtime guards', () => {
     }))
     mocks.resolveBillingOutcome.mockReturnValue({ state: 'settled', retry: false })
     const encoder = new TextEncoder()
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode('data: {"type":"message_delta"}\n\n'))
         controller.close()
@@ -262,28 +262,31 @@ describe('POST /api/chat runtime guards', () => {
 
     const response = await POST(request(undefined, { 'x-request-id': 'reused-client-id' }))
     const body = await response.text()
+    const secondResponse = await POST(request(undefined, { 'x-request-id': 'reused-client-id' }))
+    await secondResponse.text()
 
     expect(response.status).toBe(200)
     expect(body).toContain('message_delta')
     expect(response.headers.get('x-request-id')).toBe('reused-client-id')
-    const reservationInput = mocks.reserveDistributedRequest.mock.calls[0][1]
-    expect(reservationInput).toEqual(expect.objectContaining({
-      userId: 'user-1',
-      requestId: expect.any(String),
-      estimatedCharge: 1_000,
-    }))
-    expect(reservationInput.requestId).not.toBe('reused-client-id')
-    const billingInput = rpc.mock.calls.find(([name]) => name === 'katedra_consume')?.[1]
-    expect(billingInput?.p_request_id).toEqual(expect.any(String))
-    expect(billingInput?.p_request_id).not.toBe('reused-client-id')
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({
-      p_user: 'user-1',
-      p_project_id: project.projectId,
-      p_request_id: expect.any(String),
-      p_in: 12,
-      p_out: 4,
-    }))
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(secondResponse.status).toBe(200)
+    expect(secondResponse.headers.get('x-request-id')).toBe('reused-client-id')
+
+    const reservationInputs = mocks.reserveDistributedRequest.mock.calls.map(([, input]) => input)
+    expect(reservationInputs).toHaveLength(2)
+    expect(reservationInputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: 'user-1', requestId: expect.any(String), estimatedCharge: 1_000 }),
+    ]))
+    const reservationIds = reservationInputs.map(input => input.requestId)
+    expect(reservationIds.every(id => id !== 'reused-client-id')).toBe(true)
+    expect(new Set(reservationIds).size).toBe(2)
+
+    const billingInputs = rpc.mock.calls
+      .filter(([name]) => name === 'katedra_consume')
+      .map(([, input]) => input)
+    expect(billingInputs).toHaveLength(2)
+    expect(billingInputs.map(input => input.p_request_id)).toEqual(reservationIds)
+    expect(billingInputs.every(input => input.p_request_id !== 'reused-client-id')).toBe(true)
+    expect(release).toHaveBeenCalledTimes(2)
   })
 
   it('uses the project-scoped v2 balance without requiring the global wallet', async () => {
