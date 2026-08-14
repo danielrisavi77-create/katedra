@@ -37,6 +37,8 @@ overwritten while a worker was already running.
   canonical backend wrapper).
 - Lekta readiness contract test: PASS (2 tests).
 - Full Katedra suite: PASS (128 files, 428 passed, 4 skipped).
+- Lekta full `npm.cmd run check`: PASS (typecheck, full Vitest suite and Vite
+  build).
 - Typecheck: PASS.
 - Lint: PASS.
 - Production build: PASS (24 generated routes).
