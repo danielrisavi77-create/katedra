@@ -575,6 +575,54 @@ That could make link commands and schema behavior ambiguous.
 - Authenticated commerce, canonical Lekta contracts and staging browser
   journeys remain the external blockers listed in `BLOCKERS.md`.
 
+## Cycle: 2026-08-14y
+
+### Root cause selected
+
+Priority: P0 (client-controlled chat idempotency identity).
+
+`/api/chat` reused the bounded incoming `x-request-id` as the distributed
+reservation and `katedra_consume` idempotency key. A caller could replay that
+header and potentially turn a previously settled key into a new AI response
+without a fresh billing attempt.
+
+### Fix
+
+- Keep the incoming ID only as tracing/response identity.
+- Generate a fresh server UUID for each billable chat request.
+- Use that UUID for reservation and `katedra_consume`.
+- Include the server billing ID in billing reconciliation and reservation
+  release-failure logs.
+- Add a two-request regression using the same client header and assert distinct
+  server IDs with matching reservation/settlement identities.
+
+### Verification
+
+- TDD regression: PASS; the pre-fix implementation forwarded
+  `reused-client-id`, then the fixed implementation passed the two-request
+  assertion.
+- Focused chat/observability/rate-limit tests: PASS (20/20).
+- Scoped review and re-review: PASS; no Critical, Important or Minor findings
+  remain.
+- Full suite: PASS (126 files, 413 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (exit `0`).
+- Fresh Playwright `/pisi?tip=d` smoke: PASS on `localhost:3000` and
+  `127.0.0.1:3000`, with no page errors or Next static-asset failures.
+
+### Commit
+
+- `6514a68` fix: isolate chat billing request identity
+- `1ac167f` test: strengthen chat billing identity regression
+
+### Remaining issues
+
+- Live idempotent billing behavior still requires canonical Lekta RPC/RLS and
+  authenticated staging proof; local tests cannot replace that external gate.
+- Authenticated commerce and remaining Golden Journeys remain the external
+  blockers listed in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-14x
 
 ### Root cause selected
