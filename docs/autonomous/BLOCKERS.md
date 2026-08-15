@@ -69,6 +69,27 @@ conflict-safe insert/claim path that verifies the existing immutable snapshot,
 then add a database concurrency test and staging proof for two simultaneous
 identical payment/project requests before enabling paid production traffic.
 
+## BLOCKED_EXTERNAL: canonical material deletion tombstone
+
+Evidence: `app/api/materials/[materialId]/route.js` removes the private storage
+objects, but the Katedra repository has no canonical RPC for marking the
+corresponding `agent_payload_manifests` row as deleted. Lekta's current
+`attach_agent_payloads_to_run` contract accepts only manifests with
+`deleted_at is null` and can therefore return a deleted material ID even after
+its storage object is gone. The run then reports the attachment as successful,
+while the worker silently has no material context to load.
+
+The materials feature remains disabled by the existing production flag, so this
+is a pre-activation blocker rather than an enabled production incident. A
+direct Katedra update would violate the database authority rule.
+
+Required owner action: add and deploy a canonical Lekta deletion RPC that checks
+user/project ownership, atomically tombstones the manifest (and defines the
+behavior for material IDs attached to active runs), removes or schedules the
+private storage objects, and make `DELETE /api/materials/:materialId` call it.
+Add a contract test proving that a deleted material cannot be attached and a
+staging test proving idempotent deletion.
+
 Local Supabase execution is not currently available either: the installed CLI
 reports that the Docker engine pipe is missing when inspecting the local
 project. Therefore the repository-level SQL tests are the strongest available

@@ -1,5 +1,43 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15u — BLOCKED_EXTERNAL discovery
+
+### Root cause selected
+
+Priority: P1 lifecycle integrity gap, blocked externally. The material delete
+route removes private storage objects but has no canonical Lekta RPC to
+tombstone the corresponding `agent_payload_manifests` row. The current Lekta
+attachment contract can therefore confirm a deleted material ID while the
+worker cannot load its storage object.
+
+### Decision
+
+- Do not add a direct Katedra database update; that would violate the Lekta
+  schema/RPC authority boundary.
+- Keep `KATEDRA_MATERIALS_ENABLED` fail-closed until the canonical deletion
+  contract exists.
+- Record the exact required RPC behavior and contract tests in `BLOCKERS.md`.
+
+### Evidence
+
+- Katedra `DELETE /api/materials/:materialId` removes storage names only.
+- Lekta `attach_agent_payloads_to_run` filters `deleted_at is null` but has no
+  user-facing deletion/tombstone operation available to Katedra.
+- The local material loader correctly ignores missing/expired payload content,
+  but that is recovery after a false attachment, not a valid deletion flow.
+
+### Golden Journey impact
+
+- G3, G9 and G10: material deletion/retry behavior cannot be proven safely
+  before canonical Lekta deletion and staging tests exist.
+- G0-G2, G4-G8: no behavior change while materials remain disabled.
+
+### Required external action
+
+Add/deploy an ownership-checked, idempotent Lekta deletion RPC, define active
+run behavior, call it from Katedra, and prove delete → attach rejection in
+staging. This is now tracked as `BLOCKED_EXTERNAL` in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15t
 
 ### Root cause selected
