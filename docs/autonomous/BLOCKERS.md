@@ -68,3 +68,9 @@ Required owner action: update the canonical Lekta RPC to use an atomic
 conflict-safe insert/claim path that verifies the existing immutable snapshot,
 then add a database concurrency test and staging proof for two simultaneous
 identical payment/project requests before enabling paid production traffic.
+
+Local Supabase execution is not currently available either: the installed CLI
+reports that the Docker engine pipe is missing when inspecting the local
+project. Therefore the repository-level SQL tests are the strongest available
+local evidence; no local database/RLS concurrency result is being represented
+as a deployment proof.
