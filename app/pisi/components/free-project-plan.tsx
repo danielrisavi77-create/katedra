@@ -1,8 +1,10 @@
 'use client'
 
 import type { CompletionScan } from '../../../lib/project/completion-scan'
+import { buildProjectAuthRedirect } from '../../../lib/auth/project-redirect'
 
-export function FreeProjectPlan({ title, scan, authenticated = false, onContinue }: { title: string; scan: CompletionScan; authenticated?: boolean; onContinue: () => void }) {
+export function FreeProjectPlan({ projectId, title, scan, authenticated = false, onContinue }: { projectId: string; title: string; scan: CompletionScan; authenticated?: boolean; onContinue: () => void }) {
+  const registrationRedirect = buildProjectAuthRedirect(projectId)
   return (
     <main className="pis-onboarding pis-free-plan" aria-labelledby="free-plan-title">
       <section className="pis-onboarding-step">
@@ -31,7 +33,7 @@ export function FreeProjectPlan({ title, scan, authenticated = false, onContinue
 
         <p className="pis-catalog-note">Ovo je besplatni projektni plan. Katedra ne generira puni rad bez aktivnog opsega i korisničke odluke.</p>
         <div className="pis-onboarding-actions">
-          {!authenticated && <a className="pis-text-button" href="/registracija?redirect=/pisi">Spremi plan na račun</a>}
+          {!authenticated && <a className="pis-text-button" href={`/registracija?redirect=${encodeURIComponent(registrationRedirect)}`}>Spremi plan na račun</a>}
           <button type="button" className="pis-primary-button" onClick={onContinue}>Nastavi u projektu →</button>
         </div>
       </section>

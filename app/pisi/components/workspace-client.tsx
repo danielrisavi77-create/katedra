@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { normalizeLektaHandoffHashForLegacyEngine } from '../../../lib/academic-suite/handoff'
 import { ensureGuestProjectIdentity } from '../../../lib/academic-suite/guest-project'
+import { buildProjectAuthRedirect } from '../../../lib/auth/project-redirect'
 import { useAuth } from '../../../lib/hooks/useAuth'
 import { createTextDeltaParser } from '../../../lib/manuscript/client-sse'
 import { mergeVerifiedAgenticSections } from '../../../lib/manuscript/agentic-merge'
@@ -502,7 +503,7 @@ export default function WorkspaceClient() {
 
   if (booting || !manuscript) return <div className="pis-boot"><span className="pis-brand-mark">K</span><p>Otvaram tvoj rukopis…</p></div>
   if (showOnboarding) return <OnboardingFlow initialTip={initialTip} initialValues={onboardingInitialValues} scanMode={scanMode} onComplete={completeOnboarding} />
-  if (completionScan) return <FreeProjectPlan title={manuscript.title} scan={completionScan} authenticated={Boolean(user)} onContinue={() => setCompletionScan(null)} />
+  if (completionScan) return <FreeProjectPlan projectId={manuscript.projectId} title={manuscript.title} scan={completionScan} authenticated={Boolean(user)} onContinue={() => setCompletionScan(null)} />
   if (!activeSection) return null
 
   return (
@@ -531,7 +532,7 @@ export default function WorkspaceClient() {
               {passStatus === 'active' ? 'Pass aktivan' : passStatus === 'checking' ? 'Provjera Passa…' : 'Aktiviraj Pass'}
             </button>
           </div>
-        ) : <a className="pis-account" href="/prijava?redirect=/pisi">Prijava</a>}
+        ) : <a className="pis-account" href={`/prijava?redirect=${encodeURIComponent(buildProjectAuthRedirect(manuscript.projectId))}`}>Prijava</a>}
         outline={
           <OutlinePanel
             manuscript={manuscript}

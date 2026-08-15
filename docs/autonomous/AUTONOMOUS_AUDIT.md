@@ -1,5 +1,46 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15au
+
+### Root cause selected
+
+Priority: P1 G2 guest-to-account continuity. The Completion Scan offered
+`/registracija?redirect=/pisi`, and the anonymous workspace header offered the
+same generic login destination. Because the auth pages honor an explicit
+redirect over their local-manifest fallback, either path could return a user
+to a workspace without the current project's `projectId`.
+
+### Fix
+
+- Carry the canonical project ID through the Completion Scan registration link.
+- Carry the canonical project ID through the anonymous workspace login link.
+- Reuse `buildProjectAuthRedirect` so both destinations remain same-origin and
+  safely encoded.
+- Add component/source regressions for both entry points.
+
+### Verification
+
+- TDD regression: PASS; the registration redirect previously resolved to
+  `/pisi` and now resolves to `/pisi?projectId=project-123`.
+- Browser G2 continuity check: PASS locally; both registration and login links
+  preserved the same generated project ID with no page errors.
+- Full suite: PASS (135 test files, 481 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+
+### Golden Journey impact
+
+- G2: guest auth entry points now preserve the active local project identity.
+- G8: returning to the workspace remains project-specific.
+- G0-G1 and G3-G10: no intended behavior change for valid project data.
+
+### Remaining issues
+
+- The authenticated Supabase registration/login attach flow remains
+  `BLOCKED_EXTERNAL` until staging credentials and canonical project attachment
+  evidence are available.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15at
 
 ### Root cause selected
