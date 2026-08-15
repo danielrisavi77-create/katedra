@@ -1,5 +1,51 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15k
+
+### Root cause selected
+
+Priority: P0 (production checkout/webhook could remain reachable when the
+canonical billing RPC contract was unavailable).
+
+The checkout and paid-session webhook already failed closed when project-lock
+enforcement was disabled, but they did not apply the same boundary to
+`KATEDRA_BILLING_RPC_CONTRACT`. This could allow a payment session to open, or
+allow a webhook retry to enter the legacy wallet grant path, during billing
+contract drift.
+
+### Fix
+
+- Require `KATEDRA_BILLING_RPC_CONTRACT=v2` before production checkout starts.
+- Require the same contract before a production paid-session webhook grants an
+  entitlement or wallet balance.
+- Add runtime regressions proving Stripe/admin initialization is skipped when
+  the billing contract is missing or legacy.
+
+### Verification
+
+- TDD regression: PASS; both new tests failed before the guards and passed
+  afterward.
+- Focused checkout/webhook tests: PASS (9 tests).
+- Full Katedra suite: PASS (130 files, 441 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright local smoke: PASS; `/pisi?tip=d` and `/racun` at 390px and
+  1440px had no horizontal overflow or page exceptions. Anonymous `/racun`
+  API `401` responses are expected and do not produce page errors.
+
+### Commit
+
+- Isolated changeset: `fix: gate commerce on billing contract`.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Production agentic flags remain disabled until canonical preflight and
+  authenticated staging evidence pass.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15j
 
 ### Root cause selected

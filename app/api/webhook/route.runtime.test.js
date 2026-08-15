@@ -48,6 +48,23 @@ describe('POST /api/webhook runtime guards', () => {
     expect(mocks.createAdminClient).not.toHaveBeenCalled()
   })
 
+  it('fails closed before granting a paid session when production billing contract is not v2', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'legacy')
+    mocks.getStripe.mockReturnValue({
+      webhooks: { constructEvent: vi.fn().mockReturnValue({
+        type: 'checkout.session.completed',
+        data: { object: { id: 'cs_prod_without_billing_contract', mode: 'payment' } },
+      }) },
+    })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    expect(mocks.createAdminClient).not.toHaveBeenCalled()
+  })
+
   it('does not grant a second active Pass for a concurrent paid session', async () => {
     mocks.getStripe.mockReturnValue({
       webhooks: {

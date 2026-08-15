@@ -85,6 +85,10 @@ async function handlePOST(req) {
         console.error(JSON.stringify({ eventName: 'webhook_project_lock_contract_unavailable', sessionId: s.id }))
         return new Response('project lock contract unavailable', { status: 503 })
       }
+      if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_BILLING_RPC_CONTRACT !== 'v2') {
+        console.error(JSON.stringify({ eventName: 'webhook_billing_contract_unavailable', sessionId: s.id }))
+        return new Response('billing contract unavailable', { status: 503 })
+      }
       const userId = s.metadata?.user_id
       const projectId = s.metadata?.academic_project_id
        const productKey = s.metadata?.product_key

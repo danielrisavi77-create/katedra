@@ -43,6 +43,10 @@ async function handlePOST(req) {
     console.error(JSON.stringify({ eventName: 'checkout_project_lock_contract_unavailable' }))
     return Response.json({ error: 'Plaćanje trenutno nije dostupno dok server-side zaključavanje projekta nije aktivno.' }, { status: 503 })
   }
+  if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_BILLING_RPC_CONTRACT !== 'v2') {
+    console.error(JSON.stringify({ eventName: 'checkout_billing_contract_unavailable' }))
+    return Response.json({ error: 'Plaćanje trenutno nije dostupno dok server-side billing ugovor nije aktivan.' }, { status: 503 })
+  }
 
   let pkgKey, projectId, topic, lockConfirmation
   try {

@@ -78,6 +78,21 @@ describe('POST /api/checkout runtime guards', () => {
     expect(mocks.getStripe).not.toHaveBeenCalled()
   })
 
+  it('fails closed before checkout when production billing contract is not v2', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'legacy')
+    mocks.createClient.mockResolvedValue({
+      ...projectDb({ project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+    })
+
+    const response = await POST(request({ package: 'diplomski', projectId, topic: 'Tema', lockConfirmation: true }))
+
+    expect(response.status).toBe(503)
+    expect(mocks.getStripe).not.toHaveBeenCalled()
+  })
+
   it('rejects a legacy project validation result before opening Stripe checkout', async () => {
     mocks.createClient.mockResolvedValue({
       ...projectDb({ project_id: 'klegacy', work_type_canonical: 'graduate' }),
