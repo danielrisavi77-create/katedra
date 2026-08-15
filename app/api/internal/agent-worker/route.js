@@ -30,7 +30,7 @@ export async function POST(req) {
       missing: workerConfig.missing,
       invalid: workerConfig.invalid,
     })
-    return Response.json({ error: 'Agent worker joĹˇ nije konfiguriran za sigurnu naplatu.' }, { status: 503 })
+    return Response.json({ error: 'Agent worker još nije konfiguriran za sigurnu naplatu.' }, { status: 503 })
   }
 
   let body

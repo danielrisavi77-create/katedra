@@ -1,5 +1,47 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15n
+
+### Root cause selected
+
+Priority: P2 (internal agent-worker configuration errors contained mojibake).
+
+When the private worker safety configuration was missing, the endpoint returned
+`joĹˇ nije konfiguriran`, which is unreadable and weakens failure recovery and
+operator diagnosis even though the route correctly failed closed with HTTP 503.
+
+### Fix
+
+- Restore the Croatian `još` string in the internal worker response.
+- Add a source-contract regression that rejects the mojibake form and requires
+  the readable message.
+
+### Verification
+
+- TDD regression: PASS; the new assertion failed before the string fix and
+  passed afterward (4 focused tests).
+- Full Katedra suite: PASS (131 test files passed, 445 tests passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright localhost smoke: PASS for `/pisi?tip=d` and `/racun` at 390px and
+  1440px with no page errors or horizontal overflow.
+
+### Golden Journey impact
+
+- G9: improves the readability of a fail-closed agent-worker recovery path.
+- G2-G7, G8 and G10: no behavior change.
+
+### Commit
+
+- Pending selected-file commit after audit ledger update.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15m
 
 ### Root cause selected

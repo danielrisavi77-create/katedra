@@ -25,4 +25,9 @@ describe('internal agent worker route contract', () => {
     expect(source).toContain('worker safety configuration unavailable')
     expect(source).not.toContain("process.env.KATEDRA_AGENT_MODEL || 'claude-sonnet-5'")
   })
+
+  it('keeps the worker configuration error readable in Croatian', () => {
+    expect(source).toContain('Agent worker još nije konfiguriran za sigurnu naplatu.')
+    expect(source).not.toContain('joĹˇ nije konfiguriran')
+  })
 })
