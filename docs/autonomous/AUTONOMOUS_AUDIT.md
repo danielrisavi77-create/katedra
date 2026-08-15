@@ -1,5 +1,40 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ab
+
+### Root cause selected
+
+Priority: P2 documentation drift. `docs/stabilization-report.md` still listed
+Git as unavailable, although the current environment exposes Git and the
+autonomous loop has already verified status, isolated commits and diff checks.
+The stale statement could cause operators to repeat an obsolete environment
+workaround or misread the actual remaining GitHub network limitation.
+
+### Fix
+
+- Mark STAB-008 resolved with the exact verified Git path and date.
+- Distinguish local Git availability from the separate inability to reach
+  `github.com:443` for origin synchronization.
+
+### Verification
+
+- Git executable: PASS (`C:\\Program Files\\Git\\cmd\\git.exe --version`).
+- Local branch/status and isolated commit workflow: PASS.
+- Targeted documentation search: PASS; STAB-008 now says `RESOLVED (P2)` and
+  no longer claims Git is unavailable.
+- `git diff --check`: PASS for the documentation change.
+
+### Golden Journey impact
+
+- G0-G10: no product behavior change; release evidence is more accurate.
+
+### Remaining issues
+
+- GitHub origin synchronization remains an environment/network limitation,
+  not a local Git installation blocker.
+- Canonical Lekta deployment, authenticated commerce and material deletion
+  tombstoning remain `BLOCKED_EXTERNAL` in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15aa
 
 ### Root cause selected
