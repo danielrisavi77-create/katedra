@@ -1,5 +1,46 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bi — fresh local readiness audit
+
+### Root cause selected
+
+Priority: readiness verification. A fresh repository, browser and local
+quality-gate audit was required before selecting another change. No new
+code-fixable P0, P1 or P2 issue was found.
+
+### Verification
+
+- `git fetch origin --prune`: `BLOCKED_EXTERNAL`; GitHub was unreachable on
+  port 443, so no fresh remote comparison is claimed.
+- `npm test`: PASS (141 test files, 496 passed, 4 skipped).
+- `npm.cmd run test:ci`: PASS (141 test files, 496 passed, 4 skipped).
+- `npm.cmd run typecheck`, `npm.cmd run lint` and `npm.cmd run build`: PASS.
+- Playwright 1.61.1 is installed from the lockfile; no additional tool was
+  needed for this audit.
+- Local route smoke: `/`, `/pisi`, `/racun`, `/prijava`, `/privatnost` and
+  `/uvjeti` returned HTTP 200.
+- Browser smoke covered guest onboarding, `?tip=z`, `?screen=scan`, local
+  Completion Scan, reload persistence, mobile/tablet overflow and page-error
+  checks. G0, G1 and local G8 evidence passed.
+- The dependency advisory audit remains `BLOCKED_EXTERNAL` because the npm
+  bulk advisory endpoint was unavailable; this is not treated as proof of
+  dependency safety.
+
+### Golden Journey impact
+
+- G0, G1 and the local portion of G8: PASS for the verified guest/local
+  workflow.
+- G2-G7, G9 and G10: remain `BLOCKED_EXTERNAL` where authenticated Supabase,
+  Stripe, provider, Lekta preview or canonical RPC proof is required.
+
+### Remaining issues
+
+- No new local code-fixable P0, P1 or P2 issue was found, so no speculative
+  feature or unrelated refactor was introduced.
+- Existing Lekta, commerce, Docker/Supabase, account-deletion, material
+  tombstone and dependency-advisory blockers remain documented in
+  `docs/autonomous/BLOCKERS.md`.
+
 ## Cycle: 2026-08-15bh
 
 ### Root cause selected
