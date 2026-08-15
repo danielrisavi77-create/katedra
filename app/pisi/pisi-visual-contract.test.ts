@@ -56,13 +56,14 @@ it('defines the paid project lock confirmation surface', () => {
   expect(css).toContain("html[data-theme='dark'] .pis-pass-warning")
 })
 
-it('defines phase-aware agentic workspace surfaces', () => {
+it('defines project navigation alongside the existing agentic workspace surfaces', () => {
   expect(shell).toContain('data-workspace-view={view}')
-  expect(navigation).toContain('pis-phase-state')
+  expect(shell).toContain('ProjectNavigation')
+  expect(navigation).toContain('Dodatne radnje')
   expect(css).toContain('.pis-agentic-dashboard-grid')
   expect(css).toContain('.pis-intervention-grid')
   expect(css).toContain('.pis-review-actions')
-  expect(css).toContain("html[data-theme='dark'] .pis-phase-state b")
+  expect(css).toContain("html[data-theme='dark'] .pis-project-nav")
 })
 
 it('defines the hybrid workspace surface and navigation tokens', () => {

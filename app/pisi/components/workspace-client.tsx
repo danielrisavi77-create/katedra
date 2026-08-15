@@ -42,6 +42,7 @@ import { PaidProjectSetup, type AgenticWorkspacePhase } from './paid-project-set
 import { FreeProjectPlan } from './free-project-plan'
 import { ProjectHome } from './project-home'
 import { ProjectDrawer } from './project-drawer'
+import type { ProjectNavItem } from './project-navigation'
 import { WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
 
 const READY_PREFIX = 'katedra_manuscript_ready:'
@@ -506,6 +507,40 @@ export default function WorkspaceClient() {
   if (completionScan) return <FreeProjectPlan projectId={manuscript.projectId} title={manuscript.title} scan={completionScan} authenticated={Boolean(user)} onContinue={() => setCompletionScan(null)} />
   if (!activeSection) return null
 
+  const workspaceView: WorkspaceView = projectHome ? 'home' : agenticMode ? agenticView : 'writing'
+  const activeNavItem: ProjectNavItem = workspaceView === 'home'
+    ? 'home'
+    : workspaceView === 'preparation'
+      ? 'plan'
+      : workspaceView === 'writing'
+        ? 'writing'
+        : 'mentor'
+  const navigateProject = (item: ProjectNavItem) => {
+    if (item === 'home') {
+      setDrawerOpen(false)
+      setAgenticMode(false)
+      setProjectHome(true)
+      persistWorkspaceView(manuscript.projectId, 'home')
+      return
+    }
+    if (item === 'writing') {
+      setDrawerOpen(false)
+      setProjectHome(false)
+      setAgenticMode(false)
+      persistWorkspaceView(manuscript.projectId, 'writing')
+      return
+    }
+    if (item === 'plan') {
+      setDrawerOpen(false)
+      setProjectHome(false)
+      setAgenticMode(true)
+      setAgenticView('preparation')
+      persistWorkspaceView(manuscript.projectId, 'agents')
+      return
+    }
+    setDrawerOpen(true)
+  }
+
   return (
     <>
       {bootError && <div className="pis-storage-warning" role="status">{bootError}</div>}
@@ -517,12 +552,11 @@ export default function WorkspaceClient() {
         onMobileViewChange={setMobileView}
         onExport={() => void exportDocx()}
         onOpenTools={() => setDrawerOpen(true)}
-        onOpenAgents={() => { setDrawerOpen(false); setProjectHome(false); setAgenticMode(true); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'agents') }}
-        onCloseAgents={() => { setAgenticMode(false); setProjectHome(false); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'writing') }}
-        onOpenWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }}
-        view={(projectHome ? 'home' : agenticMode ? agenticView : 'writing') as WorkspaceView}
+        activeNavItem={activeNavItem}
+        onNavigate={navigateProject}
+        workType={manuscript.workType}
+        view={workspaceView}
         projectLocked={agenticMode && passStatus === 'active'}
-        activeAgentLabel={agenticMode && agenticView === 'dashboard' ? 'Autonomni agenti' : undefined}
         agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} onAcceptDraft={acceptAgenticDraft} /> : undefined}
         projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }} onPrepare={() => { setProjectHome(false); setAgenticMode(true); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'agents') }} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (

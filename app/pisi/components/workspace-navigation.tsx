@@ -5,7 +5,6 @@ import Link from 'next/link'
 
 import { ThemeToggle } from '../../theme-toggle'
 import type { SyncStatus } from '../../../lib/manuscript/sync-status'
-import type { WorkspaceView } from './workspace-shell'
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -21,15 +20,6 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
   syncing: 'Sinkronizacija metapodataka…',
   synced: 'Metapodaci sinkronizirani',
   failed: 'Sinkronizacija nije uspjela',
-}
-
-const WORKSPACE_VIEW_LABELS: Record<WorkspaceView, string> = {
-  home: 'Projekt',
-  preparation: 'Priprema rada',
-  dashboard: 'Autonomni tijek',
-  intervention: 'Intervencija',
-  review: 'Pregled rezultata',
-  writing: 'Radni prostor',
 }
 
 function WorkspaceBrand({ projectTitle }: { projectTitle: string }) {
@@ -89,7 +79,7 @@ function WorkspaceOverflowMenu({ account, onOpenTools, onExport }: Pick<Workspac
   )
 }
 
-function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenTools, onExport, view, projectLocked, activeAgentLabel, onOpenAgents, onCloseAgents, onOpenWriting }: Pick<WorkspaceNavigationProps, 'saveStatus' | 'syncStatus' | 'totalWords' | 'account' | 'onOpenTools' | 'onExport' | 'view' | 'projectLocked' | 'activeAgentLabel' | 'onOpenAgents' | 'onCloseAgents' | 'onOpenWriting'>) {
+function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenTools, onExport }: Pick<WorkspaceNavigationProps, 'saveStatus' | 'syncStatus' | 'totalWords' | 'account' | 'onOpenTools' | 'onExport'>) {
   return (
     <div className="pis-topbar-actions">
       <div className="pis-save-state" data-state={saveStatus} role="status" aria-live="polite" title={SAVE_LABELS[saveStatus]}>
@@ -101,19 +91,8 @@ function WorkspaceActions({ saveStatus, syncStatus, totalWords, account, onOpenT
         <span className="pis-sync-label">{SYNC_LABELS[syncStatus]}</span>
       </div>
       <span className="pis-word-total">{totalWords.toLocaleString('hr-HR')} riječi</span>
-      <div className="pis-phase-state" aria-label="Trenutna faza rada">
-        <b>{WORKSPACE_VIEW_LABELS[view || 'writing']}</b>
-        {projectLocked && <span>Projekt zaključan</span>}
-        {activeAgentLabel && <small>{activeAgentLabel}</small>}
-      </div>
       <div className="pis-desktop-account">{account}</div>
       <ThemeToggle />
-      <button type="button" className="pis-toolbar-button" onClick={onOpenTools}>Projekt</button>
-      {view === 'home'
-        ? <button type="button" className="pis-toolbar-button pis-agents-button" onClick={onOpenWriting}>Nastavi pisati</button>
-        : view === 'writing'
-        ? <button type="button" className="pis-toolbar-button pis-agents-button" onClick={onOpenAgents}>Agenti</button>
-        : <button type="button" className="pis-toolbar-button pis-agents-button" onClick={onCloseAgents}>Radni prostor</button>}
       <button type="button" className="pis-export-button" onClick={onExport}>Izvezi DOCX <span aria-hidden="true">↓</span></button>
       <WorkspaceOverflowMenu account={account} onOpenTools={onOpenTools} onExport={onExport} />
     </div>
@@ -128,19 +107,13 @@ export type WorkspaceNavigationProps = {
   account?: ReactNode
   onOpenTools?: () => void
   onExport: () => void
-  view?: WorkspaceView
-  projectLocked?: boolean
-  activeAgentLabel?: string
-  onOpenAgents?: () => void
-  onCloseAgents?: () => void
-  onOpenWriting?: () => void
 }
 
-export function WorkspaceNavigation({ projectTitle, saveStatus, syncStatus, totalWords, account, onOpenTools, onExport, view, projectLocked, activeAgentLabel, onOpenAgents, onCloseAgents, onOpenWriting }: WorkspaceNavigationProps) {
+export function WorkspaceNavigation({ projectTitle, saveStatus, syncStatus, totalWords, account, onOpenTools, onExport }: WorkspaceNavigationProps) {
   return (
     <header className="pis-topbar">
       <WorkspaceBrand projectTitle={projectTitle} />
-      <WorkspaceActions saveStatus={saveStatus} syncStatus={syncStatus} totalWords={totalWords} account={account} onOpenTools={onOpenTools} onExport={onExport} view={view} projectLocked={projectLocked} activeAgentLabel={activeAgentLabel} onOpenAgents={onOpenAgents} onCloseAgents={onCloseAgents} onOpenWriting={onOpenWriting} />
+      <WorkspaceActions saveStatus={saveStatus} syncStatus={syncStatus} totalWords={totalWords} account={account} onOpenTools={onOpenTools} onExport={onExport} />
     </header>
   )
 }

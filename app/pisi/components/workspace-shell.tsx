@@ -6,6 +6,7 @@ import { countDocumentWords } from '../../../lib/manuscript/model'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 import type { SyncStatus } from '../../../lib/manuscript/sync-status'
 import { MobileWorkspaceNav } from './mobile-workspace-nav'
+import { ProjectNavigation, type ProjectNavItem } from './project-navigation'
 import { WorkspaceNavigation, type SaveStatus } from './workspace-navigation'
 
 export type MobileView = 'outline' | 'editor' | 'assistant'
@@ -27,11 +28,10 @@ export function WorkspaceShell({
   projectHome,
   view = 'writing',
   projectLocked = false,
-  activeAgentLabel,
   agenticContent,
-  onOpenAgents,
-  onCloseAgents,
-  onOpenWriting,
+  activeNavItem,
+  onNavigate,
+  workType,
 }: {
   manuscript: ManuscriptV1
   saveStatus: SaveStatus
@@ -53,6 +53,9 @@ export function WorkspaceShell({
   onOpenAgents?: () => void
   onCloseAgents?: () => void
   onOpenWriting?: () => void
+  activeNavItem?: ProjectNavItem
+  onNavigate?: (item: ProjectNavItem) => void
+  workType?: 's' | 'z' | 'd'
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
 
@@ -66,14 +69,11 @@ export function WorkspaceShell({
         account={account}
         onOpenTools={onOpenTools}
         onExport={onExport}
-        view={view}
-        projectLocked={projectLocked}
-        activeAgentLabel={activeAgentLabel}
-        onOpenAgents={onOpenAgents}
-        onCloseAgents={onCloseAgents}
-        onOpenWriting={onOpenWriting}
       />
 
+      <div className="pis-workspace-frame">
+        {activeNavItem && onNavigate && workType && <ProjectNavigation activeItem={activeNavItem} onNavigate={onNavigate} workType={workType} />}
+        <div className="pis-workspace-content">
       {view === 'home' && projectHome
         ? <main className="pis-project-home-main" aria-label="Projektna početna">{projectHome}</main>
         : view !== 'writing' && agenticContent
@@ -83,6 +83,8 @@ export function WorkspaceShell({
           <main className="pis-editor-column">{editor}</main>
           <aside className="pis-assistant-column" aria-label="Katedra urednik">{assistant}</aside>
         </div>}
+        </div>
+      </div>
 
       <MobileWorkspaceNav activeMobileView={activeMobileView} onMobileViewChange={onMobileViewChange} />
     </div>

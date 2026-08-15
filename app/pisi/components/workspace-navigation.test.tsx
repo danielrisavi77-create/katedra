@@ -26,13 +26,18 @@ function renderNavigation(overrides: Partial<React.ComponentProps<typeof Workspa
 }
 
 describe('WorkspaceNavigation', () => {
-  it('shows project identity, active section, save status and primary actions', () => {
+  it('keeps project identity and workspace status in the topbar without an agent label', () => {
     renderNavigation()
+
+    expect(screen.queryByText('Autonomni agenti')).toBeNull()
 
     expect(screen.getByRole('link', { name: /Katedra početna/i })).toBeTruthy()
     expect(screen.queryByText('Teorijski okvir')).toBeNull()
     expect(screen.getByRole('status').textContent).toMatch(/Spremljeno/i)
-    expect(screen.getByRole('button', { name: /Projekt/i })).toBeTruthy()
+    expect(screen.getByText(/1[,.]?240/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'daniel@example.com' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /temu/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Dodatne radnje/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Izvezi DOCX/i })).toBeTruthy()
   })
 
@@ -43,7 +48,8 @@ describe('WorkspaceNavigation', () => {
 
     renderNavigation({ onOpenTools, onExport })
 
-    await user.click(screen.getByRole('button', { name: /^Projekt$/i }))
+    await user.click(screen.getByRole('button', { name: /Dodatne radnje/i }))
+    await user.click(screen.getByRole('menuitem', { name: /^Projekt$/i }))
     await user.click(screen.getByRole('button', { name: /Izvezi DOCX/i }))
 
     expect(onOpenTools).toHaveBeenCalledOnce()
