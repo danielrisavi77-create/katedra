@@ -23,19 +23,22 @@ export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript
     const storageKey = `${RUN_STORAGE_PREFIX}${projectId}`
     const resume = async () => {
       const storedRunId = readStoredRunId(storageKey)
-      if (storedRunId) {
+      const response = await fetch(`/api/agent-runs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
+      if (!response?.ok) {
+        if (storedRunId && !cancelled) setRunId(storedRunId)
+        return
+      }
+      const body = await response.json().catch(() => ({})) as { runs?: unknown }
+      if (!Array.isArray(body.runs)) return
+      const runRecords = body.runs.filter((run): run is Record<string, unknown> => Boolean(run && typeof run === 'object'))
+      const storedRunStillExists = storedRunId && runRecords.some((run) => run.run_id === storedRunId)
+      if (storedRunStillExists) {
         if (!cancelled) setRunId(storedRunId)
         return
       }
-
-      const response = await fetch(`/api/agent-runs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
-      if (!response?.ok) return
-      const body = await response.json().catch(() => ({})) as { runs?: unknown }
-      if (!Array.isArray(body.runs)) return
-      const active = body.runs.find((run) => {
-        if (!run || typeof run !== 'object') return false
-        const value = run as Record<string, unknown>
-        return typeof value.run_id === 'string' && RESUMABLE_STATUSES.has(String(value.status || ''))
+      if (storedRunId) removeStoredRunId(storageKey)
+      const active = runRecords.find((run) => {
+        return typeof run.run_id === 'string' && RESUMABLE_STATUSES.has(String(run.status || ''))
       }) as Record<string, unknown> | undefined
       const nextRunId = typeof active?.run_id === 'string' ? active.run_id.trim() : ''
       if (!nextRunId || cancelled) return

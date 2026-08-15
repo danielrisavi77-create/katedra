@@ -15,7 +15,7 @@ External dependencies are explicitly marked `BLOCKED_EXTERNAL`.
 | G6 | Diplomski purchase unlocks the same project and workflow | BLOCKED_EXTERNAL | Same external checkout/entitlement dependency |
 | G7 | Lekta check, sanitized handoff, remediation and fresh re-check | BLOCKED_EXTERNAL | Browser E2E exists, but a complete run requires configured Lekta preview and DOCX fixture execution |
 | G8 | Returning user resumes the last active project phase | PASS (local) | Workspace view persistence regression, explicit account-project selection test, and Playwright reload check reopen `writing` |
-| G9 | Network, session, provider, balance, checkout and malformed-state failures recover honestly | BLOCKED_EXTERNAL | Local route/unit failure tests, Playwright malformed-state recovery, and active-run resume component coverage pass; authenticated provider, session and payment failure recovery requires staging |
+| G9 | Network, session, provider, balance, checkout and malformed-state failures recover honestly | BLOCKED_EXTERNAL | Local route/unit failure tests, Playwright malformed-state recovery, active-run resume, and stale-run marker recovery coverage pass; authenticated provider, session and payment failure recovery requires staging |
 | G10 | Student reaches completion, submission and applicable defense workflow | BLOCKED_EXTERNAL | Requires the full paid workflow, canonical Lekta result and staging credentials |
 
 ## Required commands

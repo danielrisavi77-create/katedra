@@ -1,5 +1,47 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ax
+
+### Root cause selected
+
+Priority: P1 G9 stale active-run marker. The first recovery fix trusted a
+project-scoped local run ID whenever one existed. If the server had already
+removed or archived that run, a reload could still reopen a non-canonical
+agent dashboard instead of recovering the current project state.
+
+### Fix
+
+- Always validate a stored run ID against the canonical
+  `GET /api/agent-runs?projectId=...` list when that request succeeds.
+- Remove the local marker when the canonical list no longer contains it.
+- Fall back to the newest resumable server run and persist that ID locally.
+- Retain the stored ID only when the server list request fails, preserving
+  the best available offline/session fallback without inventing a run.
+
+### Verification
+
+- TDD regression: PASS; a stale local ID is discarded and the current paused
+  server run is restored.
+- Full suite: PASS (138 test files, 485 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- The authenticated server continuation itself remains staging-dependent and
+  was not represented as a local production proof.
+
+### Golden Journey impact
+
+- G9: reload recovery no longer trusts a stale local run marker when the
+  canonical project-scoped run list is available.
+- G5-G6/G10: paid workflows retain the latest valid run checkpoint locally
+  while canonical worker continuation remains a staging concern.
+- G0-G4, G7-G8: no intended behavior change.
+
+### Remaining issues
+
+- Canonical worker execution, authenticated session recovery and billing
+  reconciliation still require Lekta/staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15aw
 
 ### Root cause selected
