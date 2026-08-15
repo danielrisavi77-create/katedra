@@ -1,5 +1,49 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bn — canonical landing promise
+
+### Root cause selected
+
+Priority: P2 product-copy consistency. The public landing brand subtitle said
+“Od teme do Katedre”, while the Product Constitution and the V1 mission define
+Katedra's promise as “Od teme do obrane”. The hero paragraph already used the
+canonical wording, so the mismatch was visible to a first-time visitor.
+
+### Fix
+
+- Changed only the landing brand subtitle to “Od teme do obrane”.
+- Added `app/landing-copy-contract.test.js` so the canonical promise is
+  present and the stale wording cannot return.
+- No layout, navigation, pricing, animation or product behavior was changed.
+
+### Verification
+
+- TDD regression: PASS; the new contract test failed before the copy change and
+  passed afterward.
+- Landing browser assertion: PASS; the rendered subtitle is exactly
+  “Od teme do obrane”, with one `main` and no page errors.
+- `npm.cmd test`: PASS (143 test files, 500 passed, 4 skipped).
+- `npm.cmd run typecheck`, `npm.cmd run lint` and `npm.cmd run build`: PASS.
+- Diff review: PASS; only the prescribed subtitle and its regression test were
+  changed.
+
+### Golden Journey impact
+
+- G0: improved alignment between the public promise and the first-visit
+  experience.
+- No intended behavior change to G1-G10.
+
+### Commit
+
+The verified copy fix and this audit entry are committed together under
+`fix: align landing promise with product vision`.
+
+### Remaining issues
+
+- No new local code-fixable P0 or P1 issue was found. External commerce,
+  canonical Lekta and staging blockers remain documented in
+  `docs/autonomous/BLOCKERS.md`.
+
 ## Cycle: 2026-08-15bm — public light/dark route smoke
 
 ### Root cause selected

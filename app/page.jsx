@@ -24,7 +24,7 @@ export default function LandingPage() {
             <div className="logo-badge">K</div>
             <div>
               <h1 className="landing-brand-title" style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.4px' }}>Katedra</h1>
-              <p className="landing-brand-subtitle" style={{ fontSize: 12.5, color: 'var(--mut)', marginTop: 1 }}>Od teme do Katedre</p>
+              <p className="landing-brand-subtitle" style={{ fontSize: 12.5, color: 'var(--mut)', marginTop: 1 }}>Od teme do obrane</p>
             </div>
           </div>
           <div className="landing-header-actions"><ThemeToggle /><Link href="/prijava" style={{ color: 'var(--acc)', fontSize: 13.5, fontWeight: 700 }}>Prijavi se</Link></div>
