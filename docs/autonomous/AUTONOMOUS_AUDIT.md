@@ -1,5 +1,50 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15j
+
+### Root cause selected
+
+Priority: P0 (production `/api/balance` could fall back to legacy billing
+behavior when canonical project contracts were disabled).
+
+The balance endpoint influences the paywall and free-starter path. Unlike the
+chat, checkout, webhook and state routes, it did not fail closed when
+project-lock enforcement or billing RPC v2 was missing, so configuration drift
+could make the UI use the legacy global-wallet path.
+
+### Fix
+
+- Require both `KATEDRA_PROJECT_LOCKS_ENABLED=true` and
+  `KATEDRA_BILLING_RPC_CONTRACT=v2` for production `/api/balance` requests.
+- Return `503` before creating an admin client or reading wallet state when
+  either contract is unavailable.
+- Add a runtime regression for the unsafe production configuration.
+
+### Verification
+
+- TDD regression: PASS; the new test was red before the guard and green
+  afterward.
+- Focused balance tests: PASS (2 tests).
+- Full Katedra suite: PASS (130 files, 439 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright local smoke: PASS; `/pisi?tip=d` and `/racun` at 390px and
+  1440px had no horizontal overflow or page exceptions. Anonymous `/racun`
+  API `401` responses are expected and do not produce page errors.
+
+### Commit
+
+- `603e165 fix: fail closed balance project access`
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Production agentic flags remain disabled until canonical preflight and
+  authenticated staging evidence pass.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15i
 
 ### Root cause selected

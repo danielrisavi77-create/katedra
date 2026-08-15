@@ -30,6 +30,13 @@ async function handleGET(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (
+    process.env.NODE_ENV === 'production'
+    && (process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true' || process.env.KATEDRA_BILLING_RPC_CONTRACT !== 'v2')
+  ) {
+    console.error(JSON.stringify({ eventName: 'balance_project_contract_unavailable', userId: user.id }))
+    return Response.json({ error: 'Stanje AI pristupa još nije konfigurirano za siguran projektni rad.' }, { status: 503 })
+  }
   const db = createAdminClient()
 
   const projectId = new URL(req.url).searchParams.get('projectId')?.trim() || ''
