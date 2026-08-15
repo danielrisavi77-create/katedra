@@ -183,7 +183,7 @@
   .katedra-page .fld input,.katedra-page .fld textarea,.katedra-page .fld select{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;color:var(--txt);font-size:14px;padding:10px 12px;font-family:inherit;outline:none;transition:border-color .15s}
   .katedra-page .fld input:focus,.katedra-page .fld textarea:focus,.katedra-page .fld select:focus{border-color:var(--acc)}
   .katedra-page .fld textarea{resize:vertical;min-height:64px}
-  .katedra-page .fld .hint{font-size:11.5px;color:var(--mut2);margin-top:4px}
+  .katedra-page .fld .hint{font-size:11.5px;color:var(--mut);margin-top:4px}
   .katedra-page .fld.missing input,.katedra-page .fld.missing textarea,.katedra-page .fld.missing select{border-color:rgba(var(--bad-rgb),.55)}
   .katedra-page .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media(max-width:480px){.katedra-page .two{grid-template-columns:1fr}}
@@ -350,7 +350,7 @@
   .katedra-page .onb-choice span{display:block;font-size:12px;color:var(--mut);margin-top:2px;font-weight:400}
   .katedra-page .onb-choice.ghost{background:transparent;border-color:transparent}
   .katedra-page .onb-choice.ghost:hover{background:var(--card2);border-color:var(--line2)}
-  .katedra-page .onb-note{font-size:11.5px;color:var(--mut2);margin-top:12px}
+  .katedra-page .onb-note{font-size:11.5px;color:var(--mut);margin-top:12px}
   /* Sporedni ulaz u Completion Scan — mora izgledati manje važno od glavnih
      onb-choice gumba (koje ovaj student vjerojatno traži), ali i dalje kao
      tipka koju je vrijedno kliknuti. */
@@ -1282,17 +1282,20 @@
     line-height:1.7!important;
     box-shadow:0 12px 28px rgba(var(--shadow-rgb),.08);
   }
-  .katedra-page.legal-page .legal-document h3{font-size:18px;margin-top:28px;margin-bottom:8px;color:var(--txt)}
-  .katedra-page.legal-page .legal-document h3:first-child{margin-top:0}
-  .katedra-page.legal-page .legal-document p + h3,
-  .katedra-page.legal-page .legal-document ul + h3{margin-top:30px}
+  .katedra-page.legal-page .legal-document h2{font-size:18px;margin-top:28px;margin-bottom:8px;color:var(--txt)}
+  .katedra-page.legal-page .legal-document h2:first-child{margin-top:0}
+  .katedra-page.legal-page .legal-document p + h2,
+  .katedra-page.legal-page .legal-document ul + h2{margin-top:30px}
   .katedra-page.legal-page .legal-document p,
   .katedra-page.legal-page .legal-document li{font-size:14px}
+  .katedra-page.legal-page .legal-document a,
+  .katedra-page.legal-page .legal-sources a{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
   .katedra-page.legal-page .legal-document ul{padding-left:22px;margin-top:7px}
   .katedra-page.legal-page .legal-document li + li{margin-top:8px}
   .katedra-page.legal-page .legal-sources{margin-top:18px!important;padding:18px 20px!important;border-color:var(--line);background:transparent}
   .katedra-page.legal-page .legal-sources ul{padding-left:20px;margin-top:7px}
   .katedra-page.legal-page .legal-footer-links{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .katedra-page .onb-note a{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
   .katedra-page .legal-consent{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--mut);margin-bottom:14px;line-height:1.45}
   .katedra-page .legal-consent input{margin-top:3px;flex:none}
   .katedra-page .legal-inline-button{

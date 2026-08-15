@@ -30,6 +30,7 @@ export default function LandingPage() {
           <div className="landing-header-actions"><ThemeToggle /><Link href="/prijava" style={{ color: 'var(--acc)', fontSize: 13.5, fontWeight: 700 }}>Prijavi se</Link></div>
         </header>
 
+        <main>
         {/* HERO */}
         <section className="landing-hero" data-reveal="true" style={{ marginTop: 48, marginBottom: 40, textAlign: 'center' }}>
           <h2 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, letterSpacing: '-.5px', lineHeight: 1.15, maxWidth: 720, margin: '0 auto' }}>
@@ -126,6 +127,8 @@ export default function LandingPage() {
             Počni pisati →
           </a>
         </section>
+
+        </main>
 
         <footer className="landing-footer" data-reveal="true" style={{ borderTop: '1px solid var(--line)', paddingTop: 18, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', fontSize: 12.5 }}>
           <Link href="/privatnost" style={{ color: 'var(--mut)' }}>Politika privatnosti</Link>

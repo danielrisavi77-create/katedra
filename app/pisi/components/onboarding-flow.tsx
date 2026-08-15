@@ -116,7 +116,7 @@ export function OnboardingFlow({
   }
 
   return (
-    <div className="pis-onboarding">
+    <main className="pis-onboarding">
       <header className="pis-onboarding-brand">
         <span className="pis-onboarding-brand-name"><span className="pis-brand-mark" aria-hidden="true">K</span><span>Katedra</span></span>
         <ThemeToggle />
@@ -285,7 +285,7 @@ export function OnboardingFlow({
           </div>
         </section>
       )}
-    </div>
+    </main>
   )
 }
 

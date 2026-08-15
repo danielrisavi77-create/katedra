@@ -3,8 +3,8 @@
   --pis-paper: #fbf8f0;
   --pis-paper-deep: #f3eddf;
   --pis-ink: #22252e;
-  --pis-muted: #69675f;
-  --pis-faint: #989287;
+  --pis-muted: #5a574f;
+  --pis-faint: #5a574f;
   --pis-line: rgba(34, 37, 46, 0.16);
   --pis-line-strong: rgba(34, 37, 46, 0.28);
   --pis-blue: #2c5fa8;
@@ -26,7 +26,7 @@ html[data-theme='dark'] {
   --pis-paper-deep: #202d34;
   --pis-ink: #f5eddd;
   --pis-muted: #c1b9aa;
-  --pis-faint: #988f7f;
+  --pis-faint: #c1b9aa;
   --pis-line: rgba(245, 237, 221, .15);
   --pis-line-strong: rgba(245, 237, 221, .3);
   --pis-blue: #78a8eb;

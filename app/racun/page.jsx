@@ -78,7 +78,7 @@ export default function RacunPage() {
 
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', padding: '40px 16px 90px' }}>
-      <div className="wrap" style={{ maxWidth: 640 }}>
+      <main className="wrap" style={{ maxWidth: 640 }}>
         <div className="theme-utility-row"><Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link><ThemeToggle /></div>
         <h1 style={{ marginTop: 16 }}>Moj račun</h1>
 
@@ -184,7 +184,7 @@ export default function RacunPage() {
             </div>
           )}
         </div>}
-      </div>
+      </main>
     </div>
   )
 }
