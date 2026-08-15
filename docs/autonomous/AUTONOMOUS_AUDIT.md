@@ -1,5 +1,45 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15v
+
+### Root cause selected
+
+Priority: P1 integrity boundary in `GET /api/materials`: a manifest was
+accepted based on its storage location and expiry, without checking that its
+embedded material ID and project ID matched the manifest filename and the
+canonical project requested by the user.
+
+### Fix
+
+- Derive the expected material ID from the manifest filename.
+- Reject manifests whose embedded `id` or `projectId` does not match the
+  canonical request context.
+- Add a runtime regression with a future-dated manifest from another project.
+- Correct the filter callback so the integrity helper receives explicit values,
+  not `Array.filter`'s index/array arguments.
+
+### Verification
+
+- TDD regression: PASS; the new runtime test first returned the mismatched
+  manifest, then exposed and caught an intermediate callback bug, and now
+  passes with only the valid manifest returned.
+- Materials and agent focused tests: PASS (28 files, 89 tests).
+- Full Katedra suite and all quality gates will be recorded after this cycle's
+  final verification.
+
+### Golden Journey impact
+
+- G3, G9 and G10: prevents a malformed or cross-project manifest from entering
+  the materials view and later workflow context.
+- G0-G2, G4-G8: no behavior change.
+
+### Remaining issues
+
+- Canonical material deletion tombstoning remains `BLOCKED_EXTERNAL` and is
+  recorded in `BLOCKERS.md`.
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain externally blocked.
+
 ## Cycle: 2026-08-15u — BLOCKED_EXTERNAL discovery
 
 ### Root cause selected

@@ -139,15 +139,21 @@ export async function GET(req) {
   const { data, error } = await supabase.storage.from(BUCKET).list(prefix, { limit: 100 })
   if (error) return Response.json({ error: 'Učitavanje materijala nije uspjelo.' }, { status: 503 })
   const materials = await Promise.all((data || []).filter((entry) => entry.name.endsWith('.manifest.json')).map(async (entry) => {
+    const materialId = entry.name.slice(0, -'.manifest.json'.length)
     const downloaded = await supabase.storage.from(BUCKET).download(`${prefix}/${entry.name}`)
     if (downloaded.error) return null
-    try { return JSON.parse(await downloaded.data.text()) } catch { return null }
+    try {
+      const value = JSON.parse(await downloaded.data.text())
+      return isActiveMaterial(value, project.projectId, materialId) ? value : null
+    } catch { return null }
   }))
-  return Response.json({ materials: materials.filter(isActiveMaterial) })
+  return Response.json({ materials: materials.filter(Boolean).filter((value) => isActiveMaterial(value)) })
 }
 
-function isActiveMaterial(value) {
+function isActiveMaterial(value, expectedProjectId, expectedMaterialId) {
   if (!value || typeof value !== 'object' || typeof value.expiresAt !== 'string') return false
+  if (expectedProjectId !== undefined && value.projectId !== expectedProjectId) return false
+  if (expectedMaterialId !== undefined && value.id !== expectedMaterialId) return false
   const expiresAt = Date.parse(value.expiresAt)
   return Number.isFinite(expiresAt) && expiresAt > Date.now()
 }
