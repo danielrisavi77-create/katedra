@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bb
+
+### Root cause selected
+
+Priority: P2 account export completeness. The account center exposed Pass
+status and AI usage, but `GET /api/account/export` exported only the user and
+project metadata. A user could therefore not export the same account-level
+metadata shown in the account center, while the endpoint had no regression
+test protecting the omission.
+
+### Fix
+
+- Export only the authenticated user's project metadata, catalog-valid Pass
+  summaries and aggregate usage metadata.
+- Normalize active Pass rows whose expiry is in the past to `expired` in the
+  export response.
+- Return warnings when optional Pass or usage queries are unavailable while
+  still allowing the project metadata export.
+- Keep manuscript text, prompts and temporary run payloads out of the export;
+  the local manuscript remains local-only.
+
+### Verification
+
+- TDD red regression: PASS; the new export test failed because `passes` and
+  `usage` were missing before the route change.
+- Focused account export runtime suite: PASS (1 test).
+- Full suite: PASS (139 test files, 491 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G3: account export now includes the same owned Pass and usage metadata as the
+  account center without exporting manuscript content.
+- G0-G2 and G4-G10: no intended behavior change.
+
+### Remaining issues
+
+- Canonical entitlement deployment, authenticated commerce and billing proof
+  still require Lekta/staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ba
 
 ### Root cause selected
