@@ -48,4 +48,10 @@ describe('agent run route contract', () => {
     expect(source).toContain('manuscript.title')
     expect(source).toContain('manuscript.workType')
   })
+
+  it('restricts writing steps to unique sections from the validated manuscript', () => {
+    expect(source).toContain('validateAgentRunSectionSelection')
+    expect(source).toContain('parsed.value.sectionIds')
+    expect(source).toContain('sectionSelection.value')
+  })
 })

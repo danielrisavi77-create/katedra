@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15af
+
+### Root cause selected
+
+Priority: P1 run-shape integrity and cost control. The agent-run endpoint
+accepted arbitrary `sectionIds` from the client. It did not ensure that the
+IDs existed in the submitted manuscript snapshot or that each ID was unique,
+so a malformed client could request nonexistent or duplicate writing steps.
+
+### Fix
+
+- Validate section selection against the already validated manuscript
+  snapshot before calling `create_agent_run`.
+- Reject unknown section IDs and duplicates with HTTP 400.
+- Pass only the validated selection to the canonical run creation call.
+- Keep the existing maximum-count and string-shape checks in the request
+  parser.
+
+### Verification
+
+- TDD regression: PASS; the new selection tests failed before the validator
+  existed and passed after the route guard was wired.
+- Focused request/route tests: PASS (2 files, 14 tests).
+- Full test suite: PASS (133 test files, 466 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated request/route changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G9-G10: prevents malformed run graphs and duplicate writing work from
+  reaching the worker/billing path.
+- G0-G8: no behavior change.
+
+### Remaining issues
+
+- Canonical Lekta RPCs still need staging proof that they enforce the same
+  section contract server-side; local Katedra validation is defense in depth.
+- Authenticated commerce, worker deployment and other external blockers remain
+  documented as `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ae
 
 ### Root cause selected

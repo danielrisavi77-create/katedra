@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
 import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun } from '@/lib/agents/backend-contract'
-import { parseAgentRunRequest } from '@/lib/agents/run-request'
+import { parseAgentRunRequest, validateAgentRunSectionSelection } from '@/lib/agents/run-request'
 import { validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { resolveProjectCapability } from '@/lib/product/server-capabilities'
@@ -39,6 +39,8 @@ export async function POST(req) {
     workType: validatedContext.manuscript.workType,
   })
   if (!lockValidation.ok) return Response.json({ error: lockValidation.error }, { status: lockValidation.status })
+  const sectionSelection = validateAgentRunSectionSelection(parsed.value.sectionIds, validatedContext.manuscript)
+  if (!sectionSelection.ok) return Response.json({ error: sectionSelection.error }, { status: 400 })
 
   const capability = parsed.value.mode === 'autonomous'
     ? 'autonomous_run'
@@ -76,7 +78,7 @@ export async function POST(req) {
     projectId: project.projectId,
     mode: parsed.value.mode,
     sourcePolicy: parsed.value.sourcePolicy,
-    sectionIds: parsed.value.sectionIds,
+    sectionIds: sectionSelection.value,
   })
   if (!created.ok) {
     console.error('canonical create_agent_run failed', { userId: user.id, projectId: project.projectId, error: created.error })
