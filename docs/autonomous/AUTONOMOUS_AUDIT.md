@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ad
+
+### Root cause selected
+
+Priority: P1 manuscript-integrity UX. The agentic review let a user edit a
+verified proposal while retaining the `verified` status. The edited text
+could therefore still appear eligible for acceptance even though the
+verification covered the previous content.
+
+### Fix
+
+- Editing a verified proposal now changes its status to `generated`.
+- The review explains that a new verification is required.
+- Section-level and accept-all actions are disabled until the edited proposal
+  becomes verified again.
+- The existing project, section and `baseRevision` guards remain in place.
+
+### Verification
+
+- TDD regression: PASS; the new dashboard test failed while an edited proposal
+  still remained verified and passed after status invalidation was added.
+- Focused acceptance/revision suite: PASS (4 files, 15 tests).
+- Full test suite: PASS (133 test files, 460 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated UI changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G9 and G10: prevents unverified edits from entering the main manuscript
+  through the agentic acceptance path.
+- G0-G8: no behavior change.
+
+### Remaining issues
+
+- Re-verification of a manually edited proposal still requires the existing
+  intervention/run workflow; no automatic semantic verifier was invented in
+  this cycle.
+- Canonical Lekta deployment, authenticated commerce and other external
+  blockers remain documented as `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ac
 
 ### Root cause selected
