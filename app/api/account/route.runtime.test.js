@@ -100,7 +100,24 @@ describe('GET /api/account', () => {
 
     const body = await (await GET()).json()
 
-    expect(body.usage).toEqual({ requests: 0, inputTokens: 0, outputTokens: 0, charged: 0 })
+    expect(body.usage).toBeNull()
     expect(body.warnings).toContain('AI potrošnja trenutačno nije dostupna.')
+  })
+
+  it('does not present unavailable project or Pass data as empty account state', async () => {
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from(table) {
+        if (table === 'katedra_projects' || table === 'entitlements') return query([], new Error(`${table} unavailable`))
+        return query([])
+      },
+    })
+
+    const body = await (await GET()).json()
+
+    expect(body.projects).toBeNull()
+    expect(body.passes).toBeNull()
+    expect(body.warnings).toContain('Projekti trenutačno nisu dostupni.')
+    expect(body.warnings).toContain('Status Passova trenutačno nije dostupan.')
   })
 })

@@ -1,5 +1,57 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15m
+
+### Root cause selected
+
+Priority: P2 (account data-query failures were rendered as confirmed empty
+state).
+
+`/api/account` converted failed project, Pass and usage queries into empty
+arrays or a zero-valued usage summary. The account UI then displayed those
+values as real facts, which could mislead a returning user during a backend
+outage.
+
+### Fix
+
+- Preserve unavailable account collections and usage as `null` while retaining
+  explicit warnings.
+- Render an em dash and a status message for unavailable metrics instead of
+  confirmed zeroes.
+- Keep the account page usable and expose the warning without sending the user
+  into a false success state.
+- Add route and jsdom regressions for unavailable project/Pass/usage data.
+
+### Verification
+
+- TDD regression: PASS; the new route/UI assertions failed before the null
+  contract and passed afterward.
+- Focused account tests: PASS (8 tests).
+- Full Katedra suite: PASS (131 test files passed, 444 tests passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright localhost regression: PASS at 390px and 1440px; anonymous account
+  actions stayed hidden and unavailable authenticated account data rendered as
+  warnings instead of confirmed zeroes.
+
+### Golden Journey impact
+
+- G9: improved local recovery for account backend/query failures; authenticated
+  staging failure recovery remains external.
+- G8: returning users no longer receive false project/usage zeros during a
+  transient account data failure.
+
+### Commit
+
+- Isolated changeset: `fix: make account data failures explicit`.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15l
 
 ### Root cause selected

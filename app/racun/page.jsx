@@ -32,6 +32,10 @@ export default function RacunPage() {
     return () => { active = false }
   }, [])
 
+  const projectRows = Array.isArray(account?.projects) ? account.projects : null
+  const passRows = Array.isArray(account?.passes) ? account.passes : null
+  const usageSummary = account?.usage && typeof account.usage === 'object' ? account.usage : null
+
   const submit = async () => {
     setLoading(true)
     setError('')
@@ -83,14 +87,22 @@ export default function RacunPage() {
           <section className="panel account-overview" aria-labelledby="account-overview-title">
             <p className="pis-kicker">Projektni račun</p>
             <h2 id="account-overview-title">{account.user.email || 'Tvoj račun'}</h2>
+            {Array.isArray(account.warnings) && account.warnings.length > 0 && (
+              <div className="account-data-warnings" role="status">
+                {account.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+              </div>
+            )}
             <div className="account-overview-grid">
-              <div><b>{account.projects.length}</b><span>projekata</span></div>
-              <div><b>{account.passes.filter((pass) => pass.status === 'active').length}</b><span>aktivnih Passova</span></div>
-              <div><b>{account.projects.filter((project) => project.lekta_score !== null).length}</b><span>Lekta provjera</span></div>
-              <div><b>{account.usage?.requests || 0}</b><span>AI zahtjeva</span></div>
+              <div><b>{projectRows ? projectRows.length : '—'}</b><span>projekata</span></div>
+              <div><b>{passRows ? passRows.filter((pass) => pass.status === 'active').length : '—'}</b><span>aktivnih Passova</span></div>
+              <div><b>{projectRows ? projectRows.filter((project) => project.lekta_score !== null).length : '—'}</b><span>Lekta provjera</span></div>
+              <div><b>{usageSummary ? usageSummary.requests : '—'}</b><span>AI zahtjeva</span></div>
             </div>
-            {account.usage && <p className="account-usage-note">AI potrošnja: {account.usage.inputTokens.toLocaleString('hr-HR')} ulaznih i {account.usage.outputTokens.toLocaleString('hr-HR')} izlaznih tokena. Rukopis i promptovi nisu dio account izvoza.</p>}
-            {account.projects.length > 0 && <ul className="account-project-list">{account.projects.map((project) => <li key={project.project_id}><div><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
+            {usageSummary
+              ? <p className="account-usage-note">AI potrošnja: {usageSummary.inputTokens.toLocaleString('hr-HR')} ulaznih i {usageSummary.outputTokens.toLocaleString('hr-HR')} izlaznih tokena. Rukopis i promptovi nisu dio account izvoza.</p>
+              : <p className="account-usage-note" role="status">AI potrošnja trenutačno nije dostupna; broj zahtjeva nije moguće potvrditi.</p>}
+            {projectRows && projectRows.length > 0 && <ul className="account-project-list">{projectRows.map((project) => <li key={project.project_id}><div><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
+            {account.projects === null && <p role="status">Projekti trenutačno nisu dostupni.</p>}
             <div className="account-data-actions"><a href="/api/account/export" download>Izvezi podatke</a><span>Rukopis ostaje lokalno na uređaju.</span></div>
           </section>
         )}

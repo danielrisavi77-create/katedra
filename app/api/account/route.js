@@ -12,17 +12,19 @@ export async function GET() {
     safeQuery(() => supabase.from('katedra_usage').select('input_tokens, output_tokens, charged, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500)),
   ])
 
-  const usageSummary = (usage.data || []).reduce((summary, row) => ({
-    requests: summary.requests + 1,
-    inputTokens: summary.inputTokens + Number(row.input_tokens || 0),
-    outputTokens: summary.outputTokens + Number(row.output_tokens || 0),
-    charged: summary.charged + Number(row.charged || 0),
-  }), { requests: 0, inputTokens: 0, outputTokens: 0, charged: 0 })
+  const usageSummary = usage.error
+    ? null
+    : (usage.data || []).reduce((summary, row) => ({
+      requests: summary.requests + 1,
+      inputTokens: summary.inputTokens + Number(row.input_tokens || 0),
+      outputTokens: summary.outputTokens + Number(row.output_tokens || 0),
+      charged: summary.charged + Number(row.charged || 0),
+    }), { requests: 0, inputTokens: 0, outputTokens: 0, charged: 0 })
 
   return Response.json({
     user: { id: user.id, email: user.email || null },
-    projects: projects.data || [],
-    passes: normalizePasses(passes.data || []),
+    projects: projects.error ? null : (projects.data || []),
+    passes: passes.error ? null : normalizePasses(passes.data || []),
     usage: usageSummary,
     warnings: [
       ...(projects.error ? ['Projekti trenutačno nisu dostupni.'] : []),
