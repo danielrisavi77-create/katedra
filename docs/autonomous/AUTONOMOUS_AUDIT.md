@@ -34,7 +34,7 @@ operator diagnosis even though the route correctly failed closed with HTTP 503.
 
 ### Commit
 
-- Pending selected-file commit after audit ledger update.
+- Isolated changeset: `fix: repair agent worker error encoding`.
 
 ### Remaining issues
 
