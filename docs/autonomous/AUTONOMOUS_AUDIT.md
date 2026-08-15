@@ -1,5 +1,31 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bo — account center guest smoke
+
+### Root cause selected
+
+Priority: readiness verification for the account-center entry point. The
+anonymous account view needed a fresh browser check to ensure it remains an
+honest, usable gate instead of presenting unavailable account data. No new
+code-fixable P0, P1 or P2 issue was found.
+
+### Verification
+
+- Playwright smoke at 390 px: PASS for `/racun` as an anonymous user.
+- The page clearly presents `Moj račun`, the login action for account
+  management, privacy/data language and the local-only manuscript boundary.
+- The page exposed one `main` landmark and one `h1`, with no horizontal
+  overflow or page errors.
+- No account data, export action or deletion success state was shown without
+  authentication.
+
+### Remaining issues
+
+- Authenticated account persistence, export and canonical deletion authority
+  still require staging identity/Supabase proof and remain
+  `BLOCKED_EXTERNAL` where documented.
+- No local code change was necessary in this cycle.
+
 ## Cycle: 2026-08-15bn — canonical landing promise
 
 ### Root cause selected
