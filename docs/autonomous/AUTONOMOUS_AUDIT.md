@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15h
+
+### Root cause selected
+
+Priority: P1 (legacy DOCX parsing used only a process-local upload limiter).
+
+### Fix
+
+- Production now fails closed unless the distributed Supabase rate-limit store is configured.
+- Production DOCX uploads use the atomic distributed reservation; local development keeps the bounded in-memory limiter.
+- Uploads use a server-generated reservation ID and reject oversized multipart requests before parsing.
+- New runtime regressions cover missing configuration and unavailable distributed reservations.
+
+### Verification
+
+- TDD regression: PASS; the new runtime tests were red before the route change and green afterward.
+- Focused upload/rate-limit tests: PASS (6 files, 13 tests).
+- Full Katedra suite: PASS (130 files, 436 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright local smoke: PASS; `/pisi?tip=d` and `/racun` at 390px and
+  1440px had no horizontal overflow, page errors or console errors.
+- Agentic preflight: expected FAIL-CLOSED; eight staging variables remain
+  absent.
+
+### Commit
+
+- Katedra commit `548e8ad fix: harden docx upload rate limiting`.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Production agentic flags remain disabled until canonical preflight and authenticated staging evidence pass.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+- The current canonical reservation RPC applies the shared 2-active/8-per-minute
+  envelope; a stricter DOCX-specific 1-active/3-per-minute policy still needs
+  a scoped Lekta contract if that product limit is required in production.
+
 ## Cycle: 2026-08-15f
 
 ### Root cause selected
