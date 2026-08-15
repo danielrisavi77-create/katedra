@@ -35,7 +35,8 @@ describe('AgenticIntervention', () => {
     vi.stubGlobal('fetch', fetchMock)
     render(<AgenticIntervention runId="run-1" projectId="project-1" manuscript={manuscript} reason="Nedostaje provjeren izvor." onResumed={onResumed} />)
 
-    expect(screen.getByRole('heading', { name: 'Intervencija' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Dodaj kontekst' })).toBeTruthy()
+    expect(screen.getByText('Zaustavljeno jer')).toBeTruthy()
     expect(screen.getByText('Nedostaje provjeren izvor.')).toBeTruthy()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/materials?projectId=project-1', expect.anything()))
     const sectionTitle = screen.getByLabelText('Naslov sekcije intro')

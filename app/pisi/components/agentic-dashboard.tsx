@@ -6,7 +6,7 @@ import { createAgenticDraft, upsertSectionRevision, type AgenticDraftV1 } from '
 import { plainTextDocument } from '../../../lib/manuscript/model'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
-import { AgenticTimeline, type AgenticTimelineStep } from './agentic-timeline'
+import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from './agentic-timeline'
 import { AgenticReview } from './agentic-review'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 
@@ -38,7 +38,10 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
   const refresh = useCallback(async () => {
     const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
     if (!response?.ok) {
-      if (response) setMessage('Tijek trenutačno nije moguće učitati.')
+      if (response) {
+        const body = await response.json().catch(() => ({}))
+        setMessage(agentRequestMessage(response.status, body?.error, 'Tijek trenutačno nije moguće učitati.'))
+      }
       return
     }
     const body = await response.json().catch(() => ({}))
@@ -71,7 +74,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     }).catch(() => null)
     if (!response?.ok) {
       const body = await response?.json().catch(() => ({}))
-      setMessage(body?.error || 'Promjena statusa nije uspjela.')
+      setMessage(agentRequestMessage(response?.status, body?.error, 'Promjena statusa nije uspjela.'))
       return
     }
     await refresh()
@@ -79,11 +82,16 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
 
   const cancel = async () => {
     const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' }).catch(() => null)
-    if (!response?.ok) { setMessage('Otkazivanje tijeka nije uspjelo.'); return }
+    if (!response?.ok) {
+      const body = await response?.json().catch(() => ({}))
+      setMessage(agentRequestMessage(response?.status, body?.error, 'Otkazivanje tijeka nije uspjelo.'))
+      return
+    }
     await refresh()
   }
 
   const activeStep = useMemo(() => run?.steps.find((step) => ['running', 'retrying'].includes(step.status)) || run?.steps.find((step) => step.status === 'pending'), [run?.steps])
+  const activeSummary = useMemo(() => activeStep ? projectAgentStatus(activeStep) : null, [activeStep])
   const blocked = run?.status === 'blocked'
   const editDraft = (sectionId: string, content: TiptapNode) => {
     setDraft((current) => current ? {
@@ -129,8 +137,8 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
 
   return <section className="pis-agentic-dashboard" aria-live="polite">
     <header className="pis-agentic-dashboard-heading">
-      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Agentički workspace'}</p><h2>Autonomni tijek</h2><p>{activeStep ? `${label(activeStep.agent)} trenutno radi, a ${label(activeStep.verifier)} priprema provjeru.` : run ? runDescription(run.status) : 'Učitavam zadnji checkpoint…'}</p></div>
-      {run && <span className="pis-agent-run-mode">{run.mode || 'autonomno'}</span>}
+      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Proces izrade rada'}</p><h2>Tijek izrade rada</h2><p>{activeSummary ? `${activeSummary.phaseLabel} je u tijeku. ${activeSummary.nextAction}` : run ? runDescription(run.status) : 'Učitavam zadnji checkpoint…'}</p></div>
+      {run && <span className="pis-agent-run-mode">{modeLabel(run.mode)}</span>}
     </header>
     {run && <div className="pis-agentic-dashboard-actions">
       {run.status === 'running' && <button type="button" onClick={() => void transition('pause')}>Pauziraj tijek</button>}
@@ -139,7 +147,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       {['completed', 'cancelled', 'failed'].includes(run.status) && onReset && <button type="button" onClick={onReset}>Novi tijek</button>}
       {blocked && <button type="button" className="is-primary" onClick={() => onIntervention?.()}>Uredi kontekst i nastavi</button>}
     </div>}
-    {blocked && <p className="pis-agentic-blocked" role="alert"><strong>Potrebna je intervencija</strong> Uredi materijale ili plan, zatim nastavi od zadnjeg checkpointa.</p>}
+    {blocked && <p className="pis-agentic-blocked" role="alert"><strong><span>Potrebna je intervencija</span> — tvoja odluka</strong> Uredi materijale ili plan, zatim nastavi od zadnjeg checkpointa.</p>}
     <div className="pis-agentic-dashboard-grid">
       <AgenticTimeline steps={run?.steps || []} />
       <ReadOnlyManuscriptPreview manuscript={manuscript} />
@@ -239,10 +247,21 @@ function normalizeRun(body: Record<string, unknown>): AgenticRun {
   }
 }
 
-function label(value: string) {
-  return value.replace(/_verifier$/u, ' verifikator').replace(/(^|[ _-])([a-z])/gu, (_, prefix: string, letter: string) => `${prefix}${letter.toUpperCase()}`)
+function runDescription(status: RunStatus) {
+  return ({ pending: 'Tijek je pripremljen i čeka prvi checkpoint.', running: 'Katedra radi po redoslijedu.', paused: 'Tijek je pauziran; rukopis je siguran.', completed: 'Tijek je završen i čeka tvoj pregled.', blocked: 'Jedan rezultat treba tvoju odluku.', failed: 'Tijek je zaustavljen zbog greške.', cancelled: 'Tijek je otkazan; rukopis je ostao nepromijenjen.' } as Record<RunStatus, string>)[status] || 'Status tijeka nije poznat.'
 }
 
-function runDescription(status: RunStatus) {
-  return ({ pending: 'Tijek je pripremljen i čeka prvi checkpoint.', running: 'Agenti rade po redoslijedu.', paused: 'Tijek je pauziran; rukopis je siguran.', completed: 'Tijek je završen i čeka tvoj pregled.', blocked: 'Jedan rezultat treba tvoju odluku.', failed: 'Tijek je zaustavljen zbog greške.', cancelled: 'Tijek je otkazan; rukopis je ostao nepromijenjen.' } as Record<RunStatus, string>)[status] || 'Status tijeka nije poznat.'
+function modeLabel(mode?: string): string {
+  return ({ guided: 'Vođeno', accelerated: 'Ubrzano', autonomous: 'Samostalno' } as Record<string, string>)[mode || ''] || 'Tijek rada'
+}
+
+function agentRequestMessage(status: number | undefined, detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail.trim()) return detail
+  return ({
+    401: 'Prijavi se kako bi nastavio ovaj projekt.',
+    402: 'Aktiviraj Pass za ovaj projekt kako bi nastavio.',
+    403: 'Ovaj projekt ili način rada nije dostupan za tvoj račun.',
+    429: 'Previše zahtjeva u kratkom vremenu. Pričekaj trenutak pa pokušaj ponovno.',
+    503: 'Proces izrade trenutačno nije dostupan. Pokušaj ponovno kasnije.',
+  } as Record<number, string>)[status || 0] || fallback
 }

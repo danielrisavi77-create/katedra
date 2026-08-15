@@ -44,9 +44,9 @@ export function AssistantPanel({
   return (
     <section className="pis-assistant" aria-label="Urednik sekcije" data-context-surface="assistant">
       <div className="pis-panel-heading pis-assistant-heading">
-        <p>Katedra · AI urednik</p>
+        <p>Katedra · urednik</p>
         <h2>{selectionText ? 'Radim s označenim tekstom' : sectionTitle}</h2>
-        <span className="pis-ai-disclosure">AI može pogriješiti · ti potvrđuješ svaku izmjenu</span>
+        <span className="pis-ai-disclosure">Prijedlog nije dio rukopisa dok ga ti ne potvrdiš. Ti potvrđuješ svaku izmjenu.</span>
       </div>
 
       {selectionText && <blockquote className="pis-selection-preview">„{selectionText.slice(0, 180)}{selectionText.length > 180 ? '…' : ''}”</blockquote>}

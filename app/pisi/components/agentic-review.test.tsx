@@ -25,6 +25,8 @@ describe('AgenticReview', () => {
 
     expect(screen.getByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
     expect(screen.getByText('Nedostaje izvor.')).toBeTruthy()
+    expect(screen.getByText('Pregledaj rezultat')).toBeTruthy()
+    expect(screen.queryByText(/Agent dashboard|Generator|Autopilot/i)).toBeNull()
     expect(screen.getByRole('button', { name: 'Prihvati sve provjerene' })).toBeTruthy()
     expect(screen.getByRole('button', { name: `Prihvati ${first.title}` })).toBeTruthy()
     expect(screen.getByRole('button', { name: `Prihvati ${second.title}` })).toHaveProperty('disabled', true)

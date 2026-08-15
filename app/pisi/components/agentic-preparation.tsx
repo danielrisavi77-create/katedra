@@ -39,7 +39,7 @@ export function AgenticPreparation({
       <section className="pis-agentic-preparation is-locked" aria-labelledby="pis-preparation-locked-title">
         <p className="pis-kicker">Priprema rada</p>
         <h2 id="pis-preparation-locked-title">Aktiviraj Pass za ovaj projekt.</h2>
-        <p>Materijali, planiranje i agentički tijek dostupni su nakon potvrđene naplate.</p>
+        <p>Materijali, planiranje i vođeni proces izrade dostupni su nakon potvrđene naplate.</p>
       </section>
     )
   }
@@ -54,7 +54,7 @@ export function AgenticPreparation({
         body: JSON.stringify({ mode, sourcePolicy, sectionIds, materialIds, manuscript }),
       })
       const body = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(body.error || 'Agentički tijek nije moguće pokrenuti.')
+      if (!response.ok) throw new Error(agentRequestMessage(response.status, body.error, 'Proces izrade nije moguće pokrenuti.'))
       const runId = String(body.runId || '')
       if (!runId) throw new Error('Pokrenuti tijek nema valjan ID.')
       onRunCreated(runId)
@@ -71,7 +71,7 @@ export function AgenticPreparation({
         <div>
           <p className="pis-kicker">Zaključani projekt</p>
           <h2 id="pis-preparation-title">Priprema rada</h2>
-          <p>Prvo daj agentima kontekst. Zatim odaberi koliko želiš da rade samostalno.</p>
+          <p>Prvo dodaj kontekst rada. Zatim odaberi koliko želiš da Katedra preuzme.</p>
         </div>
         <span className="pis-agent-pass-mark">Pass aktivan</span>
       </header>
@@ -90,15 +90,26 @@ export function AgenticPreparation({
       </div>
 
       <div className="pis-preparation-step">
-        <div className="pis-preparation-step-label"><span>02</span><div><b>Odredi granice rada</b><small>Provider se bira automatski. Ti određuješ izvore i razinu autonomije.</small></div></div>
+        <div className="pis-preparation-step-label"><span>02</span><div><b>Odredi granice rada</b><small>Katedra odabire tehničku postavu. Ti određuješ izvore i razinu samostalnosti.</small></div></div>
         <AgentTeamSelector mode={mode} sourcePolicy={sourcePolicy} onModeChange={setMode} onSourcePolicyChange={setSourcePolicy} />
       </div>
 
       <div className="pis-preparation-step pis-preparation-start">
-        <div className="pis-preparation-step-label"><span>03</span><div><b>Pokreni izradu</b><small>Run se izvršava po checkpointima. Možeš zatvoriti preglednik, pauzirati ga i kasnije urediti kontekst.</small></div></div>
+        <div className="pis-preparation-step-label"><span>03</span><div><b>Pokreni izradu rada</b><small>Tijek se izvršava po kontrolnim točkama. Možeš zatvoriti preglednik, pauzirati ga i kasnije urediti kontekst.</small></div></div>
         <button type="button" className="is-primary" disabled={busy} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : mode === 'autonomous' ? 'Pokreni autonomni tijek' : 'Pokreni tijek'}</button>
       </div>
       {message && <p className="pis-agent-message" role="alert">{message}</p>}
     </section>
   )
+}
+
+function agentRequestMessage(status: number, detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail.trim()) return detail
+  return ({
+    401: 'Prijavi se kako bi nastavio ovaj projekt.',
+    402: 'Aktiviraj Pass za ovaj projekt kako bi nastavio.',
+    403: 'Ovaj projekt ili način rada nije dostupan za tvoj račun.',
+    429: 'Previše zahtjeva u kratkom vremenu. Pričekaj trenutak pa pokušaj ponovno.',
+    503: 'Proces izrade trenutačno nije dostupan. Pokušaj ponovno kasnije.',
+  } as Record<number, string>)[status] || fallback
 }

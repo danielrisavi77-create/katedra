@@ -59,5 +59,23 @@ describe('AgenticPreparation', () => {
     expect(screen.getByRole('heading', { name: 'Priprema rada' })).toBeTruthy()
     expect(screen.getByText('Digitalna javna uprava')).toBeTruthy()
     expect(screen.getByText(/Tema i vrsta rada zaključane su za ovaj Pass/)).toBeTruthy()
+    expect(screen.getByText(/Katedra odabire tehničku postavu/i)).toBeTruthy()
+    expect(screen.getByText(/Pokreni izradu rada/i)).toBeTruthy()
+  })
+
+  it('shows readable material states and a retry action', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ materials: [
+      { id: 'm-processing', name: 'upute.pdf', kind: 'mentor', extractionStatus: 'processing' },
+      { id: 'm-extracted', name: 'literatura.pdf', kind: 'source', extractionStatus: 'extracted' },
+      { id: 'm-review', name: 'sken.png', kind: 'scan', extractionStatus: 'needs_review' },
+      { id: 'm-failed', name: 'stari-rad.docx', kind: 'draft', extractionStatus: 'failed' },
+    ] }) }))
+    render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} onRunCreated={vi.fn()} />)
+
+    expect(await screen.findByText('Čitamo')).toBeTruthy()
+    expect(screen.getByText('Pročitano')).toBeTruthy()
+    expect(screen.getAllByText('Potrebna provjera').length).toBeGreaterThan(0)
+    expect(screen.getByText('Nije moguće pročitati')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pokušaj ponovno' })).toBeTruthy()
   })
 })

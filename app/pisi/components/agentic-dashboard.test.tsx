@@ -42,11 +42,13 @@ describe('AgenticDashboard', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => runningBody }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
-    expect(await screen.findByRole('heading', { name: 'Autonomni tijek' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Tijek izrade rada' })).toBeTruthy()
     expect(screen.getByText('Read-only pregled')).toBeTruthy()
     expect(screen.getByText('Početni tekst rada.')).toBeTruthy()
-    expect(screen.getAllByText(/Sources/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Literatura')).toBeTruthy()
     expect(screen.getByText(/Pokušaj 2\/3/)).toBeTruthy()
+    expect(screen.getAllByText(/verifikator/i).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Autonomni tijek|Agentički workspace|Agent dashboard|Generator|Autopilot/i)).toBeNull()
   })
 
   it('keeps the review label while it shows an existing run checkpoint', async () => {
@@ -54,7 +56,14 @@ describe('AgenticDashboard', () => {
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} requestedPhase="review" />)
 
     expect(await screen.findByText('Pregled rezultata')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Autonomni tijek' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Tijek izrade rada' })).toBeTruthy()
+  })
+
+  it('keeps authorization and availability errors readable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 402, json: async () => ({}) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Aktiviraj Pass za ovaj projekt kako bi nastavio.')
   })
 
   it('pauses the server-side run and refreshes its status', async () => {

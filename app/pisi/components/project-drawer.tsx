@@ -89,7 +89,7 @@ export function ProjectDrawer({
         </header>
         <nav aria-label="Projektni alati">
           {([
-            ['plan', 'Plan'], ['agents', 'Agenti'], ['sources', 'Izvori'], ['mentor', 'Mentor'],
+            ['plan', 'Plan'], ['sources', 'Literatura'], ['mentor', 'Mentor'],
             ['rules', 'Pravila'], ['lekta', 'Lekta'], ['help', 'Pomoć'],
           ] as const).map(([value, label]) => <button type="button" key={value} className={tab === value ? 'is-active' : ''} onClick={() => selectTab(value)}>{label}</button>)}
           <button type="button" className={tab === 'history' ? 'is-active' : ''} onClick={() => selectTab('history')}>Povijest</button>
@@ -120,7 +120,7 @@ export function ProjectDrawer({
 
           {tab === 'sources' && (
             <section>
-              <p className="pis-kicker">Lokalna biblioteka</p><h3>Izvori uz rukopis.</h3>
+              <p className="pis-kicker">Lokalna biblioteka</p><h3>Literatura uz rukopis.</h3>
               <div className="pis-inline-form"><input value={sourceTitle} onChange={(event) => setSourceTitle(event.target.value)} placeholder="Naslov izvora" /><input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="DOI ili poveznica" /><button type="button" onClick={addSource}>Dodaj</button></div>
               <ul className="pis-tool-list">
                 {manuscript.sources.map((source) => <li key={source.id}><div><b>{source.title}</b><small>{source.urlOrDoi || 'Bez poveznice'} · {source.verified ? 'provjereno' : 'provjeri prije uporabe'}</small></div><button type="button" onClick={() => onRemoveSource(source.id)}>Ukloni</button></li>)}

@@ -560,6 +560,7 @@ html[data-theme='dark'] .pis-phase-state b { color: var(--pis-yellow); }
 .pis-timeline-step-copy { display: grid; gap: 4px; min-width: 0; }
 .pis-timeline-step-copy b { color: var(--pis-ink); font-size: 13px; font-weight: 600; }
 .pis-timeline-step-copy small { color: var(--pis-muted); font-size: 10px; line-height: 1.4; }
+.pis-timeline-step-copy .pis-timeline-next { margin: 3px 0 0; color: var(--pis-blue-dark); font-size: 10px; line-height: 1.4; }
 .pis-timeline-step-copy p { margin: 3px 0 0; color: var(--pis-red); font-size: 10px; line-height: 1.4; }
 .pis-agentic-timeline-list em { color: var(--pis-muted); font: 9px/1.2 Arial, sans-serif; text-transform: uppercase; }
 .pis-readonly-preview { padding: 18px; border: 1px solid var(--pis-line-strong); background: var(--pis-paper-deep); }
@@ -600,6 +601,7 @@ html[data-theme='dark'] .pis-phase-state b { color: var(--pis-yellow); }
 .pis-review-item textarea { width: 100%; min-height: 130px; padding: 14px; border: 1px solid var(--pis-line-strong); outline: 0; background: var(--pis-paper-deep); color: var(--pis-ink); font: 14px/1.6 Georgia, 'Times New Roman', serif; resize: vertical; }
 .pis-review-item textarea:focus { border-color: var(--pis-blue); }
 .pis-review-verification { margin: 10px 0 0; color: var(--pis-muted); font-size: 10px; line-height: 1.5; }
+.pis-review-verification strong { color: var(--pis-ink); font-weight: 700; }
 .pis-review-item-actions { display: flex; gap: 8px; margin-top: 13px; }
 .pis-review-item-actions button { padding: 9px 12px; border: 1px solid var(--pis-line-strong); background: none; color: var(--pis-blue-dark); cursor: pointer; font-size: 10px; font-weight: 700; }
 .pis-review-item-actions button.is-primary { border-color: var(--pis-blue-dark); background: var(--pis-blue-dark); color: var(--pis-on-accent); }
@@ -635,6 +637,8 @@ html[data-theme='dark'] .pis-agentic-dashboard-actions button { color: var(--pis
 .pis-material-list li div, .pis-agent-steps li div { display: grid; gap: 3px; min-width: 0; }
 .pis-material-list b, .pis-agent-steps b { overflow: hidden; color: var(--pis-ink); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .pis-material-list small, .pis-agent-steps small { color: var(--pis-muted); font-size: 10px; }
+.pis-material-list li > button { padding: 5px 7px; border: 1px solid var(--pis-line-strong); background: none; color: var(--pis-blue-dark); cursor: pointer; font: 700 9px/1.2 Arial, sans-serif; white-space: nowrap; }
+.pis-material-list li > button:disabled { color: var(--pis-faint); cursor: wait; }
 .pis-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pis-faint); }
 .pis-status-dot.is-extracted, .pis-status-dot.is-verified { background: var(--pis-success); }
 .pis-status-dot.is-needs_review, .pis-status-dot.is-processing { background: var(--pis-yellow); }
@@ -655,7 +659,10 @@ html[data-theme='dark'] .pis-agentic-dashboard-actions button { color: var(--pis
 .pis-agent-steps em { color: var(--pis-muted); font: 9px/1.2 Arial, sans-serif; text-transform: uppercase; }
 html[data-theme='dark'] .pis-agent-choice.is-selected b,
 html[data-theme='dark'] .pis-file-button,
-html[data-theme='dark'] .pis-run-actions button { color: var(--pis-yellow); }
+html[data-theme='dark'] .pis-run-actions button,
+html[data-theme='dark'] .pis-material-list li > button,
+html[data-theme='dark'] .pis-timeline-step-copy .pis-timeline-next { color: var(--pis-yellow); }
+html[data-theme='dark'] .pis-review-verification strong { color: var(--pis-ink); }
 html[data-theme='dark'] .pis-lock-note strong { color: var(--pis-yellow); }
 
 .pis-mobile-nav { display: none; }
