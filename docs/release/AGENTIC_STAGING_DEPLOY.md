@@ -47,6 +47,11 @@ KATEDRA_BILLING_RPC_CONTRACT=v2
 KATEDRA_RATE_LIMIT_STORE=supabase
 ```
 
+`KATEDRA_MATERIAL_DELETE_RPC_CONTRACT` se namjerno ne postavlja u ovoj fazi.
+Postavlja se tek nakon što Lekta deploya i staging-testira canonical
+deletion-tombstone RPC; bez njega `DELETE /api/materials/:materialId` mora
+ostati na kontroliranom `503`.
+
 Uz to moraju postojati postojeći Supabase, Anthropic, Stripe, Resend i app
 URL secrets iz [staging money-flow runbooka](./STAGING_MONEY_FLOW.md).
 
