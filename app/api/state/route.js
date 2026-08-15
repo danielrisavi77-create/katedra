@@ -98,7 +98,7 @@ function rowToCamel(row) {
     lektaCheckedAt: row.lekta_checked_at,
     lektaIssues: sanitizeLektaIssues(row.lekta_issues),
     lektaFixedTotal: row.lekta_fixed_total,
-    checks: row.checks,
+    checks: sanitizeChecks(row.checks),
     gen: sanitizeGen(row.gen),
     hist: sanitizeHist(row.hist),
     log: sanitizeLog(row.log),
@@ -221,6 +221,16 @@ const GEN_TEXT_PATTERNS = {
   f_rok: /^\d{4}-\d{2}-\d{2}$/u,
   f_datumobr: /^\d{4}-\d{2}-\d{2}$/u,
   f_trajanje: /^\d{1,3}(?:\s*(?:min|minute|minuta))?$/iu,
+}
+
+function sanitizeChecks(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const safe = {}
+  for (const [key, value] of Object.entries(raw).slice(0, 500)) {
+    const safeKey = sanitizeShortText(key, 160)
+    if (safeKey !== undefined && typeof value === 'boolean') safe[safeKey] = value
+  }
+  return safe
 }
 const LOG_BOOLEAN_KEYS = new Set(['done', 'skip', 'open', 'aiGenerated', 'reviewed'])
 const AI_ACK_KEYS = new Set([
@@ -448,7 +458,7 @@ async function handlePUT(req) {
 
   // Full-sync consent never overrides the Constitution's privacy boundary:
   // free-form academic text and document-derived strings stay local.
-  const SANITIZERS = { gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog, lektaIssues: sanitizeLektaIssues }
+  const SANITIZERS = { checks: sanitizeChecks, gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog, lektaIssues: sanitizeLektaIssues }
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
     if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
     const sanitize = SANITIZERS[camel]

@@ -276,6 +276,12 @@ describe('PUT /api/state ownership guard', () => {
       projectId: 'project-1',
       workTypeCanonical: 'seminar',
       topic: 'Tema',
+      checks: {
+        'outline-ready': true,
+        'mentor-comment': false,
+        leakedText: 'tajni akademski sadržaj',
+        nested: { prompt: 'ne smije u shared state' },
+      },
       gen: {
         f_fakultet: 'FPZG',
         f_izvori: 'cijeli tekst rada koji ne smije završiti u shared state'.repeat(20),
@@ -302,6 +308,7 @@ describe('PUT /api/state ownership guard', () => {
     }))
 
     expect(response.status).toBe(200)
+    expect(written.checks).toEqual({ 'outline-ready': true, 'mentor-comment': false })
     expect(written.gen).toEqual({
       f_fakultet: 'FPZG',
       wc_total: 1200,
@@ -330,6 +337,7 @@ describe('PUT /api/state ownership guard', () => {
           maybeSingle: vi.fn().mockResolvedValue({
             data: {
               project_id: 'project-1',
+              checks: { 'outline-ready': true, leakedText: 'tajni tekst', nested: { prompt: 'tajni prompt' } },
               gen: { f_fakultet: 'FPZG', f_izvori: 'tajni tekst', wc_total: '1200', f_brutal: 'yes' },
               hist: [{ t: 'not-a-timestamp', prompt: 'tajni tekst' }],
               log: [{ t: 123, kind: 'ai_response', txt: 'tajni AI odgovor', done: 'yes' }],
@@ -347,6 +355,7 @@ describe('PUT /api/state ownership guard', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
+    expect(body.checks).toEqual({ 'outline-ready': true })
     expect(body.gen).toEqual({ f_fakultet: 'FPZG', wc_total: 1200 })
     expect(body.hist).toEqual([])
     expect(body.log).toEqual([{ t: 123, kind: 'ai_response' }])

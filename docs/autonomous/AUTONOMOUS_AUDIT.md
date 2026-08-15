@@ -1,5 +1,43 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15al
+
+### Root cause selected
+
+Priority: P1 privacy and payload-integrity boundary in `/api/state`. The
+legacy `checks` field was accepted and returned as arbitrary JSON even though
+the current UI uses it only as a map of checklist IDs to booleans. That left a
+second unbounded path for prompt, document or other free-form content to enter
+shared project state.
+
+### Fix
+
+- Sanitize `checks` in both PUT and GET paths.
+- Keep at most 500 short, control-character-free keys and boolean values.
+- Drop text, nested objects, arrays and other unknown values.
+- Preserve the existing ownership, lock and manuscript stripping guards.
+
+### Verification
+
+- TDD regression: PASS; contaminated `checks` input failed the new assertions
+  before the sanitizer and passes after it.
+- State route focused suite: PASS (10 tests).
+- Full suite and global quality gates: pending for this cycle.
+- No database migration is required.
+
+### Golden Journey impact
+
+- G0-G10: no intended workflow change; checklist booleans continue to sync.
+- Privacy: arbitrary `checks` payloads no longer cross the state boundary.
+
+### Remaining issues
+
+- Existing contaminated rows require canonical backend cleanup if present; the
+  route now prevents their return through this projection and blocks new
+  writes.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ak
 
 ### Root cause selected
