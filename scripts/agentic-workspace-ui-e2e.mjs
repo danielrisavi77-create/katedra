@@ -3,7 +3,15 @@ import assert from 'node:assert/strict'
 const baseUrl = String(process.env.KATEDRA_INTEGRATION_URL || '').replace(/\/$/u, '')
 const email = String(process.env.KATEDRA_AUTH_E2E_EMAIL || '')
 const password = String(process.env.KATEDRA_AUTH_E2E_PASSWORD || '')
-if (!baseUrl || !email || !password) throw new Error('KATEDRA_INTEGRATION_URL, KATEDRA_AUTH_E2E_EMAIL and KATEDRA_AUTH_E2E_PASSWORD are required')
+const missingExternal = [
+  ['KATEDRA_INTEGRATION_URL', baseUrl],
+  ['KATEDRA_AUTH_E2E_EMAIL', email],
+  ['KATEDRA_AUTH_E2E_PASSWORD', password],
+].filter(([, value]) => !value).map(([name]) => name)
+if (missingExternal.length) {
+  console.log(`BLOCKED_EXTERNAL: authenticated agentic workspace UI is not run without staging configuration: ${missingExternal.join(', ')}`)
+  process.exit(0)
+}
 
 const { chromium } = await import('playwright')
 const browser = await chromium.launch({ headless: true })

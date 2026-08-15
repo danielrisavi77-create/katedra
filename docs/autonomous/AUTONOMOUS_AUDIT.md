@@ -1965,6 +1965,44 @@ usable or visible).
   staging browser journeys remain external blockers listed in `BLOCKERS.md`.
 - Dependency audit remains blocked by the unavailable npm advisory endpoint.
 
+## Cycle: 2026-08-15h — hybrid mentor workspace browser contract
+
+### Scope
+
+Task 7 adds a local-only Playwright journey for the redesigned hybrid mentor
+workspace. It does not modify application UI, API routes, the database, or
+agentic feature flags.
+
+### Evidence
+
+- `npx.cmd playwright --version`: PASS (`Version 1.61.1`); the locked project
+  Playwright dependency was already available, so no second framework was
+  installed.
+- `node scripts/hybrid-mentor-ui-e2e.mjs`: PASS for the guest
+  `/pisi?tip=d` journey: faculty `FPZG`, program `Politologija`, topic entry,
+  Completion Scan, project home with exactly one `data-primary-action`, entry
+  into writing, local autosave/reload, project drawer and Katedra panel.
+- The browser contract covered `/, /pisi, /racun, /prijava, /registracija,
+  /privatnost, /uvjeti` at `390px`, `768px` and `1440px` in both `light` and
+  `dark` themes: `42/42` route/theme/width checks passed.
+- Each check asserted exactly one `main`, exactly one `h1`, no horizontal
+  overflow and no uncaught `pageerror`. The `/pisi` checks also asserted the
+  project navigation and the three mobile contexts `Pregled`, `Rukopis` and
+  `Katedra`.
+- The existing authenticated UI script now reports `BLOCKED_EXTERNAL` when
+  its staging URL or credentials are absent instead of presenting a generic
+  missing-environment exception.
+
+### External limitation
+
+The local result does not prove checkout, webhook, entitlement, worker,
+provider, canonical Lekta, Supabase/RLS or authenticated recovery behavior.
+Those remain `BLOCKED_EXTERNAL` because this session lacks the staging URL,
+credentials and canonical contracts (`KATEDRA_AUTH_E2E_EMAIL`,
+`KATEDRA_AUTH_E2E_PASSWORD`, worker/model/lock/billing/rate-limit settings).
+G2–G10 are not marked PASS by this UI evidence; their statuses remain governed
+by `docs/autonomous/GOLDEN_JOURNEYS.md` and `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15s
 
 ### Root cause selected
