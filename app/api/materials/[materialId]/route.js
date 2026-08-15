@@ -4,9 +4,11 @@ import { resolveProjectCapability } from '@/lib/product/server-capabilities'
 import { resolveMaterialStorageNames } from '@/lib/materials/storage-paths.js'
 
 const ENABLED = process.env.KATEDRA_MATERIALS_ENABLED === 'true'
+const DELETION_CONTRACT_ENABLED = process.env.KATEDRA_MATERIAL_DELETE_RPC_CONTRACT === 'v1'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
 
 export async function DELETE(req, { params }) {
+  if (!DELETION_CONTRACT_ENABLED) return Response.json({ error: 'Brisanje materijala još nije aktivno na canonical backendu.' }, { status: 503 })
   if (!ENABLED) return Response.json({ error: 'Privremena pohrana materijala još nije aktivna u backendu.' }, { status: 503 })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bd
+
+### Root cause selected
+
+Priority: P1 temporary-material deletion safety. The delete route removed
+private storage objects directly, but the canonical Lekta
+`agent_payload_manifests` row could remain active because no deletion-tombstone
+RPC exists yet. A later run could therefore attach a manifest whose storage
+payload no longer exists.
+
+### Fix
+
+- Add an explicit `KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1` release gate.
+- Return `503` before authentication, ownership lookup or storage access when
+  the canonical deletion contract is not enabled.
+- Preserve the existing storage deletion code only as a post-contract path;
+  the local change does not pretend to implement a Lekta migration or RPC.
+
+### Verification
+
+- TDD red regression: PASS; the route reached the ownership/storage path and
+  returned a misleading not-found response before the guard.
+- Focused deletion guard suite: PASS (1 test).
+- No storage operation occurs while the canonical deletion contract is absent.
+- The canonical tombstone RPC and staging proof remain external requirements.
+
+### Golden Journey impact
+
+- G7: material deletion now fails honestly instead of creating an orphaned
+  canonical manifest/storage mismatch before Lekta contract activation.
+- G0-G6 and G8-G10: no intended behavior change.
+
+### Remaining issues
+
+- Lekta must define/deploy the deletion tombstone RPC and the route must be
+  connected to that exact contract before the new release gate is enabled.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bc
 
 ### Root cause selected

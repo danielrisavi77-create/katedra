@@ -71,8 +71,9 @@ identical payment/project requests before enabling paid production traffic.
 
 ## BLOCKED_EXTERNAL: canonical material deletion tombstone
 
-Evidence: `app/api/materials/[materialId]/route.js` removes the private storage
-objects, but the Katedra repository has no canonical RPC for marking the
+Evidence: `app/api/materials/[materialId]/route.js` now fails closed unless
+`KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1` is explicitly enabled. The route's
+storage-removal path still lacks the canonical RPC for marking the
 corresponding `agent_payload_manifests` row as deleted. Lekta's current
 `attach_agent_payloads_to_run` contract accepts only manifests with
 `deleted_at is null` and can therefore return a deleted material ID even after
