@@ -6,6 +6,7 @@ import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { resolveProjectCapability } from '@/lib/product/server-capabilities'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
+const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
 
 export async function POST(req) {
   if (!ENABLED) return Response.json({ error: 'Agenticni run ugovor još nije aktivan u backendu.' }, { status: 503 })
@@ -71,6 +72,7 @@ export async function POST(req) {
     projectId: project.projectId,
     runId: created.runId,
     manuscript: parsed.value.manuscript,
+    bucket: BUCKET,
   })
   if (!context.ok) {
     await cancelAgentRun(supabase, { userId: user.id, runId: created.runId }).catch(() => undefined)

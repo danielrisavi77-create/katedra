@@ -1,5 +1,54 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15o
+
+### Root cause selected
+
+Priority: P1 (agent-run context snapshots could use a different storage bucket
+than the worker when a custom temporary-materials bucket was configured).
+
+The run creation route relied on `storeAgentRunContext`'s default bucket, while
+the worker and the material routes read `KATEDRA_TEMP_MATERIALS_BUCKET`. A
+custom deployment bucket could therefore accept a run but leave the worker
+unable to load its manuscript context.
+
+### Fix
+
+- Use the same configured bucket in `/api/agent-runs` that the worker and
+  material routes use.
+- Add a route contract regression requiring the configured bucket to be passed
+  into private run-context storage.
+
+### Verification
+
+- TDD regression: PASS; the new bucket assertion failed before the route fix
+  and passed afterward.
+- Focused route tests: PASS (6 tests).
+- Full Katedra suite: PASS (131 test files, 446 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright localhost smoke: PASS for `/pisi?tip=d` and `/racun` at 390px
+  and 1440px; all responses were `200` with no page errors or horizontal
+  overflow. Expected anonymous API `401` responses were treated as auth
+  behavior, not browser failures.
+
+### Golden Journey impact
+
+- G9: removes a deployment-specific failure before the worker can resume a
+  run.
+- G2-G8 and G10: no behavior change.
+
+### Commit
+
+- Pending selected-file commit after audit ledger update.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15n
 
 ### Root cause selected

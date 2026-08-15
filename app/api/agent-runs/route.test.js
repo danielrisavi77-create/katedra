@@ -36,4 +36,9 @@ describe('agent run route contract', () => {
     expect(source).toContain('attachAgentPayloadsToRun')
     expect(source.indexOf('await attachAgentPayloadsToRun')).toBeLessThan(source.indexOf('await activateAgentRun'))
   })
+
+  it('uses the configured private bucket for the run manuscript snapshot', () => {
+    expect(source).toContain("const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'")
+    expect(source).toContain('bucket: BUCKET')
+  })
 })
