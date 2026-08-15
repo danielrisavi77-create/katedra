@@ -1,5 +1,67 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bj — accessibility landmarks and contrast
+
+### Root cause selected
+
+Priority: P2 accessibility and public-screen semantics. A fresh axe-core audit
+found missing `main` landmarks on public pages, a registration page without a
+level-one heading, incorrect legal heading progression, and serious contrast
+or link-distinction findings in registration, legal pages and the light `/pisi`
+onboarding progress copy.
+
+### Fix
+
+- Added one `main` landmark to the landing, onboarding, account, registration
+  and legal page content.
+- Changed registration confirmation/form headings to `h1` and legal section
+  headings from `h3` to `h2`, with matching styles.
+- Increased contrast for authentication helper copy and `/pisi` light-mode
+  muted/faint tokens.
+- Added persistent underlines to inline legal/authentication links so links do
+  not rely on color alone.
+- Added `app/accessibility-contract.test.js` covering the semantic and CSS
+  contract.
+
+### Verification
+
+- TDD red regression: PASS; the new contract test failed before the markup and
+  token changes.
+- Focused accessibility tests: PASS (3 tests), related auth/legal tests: PASS
+  (7 tests).
+- axe-core Playwright audit: PASS for `/`, `/pisi`, `/racun`, `/prijava`,
+  `/registracija`, `/privatnost` and `/uvjeti` at mobile width in both light
+  and dark themes; zero violations.
+- Final Playwright runtime smoke: PASS for the same 14 route/theme
+  combinations; HTTP 200, one `main`, one `h1`, no page errors and no
+  horizontal overflow.
+- Full suite: PASS (142 test files, 499 passed, 4 skipped); typecheck, lint
+  and production build: PASS.
+- The temporary axe tool was removed after the audit and `npm ci` restored
+  `node_modules` to `package-lock.json`; no package or lockfile change was
+  committed.
+- No shared schema or Lekta migration was introduced.
+
+### Commit
+
+`a6d382a` — `fix: harden public accessibility landmarks and contrast`
+
+### Golden Journey impact
+
+- G0 and G8: public entry, onboarding and returning-project surfaces now have
+  stronger landmark/heading semantics and readable mobile copy.
+- G1 and G9: no intended persistence or recovery behavior change; route and
+  reload smoke remained clean.
+- G2-G7 and G10: no intended behavior change; authenticated/commercial/Lekta
+  proof remains external.
+
+### Remaining issues
+
+- No new local code-fixable P0, P1 or P2 issue was found after this fix.
+- Existing Lekta, commerce, Docker/Supabase, account-deletion, material
+  tombstone and dependency-advisory blockers remain documented in
+  `docs/autonomous/BLOCKERS.md`.
+
 ## Cycle: 2026-08-15bi — fresh local readiness audit
 
 ### Root cause selected
