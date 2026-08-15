@@ -73,4 +73,19 @@ describe('AgenticDashboard', () => {
     expect(screen.getByText('Nedostaje provjeren izvor.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeTruthy()
   })
+
+  it('treats a failed run as terminal and offers a new workflow', async () => {
+    const user = userEvent.setup()
+    const onReset = vi.fn()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { ...runningBody.run, status: 'failed' },
+      steps: [{ ...runningBody.steps[1], status: 'failed', last_verification: { issues: [{ message: 'Provider nije dostupan.' }] } }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onReset={onReset} />)
+
+    expect(await screen.findByText(/Tijek je zaustavljen zbog gre/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Novi tijek' }))
+    expect(onReset).toHaveBeenCalledTimes(1)
+  })
 })

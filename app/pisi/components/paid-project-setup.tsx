@@ -11,7 +11,7 @@ import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 export type AgenticWorkspacePhase = 'preparation' | 'dashboard' | 'intervention'
 
 const RUN_STORAGE_PREFIX = 'katedra_agent_run_v1:'
-const RESUMABLE_STATUSES = new Set(['pending', 'running', 'paused', 'blocked', 'failed'])
+const RESUMABLE_STATUSES = new Set(['pending', 'running', 'paused', 'blocked'])
 
 export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript, onPhaseChange, onAcceptDraft }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
   const [runId, setRunId] = useState('')

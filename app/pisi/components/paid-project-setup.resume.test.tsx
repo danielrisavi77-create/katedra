@@ -58,4 +58,21 @@ describe('PaidProjectSetup run recovery', () => {
     await waitFor(() => expect(screen.getByTestId('agent-run-panel').textContent).toBe('run-current'))
     expect(window.localStorage.getItem('katedra_agent_run_v1:project-1')).toBe('run-current')
   })
+
+  it('does not auto-resume a failed server run without a local marker', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ runs: [{ run_id: 'run-failed', status: 'failed' }] }),
+    }))
+
+    render(<PaidProjectSetup
+      projectId="project-1"
+      passActive
+      sectionIds={['section-1']}
+      manuscript={createManuscript({ projectId: 'project-1', workType: 'z' })}
+    />)
+
+    await waitFor(() => expect(screen.getByTestId('agentic-preparation')).toBeTruthy())
+    expect(screen.queryByTestId('agent-run-panel')).toBeNull()
+  })
 })

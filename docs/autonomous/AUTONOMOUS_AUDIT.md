@@ -1,5 +1,52 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ay
+
+### Root cause selected
+
+Priority: P1 G9 failed-run dead end. The agentic workspace treated a
+`failed` run like a blocked run: recovery considered it resumable and the UI
+offered context intervention, even though the context route only accepts
+`paused` or `blocked`. The user could receive a 409 with no visible path to a
+new workflow.
+
+### Fix
+
+- Remove `failed` from the statuses automatically resumed from the canonical
+  run list when there is no local run marker.
+- Keep an explicitly stored failed run visible as a terminal result so its
+  error remains inspectable after reload.
+- Treat only `blocked` as an intervention state.
+- Add `failed` to the terminal actions that expose `Novi tijek`, which clears
+  the project-scoped marker and returns to preparation.
+
+### Verification
+
+- TDD red test: PASS; the new dashboard and recovery regressions failed
+  before the status split and reproduced the dead end.
+- Focused suite: PASS (9 tests across dashboard and recovery components).
+- Full suite: PASS (138 test files, 487 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- Localhost `/pisi`: HTTP 200 with the Katedra workspace shell.
+- Authenticated provider/worker failure recovery remains staging-dependent and
+  was not represented as a local production proof.
+
+### Golden Journey impact
+
+- G9: a terminal provider/worker failure now has an honest recovery action
+  instead of an invalid context-edit path.
+- G5-G6/G10: users can start a fresh paid workflow after a failed run without
+  silently mutating the failed run.
+- G0-G4, G7-G8: no intended behavior change.
+
+### Remaining issues
+
+- Canonical worker execution, authenticated session recovery and billing
+  reconciliation still require Lekta/staging evidence.
+- Durable local edited/rejected proposal state is a separate P1 audit item.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ax
 
 ### Root cause selected

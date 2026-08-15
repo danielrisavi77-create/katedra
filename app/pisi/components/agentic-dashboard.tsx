@@ -54,7 +54,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
   }
 
   const activeStep = useMemo(() => run?.steps.find((step) => ['running', 'retrying'].includes(step.status)) || run?.steps.find((step) => step.status === 'pending'), [run?.steps])
-  const blocked = run?.status === 'blocked' || run?.status === 'failed'
+  const blocked = run?.status === 'blocked'
 
   return <section className="pis-agentic-dashboard" aria-live="polite">
     <header className="pis-agentic-dashboard-heading">
@@ -65,7 +65,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
       {run.status === 'running' && <button type="button" onClick={() => void transition('pause')}>Pauziraj tijek</button>}
       {run.status === 'paused' && <button type="button" className="is-primary" onClick={() => void transition('resume')}>Nastavi tijek</button>}
       {['running', 'paused', 'pending'].includes(run.status) && <button type="button" onClick={() => void cancel()}>Otkaži</button>}
-      {['completed', 'cancelled'].includes(run.status) && onReset && <button type="button" onClick={onReset}>Novi tijek</button>}
+      {['completed', 'cancelled', 'failed'].includes(run.status) && onReset && <button type="button" onClick={onReset}>Novi tijek</button>}
       {blocked && <button type="button" className="is-primary" onClick={() => onIntervention?.()}>Uredi kontekst i nastavi</button>}
     </div>}
     {blocked && <p className="pis-agentic-blocked" role="alert"><strong>Potrebna je intervencija</strong> Uredi materijale ili plan, zatim nastavi od zadnjeg checkpointa.</p>}
