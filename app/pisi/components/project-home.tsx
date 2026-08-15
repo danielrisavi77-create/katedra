@@ -10,7 +10,11 @@ import { ProjectTimeline, type ProjectTimelineItem } from './project-timeline'
 export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: { manuscript: ManuscriptV1; passActive: boolean; syncStatus: string; onNavigate: (destination: NextAction['destination']) => void }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
   const reviewSectionCount = manuscript.sections.filter((section) => section.status === 'review').length
-  const materialCount = (manuscript.meta.materials || []).length + manuscript.sources.length
+  const materials = [
+    ...(manuscript.meta.materials || []),
+    ...manuscript.sources.map((source) => source.title),
+  ]
+  const hasMaterials = materials.length > 0
   const scan = createCompletionScan({
     startMode: totalWords > 0 ? 'existing' : 'new',
     currentState: manuscript.meta.currentState || (totalWords > 0 ? 'draft' : 'topic'),
@@ -18,7 +22,7 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: 
     importedText: totalWords > 0 ? 'local draft' : '',
     mentor: manuscript.meta.mentor || '',
     deadline: manuscript.meta.deadline || '',
-    materials: manuscript.meta.materials || [],
+    materials,
   })
   const stage = projectStage(scan.stage, totalWords, reviewSectionCount)
   const action = resolveNextAction({
@@ -26,7 +30,7 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: 
     totalWords,
     sectionCount: manuscript.sections.length,
     reviewSectionCount,
-    hasMaterials: materialCount > 0,
+    hasMaterials,
     passActive,
   })
 
@@ -47,7 +51,7 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: 
       </div>
 
       <section className="pis-project-home-summary" aria-label="Sažetak projekta">
-        <div><span>Materijali</span><b>{materialCount ? `${materialCount} ${materialCount === 1 ? 'zapis' : 'zapisa'}` : 'Nisu dodani'}</b></div>
+        <div><span>Materijali</span><b>{hasMaterials ? `${materials.length} ${materials.length === 1 ? 'zapis' : 'zapisa'}` : 'Nisu dodani'}</b></div>
         <div><span>Rok</span><b>{manuscript.meta.deadline || 'Nije postavljen'}</b></div>
         <div><span>Mentor</span><b>{manuscript.meta.mentor || 'Nije dodan'}</b></div>
         <div><span>Pass</span><b>{passActive ? 'Aktivan za ovaj projekt' : 'Nije aktivan'}</b></div>
@@ -55,7 +59,7 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: 
       </section>
 
       <div className="pis-project-home-links">
-        <button type="button" onClick={() => onNavigate('sources')}><b>Izvori i materijali</b><span>{materialCount ? 'Otvori lokalnu biblioteku projekta' : 'Dodaj literaturu, upute ili postojeći tekst'}</span></button>
+        <button type="button" onClick={() => onNavigate('sources')}><b>Izvori i materijali</b><span>{hasMaterials ? 'Otvori lokalnu biblioteku projekta' : 'Dodaj literaturu, upute ili postojeći tekst'}</span></button>
         <button type="button" onClick={() => onNavigate('preparation')}><b>{passActive ? 'Pripremi projekt' : 'Pogledaj što dobivaš Passom'}</b><span>{passActive ? 'Materijali, izvori i agentični tijek' : 'Plan ostaje besplatan; plaćeni koraci se otključavaju za projekt'}</span></button>
         <div><b>{syncStatus === 'synced' ? 'Metapodaci sinkronizirani' : 'Rukopis je lokalno spremljen'}</b><span>Tekst ostaje na ovom uređaju</span></div>
       </div>
@@ -77,8 +81,8 @@ function stageLabel(stage: string) {
 
 function timelineItems(stage: string): ProjectTimelineItem[] {
   const stages = [
-    ['started', 'Tema'], ['planned', 'Plan'], ['writing', 'Pisanje'], ['review', 'Revizija'], ['lekta', 'Lekta'], ['completed', 'Predaja'],
+    ['topic', 'Tema'], ['plan', 'Plan'], ['literature', 'Literatura'], ['writing', 'Pisanje'], ['review', 'Revizija'], ['lekta', 'Lekta'], ['submission', 'Predaja'],
   ] as const
-  const active = ({ started: 0, scanned: 0, planned: 1, researching: 1, writing: 2, review: 3, lekta: 4, completed: 5 } as Record<string, number>)[stage] ?? 0
+  const active = ({ started: 0, scanned: 0, planned: 1, researching: 2, writing: 3, review: 4, lekta: 5, completed: 6 } as Record<string, number>)[stage] ?? 0
   return stages.map(([id, label], index) => ({ id, label, state: index < active ? 'complete' : index === active ? 'active' : 'upcoming' }))
 }

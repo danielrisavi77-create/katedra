@@ -73,6 +73,10 @@ it('defines the hybrid workspace surface and navigation tokens', () => {
   expect(css).toContain("html[data-theme='dark'] .pis-project-nav")
 })
 
+it('keeps the mobile project home independently scrollable above the safe area', () => {
+  expect(css).toMatch(/@media \(max-width: 800px\) \{[\s\S]*?\.pis-project-home-main \{[^}]*height: calc\(100vh - 112px - env\(safe-area-inset-bottom\)\);[^}]*max-height: calc\(100vh - 112px - env\(safe-area-inset-bottom\)\);[^}]*overflow-y: auto;[^}]*padding: 32px 20px calc\(90px \+ env\(safe-area-inset-bottom\)\);/)
+})
+
 it('defines exact light and dark values for the mentor workspace tokens', () => {
   const root = css.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
   const dark = css.match(/html\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
