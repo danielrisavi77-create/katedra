@@ -1,5 +1,35 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15br — commercial API boundary review
+
+### Root cause selected
+
+Priority: P0/P1 security and commerce audit. The high-risk Katedra routes were
+reviewed again against the V1 rules: project-specific entitlement, fail-closed
+uncertainty, no manuscript export, verified checkout/webhook state and durable
+withdrawal handling.
+
+### Verification
+
+- `/api/balance` resolves owned projects and active project Passes before
+  exposing access state; billing-contract uncertainty fails closed.
+- `/api/account/export` exports project metadata and aggregate usage only; it
+  does not export manuscript text or prompts.
+- Checkout/webhook routes retain catalog, payment, ownership, signature and
+  project-lock checks; their existing contract/runtime tests remain green.
+- Production withdrawal handling fails closed without distributed reservation,
+  verified sender and the configured durable withdrawal contract; duplicate
+  requests are rejected.
+- Focused route suite: PASS (11 files, 32 tests).
+- No new local code-fixable P0, P1 or P2 issue was found, and no production
+  code was changed in this cycle.
+
+### Remaining issues
+
+- Positive authenticated commerce behavior still requires real staging
+  Supabase/Stripe credentials and canonical Lekta deployment. Local tests do
+  not replace that proof.
+
 ## Cycle: 2026-08-15bq — local Lekta contract verification
 
 ### Root cause selected
