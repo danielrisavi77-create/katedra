@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { readProjectLock } from '@/lib/academic-suite/project-lock'
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
-import { MAX_AGENT_CONTEXT_BYTES } from '@/lib/agents/run-context'
+import { MAX_AGENT_CONTEXT_BYTES, validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { attachAgentPayloadsToRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
@@ -58,19 +58,15 @@ export async function POST(req, { params }) {
   try { body = JSON.parse(rawBody.toString('utf8')) } catch {
     return Response.json({ error: 'Neispravan JSON kontekst.' }, { status: 400 })
   }
+  const validatedContext = validateAgentRunContext({ manuscript: body?.manuscript }, run.project_id)
+  if (!validatedContext.ok) {
+    const status = validatedContext.reason === 'project_mismatch' ? 403 : validatedContext.reason === 'too_large' ? 413 : 400
+    return Response.json({ error: validatedContext.error }, { status })
+  }
   const materialIds = body?.materialIds === undefined ? [] : body.materialIds
   if (!Array.isArray(materialIds) || materialIds.length > 100 || materialIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 200)) {
     return Response.json({ error: 'Popis materijala nije valjan.' }, { status: 400 })
   }
-  const stored = await storeAgentRunContext(supabase, {
-    userId: user.id,
-    projectId: run.project_id,
-    runId,
-    manuscript: body?.manuscript,
-    bucket: BUCKET,
-  })
-  if (!stored.ok) return Response.json({ error: stored.error }, { status: stored.status })
-
   if (materialIds.length > 0) {
     const attached = await attachAgentPayloadsToRun(supabase, {
       userId: user.id,
@@ -85,6 +81,15 @@ export async function POST(req, { params }) {
       return Response.json({ error: 'Svi odabrani materijali nisu potvrđeni za ovaj run.' }, { status: 409 })
     }
   }
+
+  const stored = await storeAgentRunContext(supabase, {
+    userId: user.id,
+    projectId: run.project_id,
+    runId,
+    manuscript: body?.manuscript,
+    bucket: BUCKET,
+  })
+  if (!stored.ok) return Response.json({ error: stored.error }, { status: stored.status })
 
   return Response.json({ runId, manifestId: stored.value.manifestId, expiresAt: stored.value.expiresAt, attachedMaterialIds: [...new Set(materialIds)] })
 }

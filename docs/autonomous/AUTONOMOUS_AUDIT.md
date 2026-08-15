@@ -1,5 +1,49 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15s
+
+### Root cause selected
+
+Priority: P1 (the paused agent-run context endpoint stored a replacement
+manuscript snapshot before the backend confirmed that every selected material
+was attached to the run).
+
+If material attachment failed or returned only a subset, the endpoint returned
+an error after already changing the temporary run context. A later resume could
+therefore observe a snapshot associated with an unsuccessful update.
+
+### Fix
+
+- Validate the manuscript snapshot before performing any material attachment.
+- Confirm all selected material IDs through the canonical Lekta attachment RPC.
+- Store the replacement run context only after the attachment set is complete.
+- Add a route regression proving a partial attachment never stores the new
+  context.
+
+### Verification
+
+- TDD regression: PASS; the new route test failed before the ordering fix and
+  passed afterward.
+- Agent and agent-run focused tests: PASS (31 files, 100 tests).
+- Full Katedra suite: PASS (131 test files, 449 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+- `git diff --check`: PASS for the isolated changes.
+
+### Golden Journey impact
+
+- G3 and G9: prevents an unsuccessful paused-run material update from
+  replacing its temporary context before resume.
+- G0-G2, G4-G8 and G10: no behavior change.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15r
 
 ### Root cause selected
