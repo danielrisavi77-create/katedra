@@ -1,5 +1,40 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15as
+
+### Root cause selected
+
+Priority: P2 guest UX clarity. The landing page described the first step as
+questions “in chat”, while the current product actually starts with a guided
+onboarding form. That created an avoidable expectation mismatch before the
+guest entered `/pisi`.
+
+### Fix
+
+- Change the step description to accurately describe guided questions about
+  the academic work.
+- Add a landing source regression preventing the old chat promise from
+  returning.
+
+### Verification
+
+- TDD regression: PASS; the old copy failed the new assertion and the guided
+  onboarding copy now passes.
+- Browser verification: PASS; the rendered landing step contains the guided
+  onboarding description and no chat promise.
+- Full suite: PASS (134 test files, 478 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+
+### Golden Journey impact
+
+- G0: the cold visitor receives an accurate explanation before starting free.
+- G1-G10: no intended workflow behavior change.
+
+### Remaining issues
+
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15aq
 
 ### Root cause selected
