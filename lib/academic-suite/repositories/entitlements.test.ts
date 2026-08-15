@@ -8,6 +8,7 @@ type EntitlementFixture = {
   academic_project_id: string | null
   provider: string
   product_id: string | null
+  work_type: string | null
   status: string
   purchase_expires_at: string
 }
@@ -20,6 +21,7 @@ const ACTIVE_PASS: EntitlementFixture = {
   academic_project_id: 'project-1',
   provider: 'stripe',
   product_id: null,
+  work_type: 'seminarski',
   status: 'active',
   purchase_expires_at: '2026-12-31T23:59:59.000Z',
 }
@@ -46,7 +48,10 @@ function createEntitlementDb(rows: EntitlementFixture[]) {
         },
         or(filter: string) {
           const allowed: string[] = filter.match(/katedra_pass_[a-z]+/g) || []
-          predicates.push((row) => row.product_id === null || allowed.includes(row.product_id || ''))
+          const workTypeMatch = filter.match(/work_type\.in\.\(([^)]+)\)/)
+          const allowedWorkTypes = workTypeMatch?.[1].split(',') || []
+          predicates.push((row) => allowed.includes(row.product_id || '')
+            || (row.product_id === null && allowedWorkTypes.includes(row.work_type || '')))
           return query
         },
         gt(column: keyof EntitlementFixture, value: string) {
@@ -123,6 +128,12 @@ describe('hasActiveProjectPass', () => {
   it('rejects an unknown Stripe catalog product', async () => {
     await expect(
       resolvePass([{ ...ACTIVE_PASS, product_id: 'some-catalog-product' }]),
+    ).resolves.toBe(false)
+  })
+
+  it('rejects a null-product entitlement for a work type outside the Katedra catalog', async () => {
+    await expect(
+      resolvePass([{ ...ACTIVE_PASS, work_type: 'doktorski' }]),
     ).resolves.toBe(false)
   })
 

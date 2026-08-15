@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bc
+
+### Root cause selected
+
+Priority: P2 entitlement/catalog safety. The shared Katedra Pass filter
+accepted every Stripe entitlement with a null `product_id`, even though the
+shared entitlement table also supports work types outside the Katedra catalog.
+That could make a Doktorski or another Lekta entitlement appear as a Katedra
+Pass in project lookup, checkout duplicate detection or webhook reconciliation.
+
+### Fix
+
+- Require null-product legacy rows to have `seminarski`, `zavrsni` or
+  `diplomski` `work_type` values.
+- Continue accepting only the explicit canonical Katedra product IDs for
+  non-null `product_id` rows.
+- Use the same safe filter for entitlement authority, checkout, webhook and
+  account export paths.
+- Keep the existing JS account defense-in-depth normalization.
+
+### Verification
+
+- TDD red regression: PASS; a null-product `doktorski` entitlement was
+  incorrectly accepted before the filter change.
+- Focused affected-route suite: PASS (37 tests).
+- Full suite: PASS (139 test files, 492 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G3-G6: unrelated shared entitlements can no longer unlock or block a Katedra
+  project through local project-pass checks, checkout duplicate detection or
+  webhook reconciliation.
+- G0-G2 and G7-G10: no intended behavior change.
+
+### Remaining issues
+
+- The atomic server-side project lock and canonical entitlement deployment
+  still require Lekta/staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bb
 
 ### Root cause selected
