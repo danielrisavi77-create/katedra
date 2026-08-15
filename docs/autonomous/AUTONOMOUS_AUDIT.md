@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15av
+
+### Root cause selected
+
+Priority: P1 paid workflow dead end. The main agentic workspace passed
+`acceptAgenticDraft` into `AgenticDashboard`, but the same `PaidProjectSetup`
+opened from `Projekt → Agenti` received no callback. Its verified-result review
+could therefore render an enabled-looking accept flow that made no manuscript
+change.
+
+### Fix
+
+- Add the optional verified-draft callback to `ProjectDrawer`.
+- Pass it into the drawer's `PaidProjectSetup` and from `WorkspaceClient`.
+- Add component and wiring regressions proving the callback reaches the drawer
+  agentic entry point.
+
+### Verification
+
+- TDD regression: PASS; the drawer wiring assertion failed before the fix and
+  now passes.
+- Component regression: PASS; opening the drawer's Agenti tab confirms the
+  mocked setup receives the manuscript accept callback.
+- Full suite: PASS (137 test files, 483 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+
+### Golden Journey impact
+
+- G5-G6 and paid agentic workflow: verified results can be accepted regardless
+  of whether the user entered through the top-level or project-drawer path.
+- G0-G4 and G7-G10: no intended behavior change.
+
+### Remaining issues
+
+- Real paid run execution and acceptance still require canonical Lekta worker,
+  billing/RPC and authenticated staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15au
 
 ### Root cause selected

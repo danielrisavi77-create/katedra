@@ -573,6 +573,7 @@ export default function WorkspaceClient() {
           }
         })()}
         onImportText={(file) => void importTextFile(file)}
+        onAcceptDraft={acceptAgenticDraft}
       />
       {checkoutNotice && <div className="pis-checkout-notice" role="status"><span>{checkoutNotice}</span><button type="button" onClick={() => setCheckoutNotice('')} aria-label="Zatvori obavijest">×</button></div>}
       <PassDialog
