@@ -74,3 +74,9 @@ reports that the Docker engine pipe is missing when inspecting the local
 project. Therefore the repository-level SQL tests are the strongest available
 local evidence; no local database/RLS concurrency result is being represented
 as a deployment proof.
+
+An attempted per-user install from Docker's official x86_64 download endpoint
+was rejected by Windows as an invalid application platform. The temporary
+installer was removed after the failed launch; Docker Desktop remains
+uninstalled and this requires a manual/system-level installation path or a
+staging Supabase environment.
