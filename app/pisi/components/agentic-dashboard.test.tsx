@@ -33,6 +33,7 @@ const runningBody = {
 
 afterEach(() => {
   cleanup()
+  window.localStorage.clear()
   vi.unstubAllGlobals()
 })
 
@@ -87,5 +88,74 @@ describe('AgenticDashboard', () => {
     expect(screen.queryByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Novi tijek' }))
     expect(onReset).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows verified worker output in review before it can enter the manuscript', async () => {
+    const user = userEvent.setup()
+    const onAcceptDraft = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onAcceptDraft={onAcceptDraft} />)
+
+    expect(await screen.findByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
+    expect(screen.getByDisplayValue('Verificirani novi uvod.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Prihvati sve provjerene' }))
+    expect(onAcceptDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates verification when a verified proposal is edited', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    const editor = await screen.findByRole('textbox', { name: 'Prijedlog za Uvod' })
+    await user.clear(editor)
+    await user.type(editor, 'Izmijenjeni tekst bez nove provjere.')
+
+    expect(screen.getByText('Prijedlog je izmijenjen nakon verifikacije; potrebna je nova provjera.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Prihvati Uvod' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Prihvati sve provjerene' })).toHaveProperty('disabled', true)
+  })
+
+  it('keeps a local proposal edit when a later worker result arrives', async () => {
+    const user = userEvent.setup()
+    const resultA = { schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }
+    const resultB = { ...resultA, materialId: 'agent-result:step-2:1', stepId: 'step-2', sectionId: 'analysis', output: 'Novi plan analize.', createdAt: '2026-08-14T10:02:00.000Z' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run: { ...runningBody.run, status: 'completed' }, steps: [], results: [resultA] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run: { ...runningBody.run, status: 'completed' }, steps: [], results: [resultA, resultB] }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const view = render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    const editor = await screen.findByRole('textbox', { name: 'Prijedlog za Uvod' })
+    await user.clear(editor)
+    await user.type(editor, 'Lokalno ureÄ‘eni uvod.')
+
+    view.rerender(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={{ ...manuscript }} />)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect((screen.getByRole('textbox', { name: 'Prijedlog za Uvod' }) as HTMLTextAreaElement).value).toContain('Lokalno')
+    expect(screen.getByDisplayValue('Novi plan analize.')).toBeTruthy()
+  })
+
+  it('restores a local proposal edit after the dashboard is remounted', async () => {
+    const user = userEvent.setup()
+    const result = { schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ run: { ...runningBody.run, status: 'completed' }, steps: [], results: [result] }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const first = render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+    const editor = await screen.findByRole('textbox', { name: 'Prijedlog za Uvod' })
+    await user.clear(editor)
+    await user.type(editor, 'Edited locally.')
+    first.unmount()
+
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+    expect((await screen.findByRole('textbox', { name: 'Prijedlog za Uvod' }) as HTMLTextAreaElement).value).toContain('Edited')
   })
 })

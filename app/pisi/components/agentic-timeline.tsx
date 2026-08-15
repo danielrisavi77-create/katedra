@@ -6,6 +6,8 @@ export interface AgenticTimelineStep {
   verifier: string
   status: string
   attempt: number
+  provider?: string
+  usage?: { input_tokens?: number; output_tokens?: number; inputTokens?: number; outputTokens?: number }
   lastVerification?: { issues?: Array<{ message?: string }> }
 }
 
@@ -18,7 +20,7 @@ export function AgenticTimeline({ steps }: { steps: AgenticTimelineStep[] }) {
           const issue = step.lastVerification?.issues?.find((item) => item.message)?.message
           return <li key={step.id} data-status={step.status}>
             <span className="pis-timeline-marker" aria-hidden="true">{step.status === 'verified' ? '✓' : step.status === 'blocked' ? '!' : step.status === 'running' || step.status === 'retrying' ? '→' : '·'}</span>
-            <div className="pis-timeline-step-copy"><b>{label(step.agent)}</b><small>Verifikator: {label(step.verifier)} · Pokušaj {step.attempt}/3</small>{issue && <p>{issue}</p>}</div>
+            <div className="pis-timeline-step-copy"><b>{label(step.agent)}</b><small>Verifikator: {label(step.verifier)} · Pokušaj {step.attempt}/3{step.provider ? ` · ${step.provider}` : ''}{usageLabel(step.usage) ? ` · ${usageLabel(step.usage)}` : ''}</small>{issue && <p>{issue}</p>}</div>
             <em>{statusLabel(step.status)}</em>
           </li>
         })}
@@ -33,4 +35,12 @@ function label(value: string) {
 
 function statusLabel(status: string) {
   return ({ pending: 'Čeka', running: 'Radi', retrying: 'Popravak', verified: 'Provjereno', blocked: 'Blokirano', failed: 'Greška' } as Record<string, string>)[status] || 'Nepoznato'
+}
+
+function usageLabel(usage: AgenticTimelineStep['usage']) {
+  if (!usage) return ''
+  const input = Number(usage.input_tokens ?? usage.inputTokens ?? 0)
+  const output = Number(usage.output_tokens ?? usage.outputTokens ?? 0)
+  if (!input && !output) return ''
+  return `Potrošnja ${input} + ${output}`
 }

@@ -1,5 +1,52 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15az
+
+### Root cause selected
+
+Priority: P1 agentic proposal decision durability. The review panel kept
+edited and rejected proposals only in React state. A later poll with another
+worker result, or a dashboard remount, reconstructed the server result and
+could restore the original verified proposal.
+
+### Fix
+
+- Store only local proposal overrides, keyed by `projectId` and `runId`, in
+  browser `localStorage`; no proposal text enters shared state.
+- Merge an edited or rejected proposal with later server results only when its
+  `baseRevision` still matches.
+- Drop the override when a newer server revision arrives, so old local text
+  cannot mask a current result.
+- Validate stored Tiptap nodes and status values before restoring them.
+- Remount the dashboard when the project/run identity changes to avoid
+  carrying review state into another run.
+
+### Verification
+
+- TDD red regression: PASS; the local edit reverted after a new result before
+  the merge was implemented.
+- Focused suite: PASS (11 tests across dashboard and run-recovery components),
+  including poll merge and dashboard remount recovery.
+- Full suite: PASS (138 test files, 489 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- The local `/pisi` route remains available; authenticated worker payloads and
+  staging continuation are still external concerns.
+
+### Golden Journey impact
+
+- G9: local review decisions now survive polling/remount without claiming that
+  the server has accepted them.
+- G5-G6/G10: generated sections remain reviewable and explicitly local until
+  the user accepts a still-current verified proposal.
+- G0-G4, G7-G8: no intended behavior change.
+
+### Remaining issues
+
+- Canonical worker execution, authenticated session recovery and billing
+  reconciliation still require Lekta/staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ay
 
 ### Root cause selected

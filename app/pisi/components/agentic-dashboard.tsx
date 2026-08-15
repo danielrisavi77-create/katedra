@@ -1,17 +1,38 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import { createAgenticDraft, upsertSectionRevision, type AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
+import { plainTextDocument } from '../../../lib/manuscript/model'
+import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import { AgenticTimeline, type AgenticTimelineStep } from './agentic-timeline'
+import { AgenticReview } from './agentic-review'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 
 type RunStatus = 'pending' | 'running' | 'paused' | 'completed' | 'blocked' | 'failed' | 'cancelled'
 type AgenticRun = { runId: string; status: RunStatus; mode?: string; steps: AgenticTimelineStep[] }
+type LocalDraftOverride = {
+  sectionId: string
+  baseRevision: string
+  proposedContent: TiptapNode
+  status: 'generated' | 'rejected'
+  verificationMessage?: string
+  updatedAt: string
+}
 
-export function AgenticDashboard({ runId, projectId, manuscript, onReset, onIntervention }: { runId: string; projectId: string; manuscript: ManuscriptV1; onReset?: () => void; onIntervention?: () => void }) {
+const DRAFT_STORAGE_PREFIX = 'katedra_agent_draft_v1:'
+
+export function AgenticDashboard({ runId, projectId, manuscript, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
   const [run, setRun] = useState<AgenticRun | null>(null)
+  const [draft, setDraft] = useState<AgenticDraftV1 | null>(null)
   const [message, setMessage] = useState('')
+  const resultSignature = useRef('')
+  const localOverridesRef = useRef<Record<string, LocalDraftOverride>>({})
+
+  useEffect(() => {
+    localOverridesRef.current = readDraftOverrides(projectId, runId)
+    resultSignature.current = ''
+  }, [projectId, runId])
 
   const refresh = useCallback(async () => {
     const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
@@ -22,7 +43,15 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
     const body = await response.json().catch(() => ({}))
     if (!body.run) return
     setRun(normalizeRun(body))
-  }, [projectId, runId])
+    const mergedDraft = mergeDraftOverrides(normalizeDraft(body, manuscript, projectId, runId), localOverridesRef.current)
+    localOverridesRef.current = mergedDraft.overrides
+    persistDraftOverrides(projectId, runId, mergedDraft.overrides)
+    const nextSignature = JSON.stringify(body.results || [])
+    if (nextSignature !== resultSignature.current) {
+      resultSignature.current = nextSignature
+      setDraft(mergedDraft.draft)
+    }
+  }, [manuscript, projectId, runId])
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +84,47 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
 
   const activeStep = useMemo(() => run?.steps.find((step) => ['running', 'retrying'].includes(step.status)) || run?.steps.find((step) => step.status === 'pending'), [run?.steps])
   const blocked = run?.status === 'blocked'
+  const editDraft = (sectionId: string, content: TiptapNode) => {
+    setDraft((current) => current ? {
+      ...current,
+      sections: current.sections.map((revision) => {
+        if (revision.sectionId !== sectionId) return revision
+        const updatedAt = new Date().toISOString()
+        const status = revision.status === 'rejected' ? 'rejected' as const : 'generated' as const
+        localOverridesRef.current = {
+          ...localOverridesRef.current,
+          [sectionId]: { sectionId, baseRevision: revision.baseRevision, proposedContent: content, status, verificationMessage: revision.status === 'verified' ? 'Prijedlog je izmijenjen nakon verifikacije; potrebna je nova provjera.' : revision.verificationMessage, updatedAt },
+        }
+        persistDraftOverrides(projectId, runId, localOverridesRef.current)
+        return {
+          ...revision,
+          proposedContent: content,
+          ...(revision.status === 'verified' ? {
+            status: 'generated' as const,
+            verificationMessage: 'Prijedlog je izmijenjen nakon verifikacije; potrebna je nova provjera.',
+          } : {}),
+          updatedAt,
+        }
+      }),
+      updatedAt: new Date().toISOString(),
+    } : current)
+  }
+  const rejectDraft = (sectionId: string) => {
+    setDraft((current) => current ? {
+      ...current,
+      sections: current.sections.map((revision) => {
+        if (revision.sectionId !== sectionId) return revision
+        const updatedAt = new Date().toISOString()
+        localOverridesRef.current = {
+          ...localOverridesRef.current,
+          [sectionId]: { sectionId, baseRevision: revision.baseRevision, proposedContent: revision.proposedContent, status: 'rejected', verificationMessage: revision.verificationMessage, updatedAt },
+        }
+        persistDraftOverrides(projectId, runId, localOverridesRef.current)
+        return { ...revision, status: 'rejected' as const, updatedAt }
+      }),
+      updatedAt: new Date().toISOString(),
+    } : current)
+  }
 
   return <section className="pis-agentic-dashboard" aria-live="polite">
     <header className="pis-agentic-dashboard-heading">
@@ -73,8 +143,84 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
       <AgenticTimeline steps={run?.steps || []} />
       <ReadOnlyManuscriptPreview manuscript={manuscript} />
     </div>
+    {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={(sectionIds) => onAcceptDraft ? onAcceptDraft(draft, sectionIds) : Promise.resolve()} onEdit={editDraft} onReject={rejectDraft} />}
     {message && <p className="pis-agent-message" role="alert">{message}</p>}
   </section>
+}
+
+function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1, projectId: string, runId: string): AgenticDraftV1 | null {
+  const rawResults = Array.isArray(body.results) ? body.results : []
+  let draft = createAgenticDraft({ projectId, runId, base: manuscript })
+  for (const value of rawResults) {
+    if (!value || typeof value !== 'object') continue
+    const result = value as Record<string, unknown>
+    const sectionId = typeof result.sectionId === 'string' ? result.sectionId : ''
+    const output = typeof result.output === 'string' ? result.output.trim() : ''
+    if (!sectionId || !output || !manuscript.sections.some((section) => section.id === sectionId)) continue
+    const verification = result.verification && typeof result.verification === 'object' ? result.verification as Record<string, unknown> : {}
+    const verificationStatus = verification.status
+    const status = verificationStatus === 'verified' ? 'verified' : verificationStatus === 'blocked' ? 'blocked' : 'generated'
+    const issues = Array.isArray(verification.issues) ? verification.issues.map((issue) => issue && typeof issue === 'object' && typeof (issue as Record<string, unknown>).message === 'string' ? String((issue as Record<string, unknown>).message) : '').filter(Boolean) : []
+    const updatedAt = typeof result.createdAt === 'string' ? result.createdAt : new Date().toISOString()
+    draft = upsertSectionRevision(draft, {
+      sectionId,
+      baseRevision: typeof result.baseRevision === 'string' ? result.baseRevision : '__missing_base_revision__',
+      proposedContent: plainTextDocument(output),
+      status,
+      verificationMessage: issues.join(' '),
+      updatedAt,
+    })
+  }
+  return draft.sections.length ? draft : null
+}
+
+function mergeDraftOverrides(draft: AgenticDraftV1 | null, overrides: Record<string, LocalDraftOverride>): { draft: AgenticDraftV1 | null; overrides: Record<string, LocalDraftOverride> } {
+  if (!draft) return { draft, overrides: {} }
+  const validOverrides: Record<string, LocalDraftOverride> = {}
+  const sections = draft.sections.map((revision) => {
+    const override = overrides[revision.sectionId]
+    if (!override || override.baseRevision !== revision.baseRevision) return revision
+    validOverrides[revision.sectionId] = override
+    return { ...revision, proposedContent: override.proposedContent, status: override.status, verificationMessage: override.verificationMessage, updatedAt: override.updatedAt }
+  })
+  return { draft: { ...draft, sections }, overrides: validOverrides }
+}
+
+function readDraftOverrides(projectId: string, runId: string): Record<string, LocalDraftOverride> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(draftStorageKey(projectId, runId)) || 'null') as unknown
+    if (!isRecord(raw) || raw.schemaVersion !== 1 || !isRecord(raw.sections)) return {}
+    return Object.fromEntries(Object.entries(raw.sections).flatMap(([sectionId, value]) => {
+      if (!isRecord(value) || value.sectionId !== sectionId || typeof value.baseRevision !== 'string' || !isSafeTiptapNode(value.proposedContent) || !['generated', 'rejected'].includes(String(value.status)) || typeof value.updatedAt !== 'string') return []
+      return [[sectionId, value as unknown as LocalDraftOverride]]
+    }))
+  } catch {
+    return {}
+  }
+}
+
+function persistDraftOverrides(projectId: string, runId: string, overrides: Record<string, LocalDraftOverride>): void {
+  if (typeof window === 'undefined') return
+  try {
+    const key = draftStorageKey(projectId, runId)
+    if (Object.keys(overrides).length === 0) window.localStorage.removeItem(key)
+    else window.localStorage.setItem(key, JSON.stringify({ schemaVersion: 1, sections: overrides }))
+  } catch {}
+}
+
+function draftStorageKey(projectId: string, runId: string): string {
+  return `${DRAFT_STORAGE_PREFIX}${projectId}:${runId}`
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isSafeTiptapNode(value: unknown): value is TiptapNode {
+  if (!isRecord(value) || typeof value.type !== 'string' || !['doc', 'paragraph', 'heading', 'text', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'hardBreak', 'horizontalRule'].includes(value.type)) return false
+  if (value.type === 'text' && typeof value.text !== 'string') return false
+  return value.content === undefined || (Array.isArray(value.content) && value.content.every(isSafeTiptapNode))
 }
 
 function normalizeRun(body: Record<string, unknown>): AgenticRun {
@@ -87,7 +233,7 @@ function normalizeRun(body: Record<string, unknown>): AgenticRun {
     steps: steps.map((value) => {
       const step = value as Record<string, unknown>
       const verification = step.last_verification || step.lastVerification
-      return { id: String(step.step_id || step.id || ''), agent: String(step.agent || ''), verifier: String(step.verifier || ''), status: String(step.status || 'pending'), attempt: Number(step.attempt || 1), lastVerification: verification as AgenticTimelineStep['lastVerification'] }
+      return { id: String(step.step_id || step.id || ''), agent: String(step.agent || ''), verifier: String(step.verifier || ''), status: String(step.status || 'pending'), attempt: Number(step.attempt || 1), provider: typeof step.provider === 'string' ? step.provider : undefined, usage: step.usage as AgenticTimelineStep['usage'], lastVerification: verification as AgenticTimelineStep['lastVerification'] }
     }),
   }
 }
