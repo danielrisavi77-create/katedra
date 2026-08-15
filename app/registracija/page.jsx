@@ -84,7 +84,8 @@ export default function RegistracijaPage() {
       <div className="onb-card" style={{ maxWidth: 400 }}>
         <div className="logo-badge" style={{ margin: '0 auto' }}>K</div>
         <h1 style={{ margin: '12px 0 4px' }}>Registracija</h1>
-        <p className="onb-sub">Napravi Katedra račun.</p>
+        <p className="onb-sub">Napravi Katedra račun i nastavi raditi na istom projektu.</p>
+        <p className="onb-project-note">Ako već dolaziš iz rada, nastavljaš isti projekt: njegov projectId ostaje isti nakon registracije i potvrde e-maila.</p>
         <form onSubmit={submit} style={{ textAlign: 'left', marginTop: 16 }}>
           <div className="fld">
             <label htmlFor="registration-email">E-mail</label>

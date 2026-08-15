@@ -74,7 +74,7 @@ export function PassDialog({
       <div className="pis-pass-dialog" role="dialog" aria-modal="true" aria-labelledby="pis-pass-title" aria-describedby="pis-pass-description" tabIndex={-1}>
         <button type="button" className="pis-pass-close" aria-label="Zatvori" onClick={onClose} disabled={busy}>×</button>
         <p className="pis-kicker">Project Pass</p>
-        <h2 id="pis-pass-title">Nastavi raditi bez prekida.</h2>
+        <h2 id="pis-pass-title">{pkg.name} za ovaj projekt</h2>
         <div className="pis-pass-product">
           <div><b>{pkg.name}</b><span>za ovaj konkretan akademski projekt</span></div>
           <strong>{pkg.price}</strong>
@@ -89,6 +89,7 @@ export function PassDialog({
         <div className="pis-pass-warning" role="note">
           <strong>VAŽNO</strong>
           <p>Ovaj Pass vrijedi samo za ovaj projekt i potvrđenu temu. Tema se nakon naplate ne može promijeniti. Za drugi rad potreban je novi projekt i novi Pass.</p>
+          <p>Tema ovog projekta bit će zaključana nakon naplate.</p>
         </div>
         <label className="pis-pass-consent">
           <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />

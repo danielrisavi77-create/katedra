@@ -19,6 +19,7 @@ it('keeps authentication and legal headings semantically ordered', () => {
   expect(read('app/privatnost/page.jsx')).toContain('<h2>1.')
   expect(read('app/uvjeti/page.jsx')).toContain('<h2>1.')
   expect(read('app/katedra-scoped.css')).toContain('.katedra-page.legal-page .legal-document h2{')
+  expect(read('app/registracija/page.jsx')).toContain('isti projekt')
 })
 
 it('keeps low-emphasis authentication copy readable and inline links distinguishable', () => {
@@ -32,4 +33,14 @@ it('keeps low-emphasis authentication copy readable and inline links distinguish
   expect(pisiStyles).toContain('--pis-muted: #5a574f')
   expect(pisiStyles).toContain('--pis-faint: #5a574f')
   expect(pisiStyles).toContain('--pis-faint: #c1b9aa')
+})
+
+it('keeps public and account surfaces bounded on narrow screens', () => {
+  const styles = read('app/katedra-scoped.css')
+  const pisiStyles = read('app/pisi/pisi.css')
+  expect(styles).toContain('.katedra-page.auth-page{')
+  expect(styles).toContain('overflow-x:hidden')
+  expect(styles).toContain('.account-overview{')
+  expect(pisiStyles).toContain('.pis-pass-dialog')
+  expect(pisiStyles).toContain('max-width: 100%')
 })

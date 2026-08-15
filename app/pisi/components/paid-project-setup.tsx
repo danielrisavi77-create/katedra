@@ -66,7 +66,20 @@ export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript
   if (runId && intervention) return <AgenticIntervention runId={runId} projectId={projectId} manuscript={manuscript} reason="Verifikator je zatražio dodatni kontekst prije nastavka." onResumed={() => { setIntervention(false); onPhaseChange?.('dashboard') }} />
   if (runId) return <AgentRunPanel runId={runId} projectId={projectId} manuscript={manuscript} requestedPhase={requestedPhase} onReset={resetRun} onIntervention={() => { setIntervention(true); onPhaseChange?.('intervention') }} onAcceptDraft={onAcceptDraft} />
   if (requestedPhase === 'review') return <section className="pis-agentic-preparation" aria-labelledby="pis-agentic-review-empty-title"><p className="pis-kicker">Revizija</p><h2 id="pis-agentic-review-empty-title">Pregled rezultata</h2><p>Provjereni rezultati pojavit će se nakon pokrenutog tijeka i njegove verifikacije.</p><button type="button" className="is-primary" onClick={() => onPhaseChange?.('preparation')}>Pripremi tijek</button></section>
-  return <AgenticPreparation projectId={projectId} passActive={passActive} sectionIds={sectionIds} manuscript={manuscript} onRunCreated={rememberRun} />
+  return (
+    <div className="pis-paid-project-setup">
+      <header className="pis-paid-project-heading">
+        <p className="pis-kicker">Zaključani projekt</p>
+        <h2>Priprema projekta: {manuscript.title || 'Rad bez naslova'}</h2>
+        <p>Ovaj projekt: {manuscript.title || 'Rad bez naslova'} · Opseg Passa: {workTypeLabel(manuscript.workType)}</p>
+      </header>
+      <AgenticPreparation projectId={projectId} passActive={passActive} sectionIds={sectionIds} manuscript={manuscript} onRunCreated={rememberRun} />
+    </div>
+  )
+}
+
+function workTypeLabel(workType: ManuscriptV1['workType']): string {
+  return ({ s: 'Seminarski rad', z: 'Završni rad', d: 'Diplomski rad' } as Record<ManuscriptV1['workType'], string>)[workType]
 }
 
 function readStoredRunId(storageKey: string): string {

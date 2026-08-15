@@ -1510,9 +1510,14 @@
     --rail:#40545c; --stamp:#ed8d84; --stamp-rgb:237,141,132; --gold:#f4cf62;
     --shadow-rgb:0,0,0; --grain:rgba(245,237,221,.035); --scheme:dark;
   }
-.account-overview { margin-top: 20px; }
-.account-overview h2 { margin: 4px 0 18px; font-family: var(--serif, Georgia, serif); font-size: 28px; font-weight: 500; }
-.account-overview-grid { display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--line, #d8d1c4); }
+.katedra-page.auth-page{overflow-x:hidden}
+.katedra-page.auth-page .auth-shell{width:min(100%,1080px);min-width:0}
+.account-overview{margin-top:20px;min-width:0;overflow:hidden}
+.account-overview h2{margin:4px 0 4px;font-family:var(--serif, Georgia, serif);font-size:28px;font-weight:500}
+.account-email{margin:0;color:var(--mut);font-size:14px;overflow-wrap:anywhere}
+.account-subsection{min-width:0;margin-top:24px;padding-top:18px;border-top:1px solid var(--line, #d8d1c4)}
+.account-subsection h3{margin:0 0 10px;font-family:var(--serif, Georgia, serif);font-size:20px;font-weight:500}
+.account-overview-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--line, #d8d1c4); }
 .account-overview-grid div { padding: 14px 12px 14px 0; border-right: 1px solid var(--line, #d8d1c4); }
 .account-overview-grid div + div { padding-left: 12px; }
 .account-overview-grid div:last-child { border-right: 0; }
@@ -1524,10 +1529,30 @@
 .account-project-list b, .account-project-list small { display: block; }
 .account-project-list small { margin-top: 3px; color: var(--mut); font-size: 12px; }
 .account-project-list a, .account-data-actions a { color: var(--acc); }
+.account-pass-list{margin:0;padding:0;list-style:none}
+.account-pass-list li{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line, #d8d1c4)}
+.account-pass-list li:last-child{border-bottom:0}
+.account-pass-list b,.account-pass-list small{display:block}
+.account-pass-list small{margin-top:3px;color:var(--mut);font-size:12px}
+.account-pass-list li>span{align-self:center;color:var(--ok);font-size:12px;font-weight:700;white-space:nowrap}
+.account-pass-list li>span[data-status='expired'],.account-pass-list li>span[data-status='inactive']{color:var(--mut)}
 .account-data-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--mut); font-size: 12px; }
+.account-usage-note { margin: 14px 0 0; color: var(--mut); font-size: 12px; line-height: 1.5; }
+.account-availability-note{margin:14px 0;color:var(--mut);font-size:12px;line-height:1.55}
+.account-privacy { margin-top: 20px; }
+.account-privacy h2 { margin: 4px 0 8px; font-family: var(--serif, Georgia, serif); font-size: 24px; font-weight: 500; }
+.account-privacy p { color: var(--mut); font-size: 13px; line-height: 1.6; }
+.account-privacy a { color: var(--acc); }
+.account-delete-form { display: grid; gap: 8px; margin-top: 14px; }
+.account-delete-form label { font-size: 12px; font-weight: 700; }
+.account-delete-form input { width: 100%; padding: 10px 12px; border: 1px solid var(--line, #d8d1c4); background: var(--paper, #fffdf8); color: inherit; }
+.account-delete-form p { color: var(--bad); }
+.account-delete-form div { display: flex; gap: 10px; align-items: center; }
+.katedra-page .onb-project-note{margin:10px 0 0;color:var(--mut);font-size:12px;line-height:1.55}
 @media (max-width: 560px) {
   .account-overview-grid { grid-template-columns: 1fr; }
   .account-overview-grid div, .account-overview-grid div + div { padding: 10px 0; border-right: 0; border-bottom: 1px solid var(--line, #d8d1c4); }
   .account-overview-grid div:last-child { border-bottom: 0; }
   .account-data-actions { align-items: flex-start; flex-direction: column; }
+  .account-pass-list li{align-items:flex-start;flex-direction:column;gap:5px}
 }

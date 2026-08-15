@@ -67,7 +67,7 @@ export default function RacunPage() {
         body: JSON.stringify({ confirmation: deleteConfirmation }),
       })
       const body = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(body.error || 'Brisanje računa trenutno nije dostupno.')
+      if (!response.ok || body?.error) throw new Error(body.error || 'Brisanje računa trenutno nije dostupno.')
       setDeleteStep('done')
     } catch (deleteFetchError) {
       setDeleteError(deleteFetchError.message)
@@ -86,23 +86,41 @@ export default function RacunPage() {
         {account && (
           <section className="panel account-overview" aria-labelledby="account-overview-title">
             <p className="pis-kicker">Projektni račun</p>
-            <h2 id="account-overview-title">{account.user.email || 'Tvoj račun'}</h2>
+            <h2 id="account-overview-title">Identitet računa</h2>
+            <p className="account-email">{account.user.email || 'E-mail nije dostupan'}</p>
             {Array.isArray(account.warnings) && account.warnings.length > 0 && (
               <div className="account-data-warnings" role="status">
                 {account.warnings.map((warning) => <p key={warning}>{warning}</p>)}
               </div>
             )}
-            <div className="account-overview-grid">
-              <div><b>{projectRows ? projectRows.length : '—'}</b><span>projekata</span></div>
-              <div><b>{passRows ? passRows.filter((pass) => pass.status === 'active').length : '—'}</b><span>aktivnih Passova</span></div>
-              <div><b>{projectRows ? projectRows.filter((project) => project.lekta_score !== null).length : '—'}</b><span>Lekta provjera</span></div>
-              <div><b>{usageSummary ? usageSummary.requests : '—'}</b><span>AI zahtjeva</span></div>
-            </div>
+            <section className="account-subsection account-metrics" aria-labelledby="account-metrics-title">
+              <h3 id="account-metrics-title">Sažetak korištenja</h3>
+              <div className="account-overview-grid">
+                <div><b>{projectRows ? projectRows.length : '—'}</b><span>projekata</span></div>
+                <div><b>{passRows ? passRows.filter((pass) => pass.status === 'active').length : '—'}</b><span>aktivnih Passova</span></div>
+                <div><b>{projectRows ? projectRows.filter((project) => project.lekta_score !== null).length : '—'}</b><span>Lekta provjera</span></div>
+                <div><b>{usageSummary ? usageSummary.requests : '—'}</b><span>AI zahtjeva</span></div>
+              </div>
+            </section>
             {usageSummary
               ? <p className="account-usage-note">AI potrošnja: {usageSummary.inputTokens.toLocaleString('hr-HR')} ulaznih i {usageSummary.outputTokens.toLocaleString('hr-HR')} izlaznih tokena. Rukopis i promptovi nisu dio account izvoza.</p>
               : <p className="account-usage-note" role="status">AI potrošnja trenutačno nije dostupna; broj zahtjeva nije moguće potvrditi.</p>}
-            {projectRows && projectRows.length > 0 && <ul className="account-project-list">{projectRows.map((project) => <li key={project.project_id}><div><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
-            {account.projects === null && <p role="status">Projekti trenutačno nisu dostupni.</p>}
+            <section className="account-subsection" aria-labelledby="account-projects-title">
+              <h3 id="account-projects-title">Moji projekti</h3>
+              {projectRows && projectRows.length > 0 && <ul className="account-project-list">{projectRows.map((project) => <li key={project.project_id}><div><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
+              {projectRows && projectRows.length === 0 && <p role="status">Još nema spremljenih projekata.</p>}
+              {account.projects === null && <p role="status">Projekti trenutačno nisu dostupni.</p>}
+            </section>
+            <section className="account-subsection" aria-labelledby="account-passes-title">
+              <h3 id="account-passes-title">Pass po projektu</h3>
+              {passRows && passRows.length > 0 && <ul className="account-pass-list">{passRows.map((pass, index) => {
+                const project = projectRows?.find((candidate) => candidate.project_id === pass.academic_project_id)
+                const status = pass.status === 'active' ? 'Aktivan' : pass.status === 'expired' ? 'Istekao' : 'Nije aktivan'
+                return <li key={pass.id || `${pass.academic_project_id || 'pass'}-${index}`}><div><b>{project?.topic || 'Projekt bez naziva'}</b><small>{pass.work_type || pass.product_id || 'Project Pass'}</small></div><span data-status={pass.status}>{status}</span></li>
+              })}</ul>}
+              {passRows && passRows.length === 0 && <p role="status">Nema zabilježenih Passova.</p>}
+              {account.passes === null && <p role="status">Status Passova trenutačno nije dostupan.</p>}
+            </section>
             <div className="account-data-actions"><a href="/api/account/export" download>Izvezi podatke</a><span>Rukopis ostaje lokalno na uređaju.</span></div>
           </section>
         )}
@@ -111,6 +129,7 @@ export default function RacunPage() {
           <p className="pis-kicker">Privatnost i podaci</p>
           <h2 id="account-privacy-title">Ti odlučuješ što ostaje.</h2>
           <p>Rukopis i lokalne verzije ostaju na ovom uređaju. Server može izvesti samo projektne metapodatke i sažetak potrošnje.</p>
+          <p className="account-availability-note" role="status">Brisanje se izvršava samo kada canonical identity servis potvrdi zahtjev. Katedra neće prikazati uspjeh bez te potvrde.</p>
           <p><Link href="/privatnost">Pročitaj pravila privatnosti</Link></p>
           {account ? (
             <>
