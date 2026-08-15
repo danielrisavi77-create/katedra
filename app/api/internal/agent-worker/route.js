@@ -20,6 +20,9 @@ const WORKER_TOKEN = process.env.KATEDRA_AGENT_WORKER_TOKEN || ''
 
 export async function POST(req) {
   if (!ENABLED) return Response.json({ error: 'Agenticni worker još nije aktivan u backendu.' }, { status: 503 })
+  if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
+    return Response.json({ error: 'Agenticni worker nije aktivan bez server-side project lock ugovora.' }, { status: 503 })
+  }
   if (!isAuthorized(req.headers.get('x-katedra-agent-worker-token'), WORKER_TOKEN)) {
     return Response.json({ error: 'Neovlašteni worker.' }, { status: 401 })
   }

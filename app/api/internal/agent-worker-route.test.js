@@ -10,6 +10,7 @@ describe('internal agent worker route contract', () => {
     expect(source).toContain("import { createAdminClient } from '@/lib/supabase/admin'")
     expect(source).not.toContain("import { createAdminClient } from '@/lib/supabase/server'")
     expect(source).toContain('KATEDRA_AGENT_WORKER_TOKEN')
+    expect(source).toContain('KATEDRA_PROJECT_LOCKS_ENABLED')
     expect(source).toContain('runAgentWorkerLoop')
     expect(source).toContain('maxSteps: 1')
   })

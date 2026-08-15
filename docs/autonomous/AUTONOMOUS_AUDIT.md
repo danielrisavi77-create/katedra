@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15be
+
+### Root cause selected
+
+Priority: P1 agent-worker safety configuration. The internal worker endpoint
+checked that agent runs were enabled and that billing/rate-limit settings were
+valid, but did not independently require
+`KATEDRA_PROJECT_LOCKS_ENABLED=true`. A manually inconsistent deployment could
+therefore process an agent run without the server-side project-lock guard that
+the paid workflow requires.
+
+### Fix
+
+- Require the project-lock flag directly in `/api/internal/agent-worker`.
+- Return `503` before token, provider, database or worker processing when the
+  lock contract is not enabled.
+- Keep the deployment preflight requirement and route-level guard aligned.
+
+### Verification
+
+- TDD red regression: PASS; the route contract lacked any project-lock guard.
+- Focused worker/config suite: PASS (7 tests).
+- Full suite, typecheck, lint and production build remain required before the
+  cycle is committed.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G4-G6 and G9: a manually misconfigured worker cannot process paid runs
+  without server-side project-lock enforcement.
+- G0-G3, G7-G8 and G10: no intended behavior change.
+
+### Remaining issues
+
+- The canonical lock RPC, worker deployment and authenticated staging proof
+  remain external requirements.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bd
 
 ### Root cause selected
