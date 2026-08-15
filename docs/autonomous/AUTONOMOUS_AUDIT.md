@@ -22,8 +22,8 @@ the paid workflow requires.
 
 - TDD red regression: PASS; the route contract lacked any project-lock guard.
 - Focused worker/config suite: PASS (7 tests).
-- Full suite, typecheck, lint and production build remain required before the
-  cycle is committed.
+- Full suite: PASS (140 test files, 493 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
 - No shared schema or Lekta migration was introduced.
 
 ### Golden Journey impact
