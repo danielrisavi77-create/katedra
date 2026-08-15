@@ -59,6 +59,30 @@ describe('AgenticDashboard', () => {
     expect(screen.getByRole('heading', { name: 'Tijek izrade rada' })).toBeTruthy()
   })
 
+  it('uses the actual nonstandard verifier metadata in the timeline', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      ...runningBody,
+      steps: [{ ...runningBody.steps[1], verifier: 'evidence_guard_v2' }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    expect(await screen.findByText(/Verifikator evidence guard v2/)).toBeTruthy()
+    expect(screen.queryByText('Verifikator literature')).toBeNull()
+  })
+
+  it('shows result evidence before accepting a verified proposal', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Novi uvod.', citations: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }], verification: { status: 'verified', issues: [], evidence: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    expect(await screen.findByText('Ustav Republike Hrvatske')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'https://example.test/ustav' })).toBeTruthy()
+    expect(screen.getByText(/Provjereno/)).toBeTruthy()
+  })
+
   it('keeps authorization and availability errors readable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 402, json: async () => ({}) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)

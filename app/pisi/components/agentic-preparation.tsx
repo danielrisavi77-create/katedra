@@ -30,8 +30,10 @@ export function AgenticPreparation({
   const [materialIds, setMaterialIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const handleMaterialsChange = useCallback((materials: Array<{ id: string }>) => {
-    setMaterialIds(materials.map((material) => material.id).filter(Boolean))
+  const handleMaterialsChange = useCallback((materials: Array<{ id?: string; extractionStatus?: string }>) => {
+    setMaterialIds(materials
+      .filter((material) => typeof material.id === 'string' && material.id.trim().length > 0 && ['extracted', 'partial', 'needs_review'].includes(material.extractionStatus || ''))
+      .map((material) => material.id as string))
   }, [])
 
   if (!passActive) {

@@ -76,6 +76,25 @@ describe('AgenticPreparation', () => {
     expect(screen.getByText('Pročitano')).toBeTruthy()
     expect(screen.getAllByText('Potrebna provjera').length).toBeGreaterThan(0)
     expect(screen.getByText('Nije moguće pročitati')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Pokušaj ponovno' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Ponovno.*materijal/ })).toBeTruthy()
+  })
+
+  it('excludes failed and malformed materials from a new run', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ materials: [
+        { id: 'm-failed', name: 'nečitljivo.pdf', kind: 'source', extractionStatus: 'failed' },
+        { id: 'm-ready', name: 'literatura.pdf', kind: 'source', extractionStatus: 'extracted' },
+        { name: 'bez-id.txt', kind: 'notes', extractionStatus: 'extracted' },
+      ] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ runId: 'run-2' }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} onRunCreated={vi.fn()} />)
+    await screen.findByText(/Pro.*itano/)
+    await user.click(screen.getByRole('button', { name: 'Pokreni tijek' }))
+
+    const request = JSON.parse(fetchMock.mock.calls[1][1].body as string) as { materialIds: string[] }
+    expect(request.materialIds).toEqual(['m-ready'])
   })
 })

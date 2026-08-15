@@ -33,6 +33,17 @@ const PHASES: Record<string, { phaseLabel: string; agentLabel: string; verifierL
   export: { phaseLabel: 'Priprema za izvoz', agentLabel: 'Katedra priprema završnu verziju', verifierLabel: 'Verifikator završne verzije' },
 }
 
+const VERIFIER_LABELS: Record<string, string> = {
+  intake_verifier: 'Verifikator materijala',
+  sources_verifier: 'Verifikator literature',
+  structure_verifier: 'Verifikator strukture',
+  planning_verifier: 'Verifikator plana',
+  writing_verifier: 'Verifikator pisanja',
+  citation_verifier: 'Verifikator izvora',
+  review_verifier: 'Verifikator pregleda',
+  export_verifier: 'Verifikator završne verzije',
+}
+
 export function projectAgentStatus(step: AgenticTimelineStep): AgentStatusSummary {
   const phase = PHASES[step.agent] || {
     phaseLabel: humanize(step.agent),
@@ -43,10 +54,17 @@ export function projectAgentStatus(step: AgenticTimelineStep): AgentStatusSummar
 
   return {
     ...phase,
+    verifierLabel: verifierLabelFor(step.verifier, phase.verifierLabel),
     attempt: normalizeAttempt(step.attempt),
     state,
     nextAction: nextActionFor(phase.phaseLabel, state),
   }
+}
+
+export function verifierLabelFor(verifier: string, fallback: string): string {
+  const normalized = verifier.trim()
+  if (!normalized) return fallback
+  return VERIFIER_LABELS[normalized] || `Verifikator ${humanize(normalized.replace(/_verifier$/u, ''))}`
 }
 
 export function AgenticTimeline({ steps }: { steps: AgenticTimelineStep[] }) {
@@ -99,7 +117,7 @@ function humanize(value: string): string {
 }
 
 function statusLabel(status: string) {
-  return ({ pending: 'Čeka', running: 'Radi', retrying: 'Popravak', verified: 'Provjereno', blocked: 'Blokirano', failed: 'Greška', paused: 'Pauzirano' } as Record<string, string>)[status] || 'Nije poznato'
+  return ({ pending: 'Čeka svoj red', running: 'Radi', retrying: 'Popravak', verified: 'Provjereno', blocked: 'Blokirano', failed: 'Greška', paused: 'Pauzirano' } as Record<string, string>)[status] || 'Nije poznato'
 }
 
 function usageLabel(usage: AgenticTimelineStep['usage']) {

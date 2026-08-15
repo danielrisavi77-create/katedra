@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { MaterialAssetV1, MaterialExtractionStatus, MaterialKind } from '../../../lib/materials/types'
 
@@ -17,8 +17,9 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
   const [kind, setKind] = useState<MaterialKind>('notes')
   const [materials, setMaterials] = useState<MaterialAssetV1[]>([])
   const [busy, setBusy] = useState(false)
-  const [refreshingId, setRefreshingId] = useState('')
+  const [reuploadId, setReuploadId] = useState('')
   const [message, setMessage] = useState('')
+  const reuploadInput = useRef<HTMLInputElement>(null)
 
   const publish = useCallback((next: MaterialAssetV1[]) => {
     setMaterials(next)
@@ -36,7 +37,7 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
       setMessage(materialRequestMessage(response.status, body.error, 'Materijale trenutačno nije moguće učitati.'))
       return []
     }
-    const loaded = Array.isArray(body.materials) ? body.materials as MaterialAssetV1[] : []
+    const loaded = Array.isArray(body.materials) ? body.materials.filter(isMaterial) : []
     publish(loaded)
     return loaded
   }, [projectId, publish])
@@ -46,23 +47,24 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
     return () => window.clearTimeout(timer)
   }, [loadMaterials])
 
-  const upload = async (file: File) => {
+  const upload = async (file: File, uploadKind = kind, replaceId = '') => {
     setBusy(true)
     setMessage('')
     const form = new FormData()
     form.set('projectId', projectId)
-    form.set('kind', kind)
+    form.set('kind', uploadKind)
     form.set('file', file)
     try {
-      const response = await fetch('/api/materials', { method: 'POST', body: form })
+      const response = await fetch('/api/materials', { method: 'POST', body: form }).catch(() => null)
+      if (!response) throw new Error('Materijal trenutačno nije moguće učitati zbog mrežne greške. Pokušaj ponovno.')
       const body = await response.json().catch(() => ({})) as Record<string, unknown>
       const asset = isMaterial(body.asset) ? body.asset : null
       if (!response.ok) {
-        if (asset) publish([...materials, asset])
+        if (asset) publish(replaceId ? replaceMaterial(materials, replaceId, asset) : [...materials, asset])
         throw new Error(materialRequestMessage(response.status, body.error, 'Materijal nije moguće učitati.'))
       }
       if (!asset) throw new Error('Upload nije vratio valjan status materijala.')
-      publish([...materials, asset])
+      publish(replaceId ? replaceMaterial(materials, replaceId, asset) : [...materials, asset])
       onUploaded?.(asset)
       setMessage(asset.extractionStatus === 'needs_review' || asset.extractionStatus === 'partial'
         ? 'Materijal je spremljen, ali treba ručni pregled.'
@@ -71,18 +73,14 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
       setMessage(error instanceof Error ? error.message : 'Upload nije uspio.')
     } finally {
       setBusy(false)
+      setReuploadId('')
     }
   }
 
-  const retry = async (materialId: string) => {
-    setRefreshingId(materialId)
-    setMessage('Ponovno provjeravam status materijala…')
-    const refreshed = await loadMaterials()
-    const material = refreshed.find((item) => item.id === materialId)
-    setMessage(material?.extractionStatus === 'failed'
-      ? 'Materijal i dalje nije moguće pročitati. Pokušaj ga ponovno dodati u drugom formatu.'
-      : 'Status materijala je osvježen.')
-    setRefreshingId('')
+  const reupload = (material: MaterialAssetV1) => {
+    setReuploadId(material.id)
+    setMessage('Odaberi novu datoteku za ponovni pokušaj. Postojeći neuspjeli materijal neće se slati u tijek.')
+    reuploadInput.current?.click()
   }
 
   return <section className="pis-material-library" aria-labelledby="pis-material-title">
@@ -90,7 +88,8 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
     <p className="pis-agent-copy">Dodaj postojeći rad, literaturu, mentorove upute ili pravila fakulteta. Materijali su privremeni i privatni; rukopis ostaje lokalno spremljen.</p>
     <div className="pis-material-upload"><select aria-label="Vrsta materijala" value={kind} onChange={(event) => setKind(event.target.value as MaterialKind)}>{MATERIAL_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><label className="pis-file-button">{busy ? 'Čitamo…' : 'Dodaj datoteku'}<input type="file" accept=".docx,.pdf,.txt,.md,image/*" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.currentTarget.value = '' }} /></label></div>
     {message && <p className="pis-agent-message" role="status">{message}</p>}
-    {materials.length > 0 && <ul className="pis-material-list">{materials.map((material) => <li key={material.id} data-status={material.extractionStatus}><span className={`pis-status-dot is-${material.extractionStatus}`} aria-hidden="true" /><div><b title={material.name}>{material.name}</b><small>{materialStatus(material.extractionStatus)}</small></div>{material.extractionStatus === 'failed' && <button type="button" onClick={() => void retry(material.id)} disabled={refreshingId === material.id} aria-label="Pokušaj ponovno">{refreshingId === material.id ? 'Provjeravam…' : 'Pokušaj ponovno'}</button>}</li>)}</ul>}
+    <input ref={reuploadInput} type="file" accept=".docx,.pdf,.txt,.md,image/*" hidden aria-label="Odaberi zamjenski materijal" onChange={(event) => { const file = event.target.files?.[0]; const material = materials.find((item) => item.id === reuploadId); if (file && material) void upload(file, material.kind, material.id); event.currentTarget.value = '' }} />
+    {materials.length > 0 && <ul className="pis-material-list">{materials.map((material) => <li key={material.id} data-status={material.extractionStatus}><span className={`pis-status-dot is-${material.extractionStatus}`} aria-hidden="true" /><div><b title={material.name}>{material.name}</b><small>{materialStatus(material.extractionStatus)}</small></div>{material.extractionStatus === 'failed' && <button type="button" onClick={() => reupload(material)} disabled={busy} aria-label="Ponovno učitaj materijal">{busy && reuploadId === material.id ? 'Odaberi datoteku…' : 'Ponovno učitaj materijal'}</button>}</li>)}</ul>}
   </section>
 }
 
@@ -108,7 +107,11 @@ export function materialStatus(status: MaterialExtractionStatus): string {
 function isMaterial(value: unknown): value is MaterialAssetV1 {
   if (!value || typeof value !== 'object') return false
   const material = value as Partial<MaterialAssetV1>
-  return typeof material.id === 'string' && typeof material.name === 'string' && typeof material.extractionStatus === 'string'
+  return typeof material.id === 'string' && material.id.trim().length > 0 && typeof material.name === 'string' && typeof material.extractionStatus === 'string' && ['pending', 'processing', 'extracted', 'partial', 'failed', 'needs_review'].includes(material.extractionStatus)
+}
+
+function replaceMaterial(materials: MaterialAssetV1[], replacedId: string, replacement: MaterialAssetV1): MaterialAssetV1[] {
+  return [...materials.filter((material) => material.id !== replacedId), replacement]
 }
 
 function materialRequestMessage(status: number, detail: unknown, fallback: string): string {

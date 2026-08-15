@@ -7,7 +7,7 @@ import { plainTextDocument } from '../../../lib/manuscript/model'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from './agentic-timeline'
-import { AgenticReview } from './agentic-review'
+import { AgenticReview, type AgenticReviewDraft, type AgenticReviewEvidence } from './agentic-review'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 
 type RunStatus = 'pending' | 'running' | 'paused' | 'completed' | 'blocked' | 'failed' | 'cancelled'
@@ -16,7 +16,7 @@ type LocalDraftOverride = {
   sectionId: string
   baseRevision: string
   proposedContent: TiptapNode
-  status: 'generated' | 'rejected'
+  status: 'generated' | 'rejected' | 'accepted'
   verificationMessage?: string
   updatedAt: string
 }
@@ -25,7 +25,7 @@ const DRAFT_STORAGE_PREFIX = 'katedra_agent_draft_v1:'
 
 export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
   const [run, setRun] = useState<AgenticRun | null>(null)
-  const [draft, setDraft] = useState<AgenticDraftV1 | null>(null)
+  const [draft, setDraft] = useState<AgenticReviewDraft | null>(null)
   const [message, setMessage] = useState('')
   const resultSignature = useRef('')
   const localOverridesRef = useRef<Record<string, LocalDraftOverride>>({})
@@ -135,6 +135,31 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     } : current)
   }
 
+  const acceptDraft = async (sectionIds?: string[]) => {
+    if (!draft) return
+    if (onAcceptDraft) {
+      if (sectionIds) await onAcceptDraft(draft, sectionIds)
+      else await onAcceptDraft(draft)
+    }
+    const acceptedIds = sectionIds || draft.sections
+      .filter((revision) => revision.status === 'verified' && manuscript.sections.some((section) => section.id === revision.sectionId && section.updatedAt === revision.baseRevision))
+      .map((revision) => revision.sectionId)
+    if (acceptedIds.length === 0) return
+    const updatedAt = new Date().toISOString()
+    setDraft((current) => current ? {
+      ...current,
+      sections: current.sections.map((revision) => acceptedIds.includes(revision.sectionId) ? { ...revision, status: 'accepted' as const, updatedAt } : revision),
+      updatedAt,
+    } : current)
+    localOverridesRef.current = { ...localOverridesRef.current }
+    for (const sectionId of acceptedIds) {
+      const revision = draft.sections.find((item) => item.sectionId === sectionId)
+      if (!revision) continue
+      localOverridesRef.current[sectionId] = { sectionId, baseRevision: revision.baseRevision, proposedContent: revision.proposedContent, status: 'accepted', verificationMessage: revision.verificationMessage, updatedAt }
+    }
+    persistDraftOverrides(projectId, runId, localOverridesRef.current)
+  }
+
   return <section className="pis-agentic-dashboard" aria-live="polite">
     <header className="pis-agentic-dashboard-heading">
       <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Proces izrade rada'}</p><h2>Tijek izrade rada</h2><p>{activeSummary ? `${activeSummary.phaseLabel} je u tijeku. ${activeSummary.nextAction}` : run ? runDescription(run.status) : 'Učitavam zadnji checkpoint…'}</p></div>
@@ -152,12 +177,12 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       <AgenticTimeline steps={run?.steps || []} />
       <ReadOnlyManuscriptPreview manuscript={manuscript} />
     </div>
-    {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={(sectionIds) => onAcceptDraft ? onAcceptDraft(draft, sectionIds) : Promise.resolve()} onEdit={editDraft} onReject={rejectDraft} />}
+    {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
     {message && <p className="pis-agent-message" role="alert">{message}</p>}
   </section>
 }
 
-function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1, projectId: string, runId: string): AgenticDraftV1 | null {
+function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1, projectId: string, runId: string): AgenticReviewDraft | null {
   const rawResults = Array.isArray(body.results) ? body.results : []
   let draft = createAgenticDraft({ projectId, runId, base: manuscript })
   for (const value of rawResults) {
@@ -171,7 +196,7 @@ function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1,
     const status = verificationStatus === 'verified' ? 'verified' : verificationStatus === 'blocked' ? 'blocked' : 'generated'
     const issues = Array.isArray(verification.issues) ? verification.issues.map((issue) => issue && typeof issue === 'object' && typeof (issue as Record<string, unknown>).message === 'string' ? String((issue as Record<string, unknown>).message) : '').filter(Boolean) : []
     const updatedAt = typeof result.createdAt === 'string' ? result.createdAt : new Date().toISOString()
-    draft = upsertSectionRevision(draft, {
+    const nextDraft = upsertSectionRevision(draft, {
       sectionId,
       baseRevision: typeof result.baseRevision === 'string' ? result.baseRevision : '__missing_base_revision__',
       proposedContent: plainTextDocument(output),
@@ -179,11 +204,36 @@ function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1,
       verificationMessage: issues.join(' '),
       updatedAt,
     })
+    draft = {
+      ...nextDraft,
+      sections: nextDraft.sections.map((revision) => revision.sectionId === sectionId ? { ...revision, evidence: normalizeEvidence(result, verification) } : revision),
+    }
   }
   return draft.sections.length ? draft : null
 }
 
-function mergeDraftOverrides(draft: AgenticDraftV1 | null, overrides: Record<string, LocalDraftOverride>): { draft: AgenticDraftV1 | null; overrides: Record<string, LocalDraftOverride> } {
+function normalizeEvidence(result: Record<string, unknown>, verification: Record<string, unknown>): AgenticReviewEvidence[] {
+  const candidates = [
+    ...(Array.isArray(result.citations) ? result.citations : []),
+    ...(Array.isArray(result.evidence) ? result.evidence : []),
+    ...(Array.isArray(verification.evidence) ? verification.evidence : []),
+  ]
+  const seen = new Set<string>()
+  return candidates.flatMap((value) => {
+    if (!value || typeof value !== 'object') return []
+    const item = value as Record<string, unknown>
+    const id = typeof item.id === 'string' ? item.id : ''
+    const title = typeof item.title === 'string' ? item.title : undefined
+    const url = typeof item.url === 'string' ? item.url : undefined
+    const doi = typeof item.doi === 'string' ? item.doi : undefined
+    const key = id || url || doi || title || ''
+    if (!key || seen.has(key)) return []
+    seen.add(key)
+    return [{ id: key, title, url, doi, verified: item.verified === true, status: typeof item.status === 'string' ? item.status : undefined }]
+  })
+}
+
+function mergeDraftOverrides(draft: AgenticReviewDraft | null, overrides: Record<string, LocalDraftOverride>): { draft: AgenticReviewDraft | null; overrides: Record<string, LocalDraftOverride> } {
   if (!draft) return { draft, overrides: {} }
   const validOverrides: Record<string, LocalDraftOverride> = {}
   const sections = draft.sections.map((revision) => {
@@ -201,7 +251,7 @@ function readDraftOverrides(projectId: string, runId: string): Record<string, Lo
     const raw = JSON.parse(window.localStorage.getItem(draftStorageKey(projectId, runId)) || 'null') as unknown
     if (!isRecord(raw) || raw.schemaVersion !== 1 || !isRecord(raw.sections)) return {}
     return Object.fromEntries(Object.entries(raw.sections).flatMap(([sectionId, value]) => {
-      if (!isRecord(value) || value.sectionId !== sectionId || typeof value.baseRevision !== 'string' || !isSafeTiptapNode(value.proposedContent) || !['generated', 'rejected'].includes(String(value.status)) || typeof value.updatedAt !== 'string') return []
+    if (!isRecord(value) || value.sectionId !== sectionId || typeof value.baseRevision !== 'string' || !isSafeTiptapNode(value.proposedContent) || !['generated', 'rejected', 'accepted'].includes(String(value.status)) || typeof value.updatedAt !== 'string') return []
       return [[sectionId, value as unknown as LocalDraftOverride]]
     }))
   } catch {

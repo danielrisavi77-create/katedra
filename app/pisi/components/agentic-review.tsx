@@ -1,28 +1,47 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
 import { documentText, plainTextDocument } from '../../../lib/manuscript/model'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 
-export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticDraftV1; onAccept: (sectionIds?: string[]) => Promise<void>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
-  const verifiedIds = draft.sections.filter((revision) => isAcceptable(manuscript, revision)).map((revision) => revision.sectionId)
+export type AgenticReviewEvidence = { id: string; title?: string; url?: string; doi?: string; verified?: boolean; status?: string }
+export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[] }
+export type AgenticReviewDraft = Omit<AgenticDraftV1, 'sections'> & { sections: AgenticReviewRevision[] }
+
+export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticReviewDraft; onAccept: (sectionIds?: string[]) => Promise<void>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
+  const [acceptedSectionIds, setAcceptedSectionIds] = useState<Set<string>>(() => new Set())
+  const verifiedIds = draft.sections.filter((revision) => !acceptedSectionIds.has(revision.sectionId) && isAcceptable(manuscript, revision)).map((revision) => revision.sectionId)
   const textareas = useRef<Record<string, HTMLTextAreaElement | null>>({})
+
+  const accept = async (sectionIds?: string[]) => {
+    const acceptedIds = sectionIds || verifiedIds
+    if (acceptedIds.length === 0) return
+    if (sectionIds) await onAccept(sectionIds)
+    else await onAccept()
+    setAcceptedSectionIds((current) => new Set([...current, ...acceptedIds]))
+  }
 
   return <section className="pis-agentic-review" aria-labelledby="pis-agentic-review-title">
     <header className="pis-agentic-dashboard-heading"><div><p className="pis-kicker">Tvoja potvrda</p><h2 id="pis-agentic-review-title">Pregled rezultata</h2><p>Pregledaj izvore i prijedloge. Prihvati samo ono što je prošlo verifikaciju; glavni rukopis se do tada ne mijenja.</p></div><span className="pis-agent-run-mode">{verifiedIds.length} spremno</span></header>
-    <div className="pis-review-actions"><span>Glavni rukopis se još nije promijenio.</span><button type="button" className="is-primary" disabled={verifiedIds.length === 0} onClick={() => void onAccept()} aria-label="Prihvati sve provjerene">Prihvati sve provjerene</button></div>
+    <div className="pis-review-actions"><span>Glavni rukopis se još nije promijenio.</span><button type="button" className="is-primary" disabled={verifiedIds.length === 0} onClick={() => void accept()} aria-label="Prihvati sve provjerene">Prihvati sve provjerene</button></div>
     <div className="pis-review-list">{draft.sections.map((revision) => {
       const section = manuscript.sections.find((item) => item.id === revision.sectionId)
       if (!section) return <p key={revision.sectionId} className="pis-agent-message" role="alert">Sekcija nije pronađena u glavnom rukopisu.</p>
-      const acceptable = isAcceptable(manuscript, revision)
-      const canReview = !['accepted', 'rejected'].includes(revision.status)
+      const locallyAccepted = acceptedSectionIds.has(revision.sectionId) || revision.status === 'accepted'
+      const acceptable = !locallyAccepted && isAcceptable(manuscript, revision)
+      const canReview = !locallyAccepted && !['accepted', 'rejected'].includes(revision.status)
+      const evidence = revision.evidence || []
       return <article key={revision.sectionId} className="pis-review-item" data-status={revision.status}>
-        <header><div><p className="pis-kicker">{reviewStatus(revision.status)}</p><h3>{section.title}</h3></div><span>{acceptable ? 'Provjereno' : 'Pregledaj rezultat'}</span></header>
+        <header><div><p className="pis-kicker">{locallyAccepted ? 'Prihvaćeno' : reviewStatus(revision.status)}</p><h3>{section.title}</h3></div><span>{locallyAccepted ? 'Prihvaćeno' : acceptable ? 'Provjereno' : 'Pregledaj rezultat'}</span></header>
         <textarea ref={(element) => { textareas.current[section.id] = element }} aria-label={`Prijedlog za ${section.title}`} value={documentText(revision.proposedContent)} onChange={(event) => onEdit(section.id, plainTextDocument(event.target.value))} readOnly={!canReview} />
+        <div className="pis-review-evidence" aria-label={`Izvori za ${section.title}`}>
+          <strong>Izvori i dokazi</strong>
+          {evidence.length > 0 ? <ul>{evidence.map((item) => <li key={item.id}><span>{item.title || item.url || item.doi || 'Neimenovani izvor'}</span>{item.url && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}{item.doi && <small>DOI: {item.doi}</small>}<em>{item.verified ? 'Provjereno' : item.status || 'Potrebna provjera'}</em></li>)}</ul> : <p>Nema priloženih izvora za ovaj rezultat.</p>}
+        </div>
         {revision.verificationMessage && <p className="pis-review-verification"><strong>{revision.status === 'blocked' ? 'Potrebna provjera · ' : ''}Verifikator</strong> {revision.verificationMessage}</p>}
-        {canReview && <div className="pis-review-item-actions"><button type="button" onClick={() => textareas.current[section.id]?.focus()} aria-label={`Uredi ${section.title}`}>Uredi</button><button type="button" className="is-primary" disabled={!acceptable} onClick={() => void onAccept([section.id])} aria-label={`Prihvati ${section.title}`}>Prihvati</button><button type="button" onClick={() => onReject(section.id)} aria-label={`Odbaci ${section.title}`}>Odbaci</button></div>}
+        {canReview && <div className="pis-review-item-actions"><button type="button" onClick={() => textareas.current[section.id]?.focus()} aria-label={`Uredi ${section.title}`}>Uredi</button><button type="button" className="is-primary" disabled={!acceptable} onClick={() => void accept([section.id])} aria-label={`Prihvati ${section.title}`}>Prihvati</button><button type="button" onClick={() => onReject(section.id)} aria-label={`Odbaci ${section.title}`}>Odbaci</button></div>}
       </article>
     })}</div>
   </section>
