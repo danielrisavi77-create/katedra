@@ -1,5 +1,57 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15r
+
+### Root cause selected
+
+Priority: P1 (the `/api/state` privacy allowlist validated field names but not
+the runtime shape or size of nested values, and GET returned legacy `gen`,
+`hist` and `log` values without re-sanitizing them).
+
+A stale or modified legacy client could place long academic text in an
+allowlisted field, use string values where structured booleans/numbers were
+expected, or return previously contaminated ledger data through the shared
+state response. This contradicted the local-only manuscript boundary.
+
+### Fix
+
+- Validate allowlisted legacy metadata by type, bounded size and field-specific
+  shape before writing it to shared state.
+- Keep only known capability acknowledgements and their short structured
+  evidence fields.
+- Bound history and ledger entry counts, timestamps, filenames and Lekta
+  summary identifiers; drop free-form text and unknown nested fields.
+- Apply the same sanitizers when reading state, so legacy contamination is not
+  returned to the client.
+- Add runtime regressions for malicious nested write values and contaminated
+  stored values.
+
+### Verification
+
+- TDD regression: PASS; both new privacy tests failed before the sanitizer and
+  passed afterward.
+- Focused state/privacy tests: PASS (14 tests).
+- Full Katedra suite: PASS (131 test files, 448 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright localhost smoke: PASS for `/pisi`, `/racun`, `/prijava`,
+  `/privatnost` and `/uvjeti` at 390px and 1440px, including dark-mode
+  onboarding; no horizontal overflow or page errors.
+- `git diff --check`: PASS.
+
+### Golden Journey impact
+
+- G2, G3 and G9: strengthens the shared-state privacy and malformed-state
+  recovery boundary.
+- G0, G1, G4-G8 and G10: no behavior change.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Fresh UX/readiness review: 2026-08-15q
 
 ### Scope and evidence

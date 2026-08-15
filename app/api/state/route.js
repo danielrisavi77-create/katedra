@@ -99,9 +99,9 @@ function rowToCamel(row) {
     lektaIssues: sanitizeLektaIssues(row.lekta_issues),
     lektaFixedTotal: row.lekta_fixed_total,
     checks: row.checks,
-    gen: row.gen,
-    hist: row.hist,
-    log: row.log,
+    gen: sanitizeGen(row.gen),
+    hist: sanitizeHist(row.hist),
+    log: sanitizeLog(row.log),
     logf: row.logf,
     guestProjectId: row.guest_project_id,
     updatedAt: row.updated_at,
@@ -135,23 +135,143 @@ function sanitizeGen(raw) {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const safe = {}
   for (const key of GEN_SERVER_SAFE_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(raw, key)) safe[key] = raw[key]
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) continue
+    const value = raw[key]
+    if (GEN_BOOLEAN_KEYS.has(key)) {
+      if (typeof value === 'boolean') safe[key] = value
+      continue
+    }
+    if (GEN_INTEGER_KEYS.has(key)) {
+      const number = boundedInteger(value, 0, 10_000_000)
+      if (number !== undefined) safe[key] = number
+      continue
+    }
+    if (key === 'aiAck') {
+      const acknowledgements = sanitizeAiAcknowledgements(value)
+      if (Object.keys(acknowledgements).length) safe[key] = acknowledgements
+      continue
+    }
+    const text = sanitizeShortText(value, GEN_TEXT_LIMITS[key] || 200)
+    if (text !== undefined && (!GEN_TEXT_PATTERNS[key] || GEN_TEXT_PATTERNS[key].test(text))) safe[key] = text
   }
   return safe
 }
 function sanitizeHist(raw) {
   if (!Array.isArray(raw)) return []
-  return raw.map((e) => ({ t: e?.t, mode: e?.mode, tip: e?.tip }))
+  return raw.slice(0, 250).flatMap((entry) => {
+    const timestamp = boundedInteger(entry?.t, 0, Number.MAX_SAFE_INTEGER)
+    if (timestamp === undefined) return []
+    const safe = { t: timestamp }
+    const mode = sanitizeShortText(entry?.mode, 80)
+    const tip = sanitizeShortText(entry?.tip, 80)
+    if (mode !== undefined) safe.mode = mode
+    if (tip !== undefined) safe.tip = tip
+    return [safe]
+  })
 }
 function sanitizeLog(raw) {
   if (!Array.isArray(raw)) return []
-  return raw.map((e) => {
-    const safe = { t: e?.t }
+  return raw.slice(0, 250).flatMap((entry) => {
+    const timestamp = boundedInteger(entry?.t, 0, Number.MAX_SAFE_INTEGER)
+    if (timestamp === undefined) return []
+    const safe = { t: timestamp }
     for (const key of LOG_SERVER_SAFE_KEYS) {
-      if (e && Object.prototype.hasOwnProperty.call(e, key)) safe[key] = e[key]
+      if (!entry || !Object.prototype.hasOwnProperty.call(entry, key)) continue
+      if (LOG_BOOLEAN_KEYS.has(key)) {
+        if (typeof entry[key] === 'boolean') safe[key] = entry[key]
+        continue
+      }
+      if (key === 'files') {
+        if (Array.isArray(entry.files)) {
+          const files = entry.files.slice(0, 20).flatMap((file) => {
+            const name = sanitizeShortText(file, 200)
+            return name === undefined ? [] : [name]
+          })
+          if (files.length) safe.files = files
+        }
+        continue
+      }
+      if (key === 'lekta_result') {
+        const result = sanitizeLektaResult(entry.lekta_result)
+        if (result) safe.lekta_result = result
+        continue
+      }
+      const value = sanitizeShortText(entry[key], 120)
+      if (value !== undefined) safe[key] = value
     }
-    return safe
+    return [safe]
   })
+}
+
+const GEN_BOOLEAN_KEYS = new Set(['f_brutal', 'a_gradja', 'a_checkpoint', 'u_skills', 'a_learn'])
+const GEN_INTEGER_KEYS = new Set(['wc_total'])
+const GEN_TEXT_LIMITS = {
+  f_fakultet: 200,
+  f_kolegij: 200,
+  f_opseg: 120,
+  f_izvori: 40,
+  f_stil: 200,
+  f_rok: 40,
+  f_radfile: 200,
+  f_trajanje: 40,
+  f_datumobr: 40,
+  wc_unit: 40,
+}
+const GEN_TEXT_PATTERNS = {
+  f_opseg: /^[\d.,\s]*(?:[-–][\d.,\s]*)?(?:riječi|stranica|pages?|words?)?$/iu,
+  f_izvori: /^(?:min\.\s*)?\d{1,4}$/iu,
+  f_rok: /^\d{4}-\d{2}-\d{2}$/u,
+  f_datumobr: /^\d{4}-\d{2}-\d{2}$/u,
+  f_trajanje: /^\d{1,3}(?:\s*(?:min|minute|minuta))?$/iu,
+}
+const LOG_BOOLEAN_KEYS = new Set(['done', 'skip', 'open', 'aiGenerated', 'reviewed'])
+const AI_ACK_KEYS = new Set([
+  'contextual_ai', 'section_writing', 'full_generation', 'generate_large_sections',
+  'source_suggestions', 'web_research', 'mentor_review', 'methodology',
+  'defense_simulator', 'autonomous_run',
+])
+
+function sanitizeAiAcknowledgements(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const safe = {}
+  for (const [capability, value] of Object.entries(raw)) {
+    if (!AI_ACK_KEYS.has(capability) || value == null || typeof value !== 'object' || Array.isArray(value)) continue
+    const factId = sanitizeShortText(value.factId, 120)
+    const factVerifiedDate = sanitizeShortText(value.factVerifiedDate, 40)
+    const ackedAt = boundedInteger(value.ackedAt, 0, Number.MAX_SAFE_INTEGER)
+    if (!factId || ackedAt === undefined) continue
+    safe[capability] = { factId, ...(factVerifiedDate ? { factVerifiedDate } : {}), ackedAt }
+  }
+  return safe
+}
+
+function sanitizeLektaResult(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const result = {}
+  const score = boundedInteger(raw.score, 0, 100)
+  const issueCount = boundedInteger(raw.issueCount, 0, 100_000)
+  if (score !== undefined) result.score = score
+  if (issueCount !== undefined) result.issueCount = issueCount
+  if (Array.isArray(raw.findingIds)) {
+    const findingIds = raw.findingIds.slice(0, 250).flatMap((id) => {
+      const value = sanitizeShortText(id, 120)
+      return value === undefined ? [] : [value]
+    })
+    if (findingIds.length) result.findingIds = findingIds
+  }
+  return Object.keys(result).length ? result : null
+}
+
+function sanitizeShortText(value, maxLength) {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  if (!normalized || normalized.length > maxLength || /[\u0000-\u001f\u007f]/u.test(normalized)) return undefined
+  return normalized
+}
+
+function boundedInteger(value, min, max) {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/u.test(value.trim()) ? Number(value) : NaN
+  return Number.isSafeInteger(number) && number >= min && number <= max ? number : undefined
 }
 
 function cleanOpaqueId(value) {

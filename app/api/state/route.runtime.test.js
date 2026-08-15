@@ -255,4 +255,94 @@ describe('PUT /api/state ownership guard', () => {
       status: 'OPEN',
     }])
   })
+
+  it('keeps synced legacy metadata structured and bounded', async () => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    let written
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from() {
+        const query = {
+          select() { return query },
+          upsert(value) { written = value; return query },
+          maybeSingle: vi.fn().mockResolvedValue({ data: { project_id: 'project-1' }, error: null }),
+        }
+        return query
+      },
+    })
+    mocks.resolveOwnedProject.mockResolvedValue({ projectId: 'project-1', guestProjectId: 'guest-1' })
+
+    const response = await PUT(request({
+      projectId: 'project-1',
+      workTypeCanonical: 'seminar',
+      topic: 'Tema',
+      gen: {
+        f_fakultet: 'FPZG',
+        f_izvori: 'cijeli tekst rada koji ne smije završiti u shared state'.repeat(20),
+        wc_total: '1200',
+        f_brutal: 'yes',
+        aiAck: {
+          generate_large_sections: { factId: 'fact-1', factVerifiedDate: '2026-08-15', ackedAt: 123 },
+          injected: { prompt: 'tajni akademski tekst' },
+        },
+      },
+      hist: [{ t: 'not-a-timestamp', mode: 'write', tip: 'x'.repeat(500), prompt: 'tajni tekst' }],
+      log: [{
+        t: 123,
+        kind: 'session_started',
+        files: ['draft.docx', 'x'.repeat(500)],
+        done: 'yes',
+        lekta_result: { score: 99, issueCount: 1, findingIds: ['issue-1'], detail: 'tajni tekst' },
+        txt: 'tajni tekst',
+      }],
+    }))
+
+    expect(response.status).toBe(200)
+    expect(written.gen).toEqual({
+      f_fakultet: 'FPZG',
+      wc_total: 1200,
+      aiAck: {
+        generate_large_sections: { factId: 'fact-1', factVerifiedDate: '2026-08-15', ackedAt: 123 },
+      },
+    })
+    expect(written.hist).toEqual([])
+    expect(written.log).toEqual([{
+      t: 123,
+      kind: 'session_started',
+      files: ['draft.docx'],
+      lekta_result: { score: 99, issueCount: 1, findingIds: ['issue-1'] },
+    }])
+  })
+
+  it('sanitizes legacy gen, history and ledger values when reading state', async () => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from() {
+        const query = {
+          select() { return query },
+          eq() { return query },
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: {
+              project_id: 'project-1',
+              gen: { f_fakultet: 'FPZG', f_izvori: 'tajni tekst', wc_total: '1200', f_brutal: 'yes' },
+              hist: [{ t: 'not-a-timestamp', prompt: 'tajni tekst' }],
+              log: [{ t: 123, kind: 'ai_response', txt: 'tajni AI odgovor', done: 'yes' }],
+            },
+            error: null,
+          }),
+        }
+        return query
+      },
+    })
+    mocks.resolveOwnedProject.mockResolvedValue({ projectId: 'project-1', guestProjectId: 'guest-1' })
+
+    const response = await GET(new Request('http://localhost/api/state?projectId=project-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.gen).toEqual({ f_fakultet: 'FPZG', wc_total: 1200 })
+    expect(body.hist).toEqual([])
+    expect(body.log).toEqual([{ t: 123, kind: 'ai_response' }])
+  })
 })
