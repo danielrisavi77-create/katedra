@@ -59,8 +59,10 @@ canonical migration and a real concurrency test.
 
 The local Lekta contract suite currently passes for the available agentic
 contract, billing, payload-attachment and worker-dispatcher fixtures (4 files,
-11 tests, run-mode execution on 2026-08-15). This is local source evidence only;
-it does not prove that the canonical RPCs, RLS policies or worker are deployed.
+11 tests, run-mode execution on 2026-08-15). Lekta's full local check also
+passes (typecheck, 311 test files / 3,786 tests and Vite build). This is local
+source evidence only; it does not prove that the canonical RPCs, RLS policies
+or worker are deployed.
 
 Required owner action: update the canonical Lekta RPC to use an atomic
 conflict-safe insert/claim path that verifies the existing immutable snapshot,
