@@ -1,5 +1,53 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15l
+
+### Root cause selected
+
+Priority: P2 (anonymous `/racun` exposed account-only actions).
+
+The page rendered account deletion and withdrawal controls even when
+`/api/account` returned `401`. Both actions require an authenticated account,
+so a guest saw controls that could only end in an API error. This weakened the
+account-center mental model and created an avoidable failure path in G9.
+
+### Fix
+
+- Keep privacy guidance visible to guests, but hide account deletion and
+  withdrawal actions until the authenticated account payload is available.
+- Show one explicit login CTA returning to `/racun`.
+- Add a jsdom regression test and a browser assertion for both mobile and
+  desktop widths.
+
+### Verification
+
+- TDD regression: PASS; the new DOM test was red before the conditional account
+  rendering and green afterward.
+- Focused account tests: PASS (4 tests).
+- Full Katedra suite: PASS (131 files, 442 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright local smoke: PASS; anonymous `/racun` hides both account-only
+  actions, shows the login CTA, has no page exceptions, and has no horizontal
+  overflow at 390px or 1440px.
+
+### Golden Journey impact
+
+- G9: improved local anonymous/session-error recovery; authenticated payment
+  and provider failure evidence remains external.
+- G8: no change to returning authenticated project behavior.
+
+### Commit
+
+- Isolated changeset: `fix: clarify anonymous account actions`.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15k
 
 ### Root cause selected
