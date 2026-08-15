@@ -109,7 +109,7 @@ async function handlePOST(req, requestContext = {}) {
   }
   if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true' && paidCapability) {
     const { resolveProjectCapability } = await import('@/lib/product/server-capabilities')
-    const decision = await resolveProjectCapability(db, { userId, projectId: project?.projectId || projectId, capability: paidCapability })
+    const decision = await resolveProjectCapability(supabase, { userId, projectId: project?.projectId || projectId, capability: paidCapability })
     if (!decision.allowed) {
       const status = decision.code === 'pass_required' ? 402 : decision.code === 'policy_unverified' ? 403 : decision.code === 'project_not_owned' ? 404 : 503
       return json(status, { error: decision.code === 'policy_unverified' ? 'Institucijska pravila za ovu AI mogućnost još nisu verificirana.' : 'Ova AI mogućnost nije otključana za ovaj projekt.', reason: decision.code })

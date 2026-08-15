@@ -1,5 +1,55 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15p
+
+### Root cause selected
+
+Priority: P0 (the paid chat capability gate used an admin Supabase client
+without the authenticated browser session).
+
+`resolveProjectCapability` verifies that the supplied user ID matches
+`db.auth.getUser()`. `/api/chat` passed its service-role client to that helper,
+so a real paid chat request could be interpreted as unauthenticated even after
+the route had authenticated the user with the server client.
+
+### Fix
+
+- Pass the session-bound server client to `resolveProjectCapability`.
+- Keep the admin client for server-side ownership, wallet, provider and billing
+  operations where elevated access is intentional.
+- Add a runtime regression that asserts the capability gate receives the
+  authenticated server client, not the admin client.
+
+### Verification
+
+- TDD regression: PASS; the new client-identity assertion failed before the
+  route fix and passed afterward.
+- Focused chat/capability tests: PASS (18 tests).
+- Full Katedra suite: PASS (131 test files, 446 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright localhost smoke: PASS for `/pisi?tip=d` and `/racun` at 390px
+  and 1440px; all responses were `200` with no page errors or horizontal
+  overflow. Expected anonymous API `401` responses were treated as auth
+  behavior, not browser failures.
+
+### Golden Journey impact
+
+- G3-G6 and G9: restores the authenticated capability boundary needed before
+  the paid chat/provider path can be verified in staging.
+- G0-G2, G7-G8 and G10: no behavior change.
+
+### Commit
+
+- Pending selected-file commit after audit ledger update.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15o
 
 ### Root cause selected

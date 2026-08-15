@@ -138,7 +138,8 @@ describe('POST /api/chat runtime guards', () => {
 
   it('uses the strict project capability gate for paid generation when locks are enabled', async () => {
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
-    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    const serverClient = { auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } }
+    mocks.createClient.mockResolvedValue(serverClient)
     mocks.createAdminClient.mockReturnValue({})
     mocks.validateChatRequest.mockReturnValue({ ok: true, value: {} })
     mocks.resolveOwnedProject.mockResolvedValue(project)
@@ -151,7 +152,7 @@ describe('POST /api/chat runtime guards', () => {
     }))
 
     expect(response.status).toBe(402)
-    expect(mocks.resolveProjectCapability).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.resolveProjectCapability).toHaveBeenCalledWith(serverClient, {
       userId: 'user-1', projectId: project.projectId, capability: 'full_generation',
     })
   })
