@@ -9,9 +9,15 @@ import { MobileWorkspaceNav } from './mobile-workspace-nav'
 import { ProjectNavigation, type ProjectNavItem } from './project-navigation'
 import { WorkspaceNavigation, type SaveStatus } from './workspace-navigation'
 
-export type MobileView = 'outline' | 'editor' | 'assistant'
+export type MobileView = 'overview' | 'editor' | 'assistant'
 export type WorkspaceView = 'home' | 'preparation' | 'dashboard' | 'intervention' | 'review' | 'writing'
 export type { SaveStatus } from './workspace-navigation'
+
+export function normalizeMobileView(value: unknown): MobileView {
+  if (value === 'outline' || value === 'overview') return 'overview'
+  if (value === 'assistant') return 'assistant'
+  return 'editor'
+}
 
 export function WorkspaceShell({
   manuscript,
@@ -78,10 +84,12 @@ export function WorkspaceShell({
         ? <main className="pis-project-home-main" aria-label="Projektna početna">{projectHome}</main>
         : view !== 'writing' && agenticContent
         ? <main className="pis-agentic-main" aria-label="Agentički workspace">{agenticContent}</main>
-        : <div className="pis-columns" data-mobile-view={activeMobileView}>
-          <nav className="pis-outline-column" aria-label="Struktura rada">{outline}</nav>
-          <main className="pis-editor-column">{editor}</main>
-          <aside className="pis-assistant-column" aria-label="Katedra urednik">{assistant}</aside>
+        : <div className="pis-writing-frame" data-testid="pis-writing-frame">
+          <div className="pis-columns" data-mobile-view={normalizeMobileView(activeMobileView)}>
+            <nav className="pis-outline-column" aria-label="Struktura rada">{outline}</nav>
+            <main className="pis-editor-column">{editor}</main>
+            <aside className="pis-assistant-column" aria-label="Katedra urednik">{assistant}</aside>
+          </div>
         </div>}
         </div>
       </div>

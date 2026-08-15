@@ -44,12 +44,13 @@ import { ProjectHome } from './project-home'
 import { ProjectDrawer } from './project-drawer'
 import type { ProjectNavItem } from './project-navigation'
 import { projectNavigationDestination, type ProjectDrawerTab } from './project-navigation-routing'
-import { WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
+import { normalizeMobileView, WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
 
 const READY_PREFIX = 'katedra_manuscript_ready:'
 const PROJECT_SETUP_PREFIX = 'katedra_project_setup_v1:'
 const MENTOR_PREFIX = 'katedra_mentor_tasks:'
 const WORKSPACE_VIEW_PREFIX = 'katedra_workspace_view_v1:'
+const MOBILE_VIEW_PREFIX = 'katedra_mobile_workspace_view_v1:'
 const AGENTIC_PHASE_PREFIX = 'katedra_agentic_workspace_phase_v1:'
 
 type MentorTask = { id: string; text: string; done: boolean; sectionId?: string }
@@ -152,6 +153,7 @@ export default function WorkspaceClient() {
       if (cancelled) return
       const storage = getBrowserStorage()
       const projectSetupConfirmed = readStorage(storage, `${PROJECT_SETUP_PREFIX}${migrated.projectId}`) === '1'
+      const persistedMobileView = normalizeMobileView(readStorage(storage, `${MOBILE_VIEW_PREFIX}${migrated.projectId}`))
       const restoredManuscript = stored || migrated
       const persistedView = parseWorkspaceView(readStorage(storage, `${WORKSPACE_VIEW_PREFIX}${migrated.projectId}`))
       const persistedAgenticPhase = initialAgenticWorkspacePhase(readStorage(storage, `${AGENTIC_PHASE_PREFIX}${migrated.projectId}`))
@@ -167,9 +169,12 @@ export default function WorkspaceClient() {
       setLektaSummary(readLektaSummary(manifest))
       setMentorTasks(readJson<MentorTask[]>(`${MENTOR_PREFIX}${migrated.projectId}`) || legacyState?.mentorTasks || [])
       setShowOnboarding(needsOnboarding)
-      setProjectHome(!needsOnboarding && restoredView === 'home')
-      setAgenticMode(!needsOnboarding && restoredView === 'agents')
-      setAgenticView(!needsOnboarding && restoredView === 'agents' ? persistedAgenticPhase : 'preparation')
+      const shouldResumeAgentic = !needsOnboarding && restoredView === 'agents'
+      const shouldResumeHome = !needsOnboarding && !shouldResumeAgentic && (restoredView === 'home' || persistedMobileView === 'overview')
+      setMobileView(persistedMobileView)
+      setProjectHome(shouldResumeHome)
+      setAgenticMode(shouldResumeAgentic)
+      setAgenticView(shouldResumeAgentic ? persistedAgenticPhase : 'preparation')
       setBooting(false)
     }
     void bootstrap().catch(() => {
@@ -549,6 +554,7 @@ export default function WorkspaceClient() {
       setDrawerOpen(false)
       setProjectHome(false)
       setAgenticMode(false)
+      changeMobileView('editor')
       persistWorkspaceView(manuscript.projectId, 'writing')
       return
     }
@@ -580,6 +586,24 @@ export default function WorkspaceClient() {
     setDrawerOpen(true)
   }
 
+  const changeMobileView = (view: MobileView) => {
+    const nextView = normalizeMobileView(view)
+    setMobileView(nextView)
+    writeStorage(getBrowserStorage(), `${MOBILE_VIEW_PREFIX}${manuscript.projectId}`, nextView)
+
+    if (nextView === 'overview') {
+      setDrawerOpen(false)
+      setAgenticMode(false)
+      setProjectHome(true)
+      persistWorkspaceView(manuscript.projectId, 'home')
+      return
+    }
+
+    setProjectHome(false)
+    setAgenticMode(false)
+    persistWorkspaceView(manuscript.projectId, 'writing')
+  }
+
   return (
     <>
       {bootError && <div className="pis-storage-warning" role="status">{bootError}</div>}
@@ -588,7 +612,7 @@ export default function WorkspaceClient() {
         saveStatus={saveStatus}
         syncStatus={syncStatus}
         activeMobileView={mobileView}
-        onMobileViewChange={setMobileView}
+        onMobileViewChange={changeMobileView}
         onExport={() => void exportDocx()}
         onOpenTools={() => setDrawerOpen(true)}
         activeNavItem={activeNavItem}
@@ -609,7 +633,7 @@ export default function WorkspaceClient() {
         outline={
           <OutlinePanel
             manuscript={manuscript}
-             onActivate={(sectionId) => { clearAiContext(); updateManuscript((current) => ({ ...current, activeSectionId: sectionId })); setMobileView('editor') }}
+             onActivate={(sectionId) => { clearAiContext(); updateManuscript((current) => ({ ...current, activeSectionId: sectionId })); changeMobileView('editor') }}
              onAdd={() => { clearAiContext(); updateManuscript((current) => { const section = createSection({ title: 'Novo poglavlje', order: current.sections.length }); return { ...current, sections: [...current.sections, section], activeSectionId: section.id } }) }}
              onMove={(sectionId, offset) => { clearAiContext(); updateManuscript((current) => { const index = current.sections.findIndex((section) => section.id === sectionId); return { ...current, sections: moveSection(current.sections, sectionId, index + offset) } }) }}
              onRemove={(sectionId) => { clearAiContext(); updateManuscript((current) => { const sections = removeSection(current.sections, sectionId); return { ...current, sections, activeSectionId: current.activeSectionId === sectionId ? sections[0].id : current.activeSectionId } }) }}

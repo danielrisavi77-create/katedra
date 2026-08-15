@@ -1,9 +1,9 @@
 'use client'
 
-import type { MobileView } from './workspace-shell'
+import { normalizeMobileView, type MobileView } from './workspace-shell'
 
 const MOBILE_VIEWS: Array<[MobileView, string, string]> = [
-  ['outline', 'Sadržaj', '≡'],
+  ['overview', 'Pregled', '≡'],
   ['editor', 'Rukopis', '✎'],
   ['assistant', 'Katedra', 'K'],
 ]
@@ -14,14 +14,16 @@ export type MobileWorkspaceNavProps = {
 }
 
 export function MobileWorkspaceNav({ activeMobileView, onMobileViewChange }: MobileWorkspaceNavProps) {
+  const normalizedView = normalizeMobileView(activeMobileView)
+
   return (
     <nav className="pis-mobile-nav" aria-label="Radni prostor">
       {MOBILE_VIEWS.map(([view, label, icon]) => (
         <button
           key={view}
           type="button"
-          className={activeMobileView === view ? 'is-active' : ''}
-          aria-current={activeMobileView === view ? 'page' : undefined}
+          className={normalizedView === view ? 'is-active' : ''}
+          aria-current={normalizedView === view ? 'page' : undefined}
           onClick={() => onMobileViewChange(view)}
         >
           <span className="pis-mobile-nav-icon" aria-hidden="true">{icon}</span>
