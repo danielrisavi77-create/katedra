@@ -41,7 +41,7 @@ unable to load its manuscript context.
 
 ### Commit
 
-- Pending selected-file commit after audit ledger update.
+- Isolated changeset: `fix: align agent run context storage bucket`.
 
 ### Remaining issues
 
