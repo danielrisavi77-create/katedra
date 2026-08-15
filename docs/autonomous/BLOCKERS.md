@@ -57,6 +57,11 @@ proven against the canonical Supabase project. Katedra fails closed on
 malformed or mismatched responses, but production safety still depends on the
 canonical migration and a real concurrency test.
 
+The local Lekta contract suite currently passes for the available agentic
+contract, billing, payload-attachment and worker-dispatcher fixtures (4 files,
+11 tests, run-mode execution on 2026-08-15). This is local source evidence only;
+it does not prove that the canonical RPCs, RLS policies or worker are deployed.
+
 Required owner action: update the canonical Lekta RPC to use an atomic
 conflict-safe insert/claim path that verifies the existing immutable snapshot,
 then add a database concurrency test and staging proof for two simultaneous
