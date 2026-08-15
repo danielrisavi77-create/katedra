@@ -202,7 +202,8 @@ describe('AgenticDashboard', () => {
     vi.stubGlobal('fetch', fetchMock)
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
-    expect(await screen.findByText('Tijek izrade rada')).toBeTruthy()
+    expect(await screen.findByText('Literatura')).toBeTruthy()
+    expect(screen.getByText(/Verifikator literature/)).toBeTruthy()
     expect(pollers.length).toBeGreaterThan(0)
     await act(async () => {
       pollers[0]()
@@ -211,7 +212,8 @@ describe('AgenticDashboard', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('Tijek izrade rada')).toBeTruthy()
+    expect(screen.getByText('Literatura')).toBeTruthy()
+    expect(screen.getByText(/Verifikator literature/)).toBeTruthy()
     expect((await screen.findByRole('alert')).textContent).toMatch(/mrež.*greš/i)
     fireEvent.click(screen.getByRole('button', { name: /Pokušaj ponovno/i }))
     await act(async () => {
@@ -220,7 +222,8 @@ describe('AgenticDashboard', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(screen.getByText('Tijek izrade rada')).toBeTruthy()
+    expect(screen.getByText('Literatura')).toBeTruthy()
+    expect(screen.getByText(/Verifikator literature/)).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
