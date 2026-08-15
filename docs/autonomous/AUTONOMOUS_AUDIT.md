@@ -1,5 +1,47 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ai
+
+### Root cause selected
+
+Priority: P0 paid-project billing idempotency. The webhook checked for an
+existing entitlement before calling the canonical project-lock RPC. When two
+paid sessions raced and the first lock existed before its entitlement insert
+completed, the second webhook could attempt a conflicting lock, return 500 and
+remain in Stripe retry instead of reconciling the duplicate payment.
+
+### Fix
+
+- Read the canonical project lock before creating a new one.
+- Treat an existing lock with the same payment, topic and product as an
+  idempotent retry and continue entitlement reconciliation.
+- Treat a lock owned by another payment, or a lock with mismatched purchase
+  identity, as a duplicate and issue the existing idempotent refund path.
+- Keep refund failure fail-closed with a retryable reconciliation response.
+
+### Verification
+
+- TDD regression: PASS; the new lock-race test failed before the fix because
+  the route attempted `lockPaidProject`, then passed after it refunded the
+  duplicate session without granting wallet or entitlement.
+- Webhook/project-lock focused suite: PASS (25 passed, 1 skipped).
+- Full test suite and global quality gates: pending for this cycle.
+- Staging Stripe/Lekta concurrency proof: still unavailable externally.
+
+### Golden Journey impact
+
+- G2-G3: a second payment cannot create a second project lock during the
+  lock-before-entitlement race; it is refunded or left explicitly pending for
+  reconciliation.
+- G0-G1 and G4-G10: no intended behavior change.
+
+### Remaining issues
+
+- Atomic lock idempotency still requires deployment and proof of the canonical
+  Lekta RPC/RLS contract; this route is defense in depth, not a replacement.
+- External commerce, Lekta staging, Docker/Supabase and dependency advisory
+  blockers remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ah
 
 ### Root cause selected

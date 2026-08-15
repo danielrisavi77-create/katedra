@@ -224,4 +224,70 @@ describe('POST /api/webhook runtime guards', () => {
       academic_project_id: projectId,
     })
   })
+
+  it('refunds a second payment when the canonical project lock already belongs to another session', async () => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    mocks.getKatedraPackage.mockReturnValue({ tokens: 12_000_000, eur: 129.9 })
+    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second_lock_race' })
+    const calls = []
+    const db = {
+      rpc: vi.fn(() => { throw new Error('a duplicate lock race must not grant wallet') }),
+      from(table) {
+        calls.push(['from', table])
+        const query = {
+          select() { return query },
+          eq() { return query },
+          or() { return query },
+          gt() { return query },
+          limit() { return query },
+          async maybeSingle() {
+            if (table === 'katedra_projects') return { data: { user_id: 'user-1', project_id: projectId, topic: 'Digitalizacija javne uprave' }, error: null }
+            if (table === 'entitlements') return { data: null, error: null }
+            if (table === 'katedra_project_locks') return { data: {
+              lock_id: 'lock-first', user_id: 'user-1', project_id: projectId,
+              topic: 'Digitalizacija javne uprave', work_type: 'diplomski',
+              product_key: 'diplomski', payment_id: 'cs_first',
+              locked_at: '2026-08-14T10:00:00.000Z', status: 'locked',
+            }, error: null }
+            return { data: null, error: null }
+          },
+          insert() {
+            throw new Error('duplicate lock race must not insert entitlement')
+          },
+        }
+        return query
+      },
+    }
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.getStripe.mockReturnValue({
+      webhooks: { constructEvent: vi.fn().mockReturnValue({
+        type: 'checkout.session.completed',
+        data: { object: {
+          id: 'cs_second', mode: 'payment', payment_status: 'paid',
+          payment_intent: 'pi_second', currency: 'eur', amount_total: 12_990,
+          metadata: {
+            user_id: 'user-1', academic_project_id: projectId,
+            product_key: 'diplomski', topic: 'Digitalizacija javne uprave',
+            lock_confirmation: 'true', tokens: '12000000', amount_eur: '129.9',
+          },
+        } },
+      }) },
+      refunds: { create: refundCreate },
+    })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('ok')
+    expect(refundCreate).toHaveBeenCalledWith(
+      { payment_intent: 'pi_second' },
+      { idempotencyKey: 'katedra-duplicate-pass-cs_second' },
+    )
+    expect(db.rpc).not.toHaveBeenCalled()
+    expect(calls).toEqual([
+      ['from', 'katedra_projects'],
+      ['from', 'entitlements'],
+      ['from', 'katedra_project_locks'],
+    ])
+  })
 })

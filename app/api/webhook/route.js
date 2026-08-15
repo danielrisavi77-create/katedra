@@ -46,7 +46,7 @@ import { getKatedraPackage, PURCHASE_WINDOW_DAYS } from '@/lib/stripe/catalog'
 import { validateCheckoutConfirmation } from '../../../lib/stripe/checkout-validation.js'
 import { refundDuplicateProjectPass } from '../../../lib/stripe/duplicate-refund.js'
 import { katedraPassProductFilter, katedraPassProductId } from '../../../lib/katedra-pass-catalog.js'
-import { lockPaidProject } from '../../../lib/academic-suite/project-lock'
+import { lockPaidProject, readProjectLock } from '../../../lib/academic-suite/project-lock'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 // purchaseWindowDays: koliko dugo Pass vrijedi za trošenje slota, po tipu
@@ -196,18 +196,58 @@ async function handlePOST(req) {
            return new Response('ok')
          }
          if (projectLocksEnabled) {
-           const lockResult = await lockPaidProject(db, {
-             userId,
-             projectId,
-             topic: String(s.metadata?.topic || project.topic || '').trim(),
-             workType: productKey,
-             productKey,
-             paymentId: s.id,
-             lockedAt: new Date().toISOString(),
-           })
-           if (!lockResult.ok) {
-             console.error('paid project lock failed', { sessionId: s.id, userId, projectId, error: lockResult.error })
-             return new Response('project lock failed', { status: 500 })
+           const topic = String(s.metadata?.topic || project.topic || '').trim()
+           const existingLock = await readProjectLock(db, { userId, projectId })
+           if (!existingLock.ok) {
+             console.error('paid project lock read failed', { sessionId: s.id, userId, projectId, error: existingLock.error })
+             return new Response('project lock read failed', { status: 500 })
+           }
+           if (existingLock.lock) {
+             const samePayment = existingLock.lock.paymentId === s.id
+             const sameProject = existingLock.lock.projectId === projectId
+             const samePurchase = existingLock.lock.topic === topic
+               && existingLock.lock.workType === productKey
+               && existingLock.lock.productKey === productKey
+             if (!samePayment || !sameProject || !samePurchase) {
+               const refund = await refundDuplicateProjectPass(stripe, {
+                 sessionId: s.id,
+                 paymentIntent: s.payment_intent,
+               })
+               if (!refund.ok) {
+                 console.error(JSON.stringify({
+                   eventName: 'duplicate_project_lock_reconciliation_pending',
+                   sessionId: s.id,
+                   existingPaymentId: existingLock.lock.paymentId,
+                   userId,
+                   projectId,
+                   reason: refund.reason,
+                 }))
+                 return new Response('duplicate lock refund pending', { status: 500 })
+               }
+               console.log(JSON.stringify({
+                 eventName: 'duplicate_project_lock_refunded',
+                 sessionId: s.id,
+                 existingPaymentId: existingLock.lock.paymentId,
+                 refundId: refund.refundId,
+                 userId,
+                 projectId,
+               }))
+               return new Response('ok')
+             }
+           } else {
+             const lockResult = await lockPaidProject(db, {
+               userId,
+               projectId,
+               topic,
+               workType: productKey,
+               productKey,
+               paymentId: s.id,
+               lockedAt: new Date().toISOString(),
+             })
+             if (!lockResult.ok) {
+               console.error('paid project lock failed', { sessionId: s.id, userId, projectId, error: lockResult.error })
+               return new Response('project lock failed', { status: 500 })
+             }
            }
          }
 
