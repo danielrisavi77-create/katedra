@@ -24,6 +24,32 @@ afterEach(() => {
 })
 
 describe('PUT /api/state ownership guard', () => {
+  it('fails closed in production when project-lock enforcement is disabled', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+    })
+
+    const response = await PUT(request({ projectId: 'project-1', workTypeCanonical: 'seminar', topic: 'Nova tema' }))
+
+    expect(response.status).toBe(503)
+    expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
+  })
+
+  it('fails closed in production when GET cannot report project-lock state', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+    })
+
+    const response = await GET(new Request('http://localhost/api/state?projectId=project-1'))
+
+    expect(response.status).toBe(503)
+    expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
+  })
+
   it('resolves the owned project before building the upsert', async () => {
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
     mocks.createClient.mockResolvedValue({

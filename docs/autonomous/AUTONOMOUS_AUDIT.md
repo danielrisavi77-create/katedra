@@ -1,5 +1,52 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15i
+
+### Root cause selected
+
+Priority: P0 (state mutation could bypass project locking during production
+configuration drift).
+
+`/api/state` only ran its immutable-project checks when
+`KATEDRA_PROJECT_LOCKS_ENABLED` was true. If the production flag was missing
+or accidentally disabled, an authenticated client could still write a new
+topic or work type. The deployment preflight rejected that configuration, but
+the route itself did not provide a second fail-closed boundary.
+
+### Fix
+
+- Fail closed with `503` for production `GET` and `PUT /api/state` when the
+  project-lock contract is not enabled.
+- Make lock configuration read at request time rather than capturing the
+  value at module import.
+- Add runtime regressions proving the route rejects both reads and writes
+  before ownership or persistence work in the unsafe configuration.
+
+### Verification
+
+- TDD regression: PASS; both new tests were red before the route guard and
+  green afterward.
+- Focused state tests: PASS (8 tests).
+- Full Katedra suite: PASS (130 files, 438 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Playwright local smoke: PASS for layout/page behavior at 390px and 1440px;
+  anonymous `/racun` produces the expected two `401 /api/account` responses
+  in React development mode, with no overflow or page exceptions.
+
+### Commit
+
+- Katedra commit `5725ec3 fix: fail closed state project locks`.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Production agentic flags remain disabled until canonical preflight and
+  authenticated staging evidence pass.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15h
 
 ### Root cause selected

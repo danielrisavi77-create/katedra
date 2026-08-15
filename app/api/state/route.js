@@ -29,7 +29,16 @@ const COLUMNS =
   'topic, deadline, ruleset_version, lekta_score, lekta_checked_at, lekta_issues, ' +
   'lekta_fixed_total, checks, gen, hist, log, logf, guest_project_id, updated_at'
 
-const KATEDRA_PROJECT_LOCKS_ENABLED = process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
+function projectLocksEnabled() {
+  return process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
+}
+
+function projectLockUnavailableResponse() {
+  return Response.json(
+    { error: 'Server-side zaklju\u010davanje projekta trenutno nije aktivno.' },
+    { status: 503 },
+  )
+}
 
 const LEKTA_ISSUE_MAX_COUNT = 250
 const LEKTA_ISSUE_STRING_FIELDS = {
@@ -188,6 +197,7 @@ async function handleGET(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (process.env.NODE_ENV === 'production' && !projectLocksEnabled()) return projectLockUnavailableResponse()
 
   const projectId = cleanOpaqueId(new URL(req.url).searchParams.get('projectId'))
   if (!projectId) return Response.json({ error: 'Nedostaje ID projekta.' }, { status: 400 })
@@ -203,7 +213,7 @@ async function handleGET(req) {
     .maybeSingle()
 
   if (error) return Response.json({ error: 'Učitavanje nije uspjelo.' }, { status: 500 })
-  if (!KATEDRA_PROJECT_LOCKS_ENABLED) return Response.json(rowToCamel(row))
+  if (!projectLocksEnabled()) return Response.json(rowToCamel(row))
 
   const lockResult = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
   if (!lockResult.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
@@ -218,6 +228,7 @@ async function handlePUT(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (process.env.NODE_ENV === 'production' && !projectLocksEnabled()) return projectLockUnavailableResponse()
 
   let body
   try {
@@ -250,7 +261,7 @@ async function handlePUT(req) {
   const canonicalType = canonicalWorkType(body)
   if (!canonicalType) return Response.json({ error: 'Nepoznata vrsta rada.' }, { status: 400 })
 
-  if (KATEDRA_PROJECT_LOCKS_ENABLED) {
+  if (projectLocksEnabled()) {
     const lockResult = project
       ? await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
       : { ok: true, lock: null }
