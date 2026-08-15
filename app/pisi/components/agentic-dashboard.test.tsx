@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -66,7 +66,7 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
-    expect(await screen.findByText(/Verifikator evidence guard v2/)).toBeTruthy()
+    expect(await screen.findByText(/Verifikator Evidence Guard V2/i)).toBeTruthy()
     expect(screen.queryByText('Verifikator literature')).toBeNull()
   })
 
@@ -80,7 +80,8 @@ describe('AgenticDashboard', () => {
 
     expect(await screen.findByText('Ustav Republike Hrvatske')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'https://example.test/ustav' })).toBeTruthy()
-    expect(screen.getByText(/Provjereno/)).toBeTruthy()
+    const evidence = screen.getByLabelText('Izvori za Uvod')
+    expect(within(evidence).getByText('Provjereno')).toBeTruthy()
   })
 
   it('keeps authorization and availability errors readable', async () => {

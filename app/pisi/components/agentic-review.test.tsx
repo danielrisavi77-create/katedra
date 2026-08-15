@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -32,7 +32,9 @@ describe('AgenticReview', () => {
     expect(screen.getByRole('button', { name: `Prihvati ${second.title}` })).toHaveProperty('disabled', true)
     await user.click(screen.getByRole('button', { name: 'Prihvati sve provjerene' }))
     expect(onAccept).toHaveBeenCalledWith()
-    expect(screen.getByText(/Prihva.*eno/)).toBeTruthy()
+    const firstProposal = screen.getByRole('heading', { name: first.title }).closest('[data-status]')
+    expect(firstProposal).toBeTruthy()
+    expect(within(firstProposal as HTMLElement).getAllByText('Prihvaćeno')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: `Prihvati ${first.title}` })).toBeNull()
     expect((screen.getByRole('textbox', { name: `Prijedlog za ${first.title}` }) as HTMLTextAreaElement).readOnly).toBe(true)
     expect(screen.getAllByText(/Nema.*izvora/).length).toBeGreaterThan(0)
