@@ -1,5 +1,45 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15aj
+
+### Root cause selected
+
+Priority: P0 privacy boundary in `/api/state`. The legacy `logf` column was
+still selected, returned and accepted by the generic writable-field loop
+without any sanitizer. A stale or malicious client could therefore place raw
+prompt/response or document-derived JSON in shared project state.
+
+### Fix
+
+- Remove `logf` from the state read projection.
+- Remove `logf` from the writable state allowlist.
+- Add regressions proving sensitive `logf` input is not persisted and stored
+  `logf` data is not returned.
+- Keep all existing structured `gen`, `hist`, `log` and Lekta metadata
+  sanitizers unchanged.
+
+### Verification
+
+- TDD regression: PASS; both new assertions failed before the allowlist fix and
+  pass after it.
+- State route focused suite: PASS (10 tests).
+- Full suite and global quality gates: pending for this cycle.
+- No database migration is required; the legacy column remains untouched in
+  the canonical backend but is no longer part of Katedra's sync contract.
+
+### Golden Journey impact
+
+- G0-G10: no intended product behavior change.
+- Privacy/compliance: legacy state writes now fail closed for an otherwise
+  unrecognized free-form field.
+
+### Remaining issues
+
+- Existing contaminated rows, if any, require canonical backend cleanup; this
+  change prevents new reads/writes through Katedra but does not mutate old data.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ai
 
 ### Root cause selected

@@ -27,7 +27,7 @@ import { getRequestId, withRequestId } from '../../../lib/observability/request-
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
   'topic, deadline, ruleset_version, lekta_score, lekta_checked_at, lekta_issues, ' +
-  'lekta_fixed_total, checks, gen, hist, log, logf, guest_project_id, updated_at'
+  'lekta_fixed_total, checks, gen, hist, log, guest_project_id, updated_at'
 
 function projectLocksEnabled() {
   return process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
@@ -102,7 +102,6 @@ function rowToCamel(row) {
     gen: sanitizeGen(row.gen),
     hist: sanitizeHist(row.hist),
     log: sanitizeLog(row.log),
-    logf: row.logf,
     guestProjectId: row.guest_project_id,
     updatedAt: row.updated_at,
   }
@@ -121,7 +120,6 @@ const WRITABLE_FIELDS = {
   gen: 'gen',
   hist: 'hist',
   log: 'log',
-  logf: 'logf',
 }
 
 // Audit 5 — server-side backstop, symmetric with the client-side filtering

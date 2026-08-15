@@ -295,6 +295,10 @@ describe('PUT /api/state ownership guard', () => {
         lekta_result: { score: 99, issueCount: 1, findingIds: ['issue-1'], detail: 'tajni tekst' },
         txt: 'tajni tekst',
       }],
+      logf: {
+        prompt: 'tajni akademski tekst koji ne smije u shared state',
+        response: 'sirovi AI odgovor',
+      },
     }))
 
     expect(response.status).toBe(200)
@@ -312,6 +316,7 @@ describe('PUT /api/state ownership guard', () => {
       files: ['draft.docx'],
       lekta_result: { score: 99, issueCount: 1, findingIds: ['issue-1'] },
     }])
+    expect(written).not.toHaveProperty('logf')
   })
 
   it('sanitizes legacy gen, history and ledger values when reading state', async () => {
@@ -328,6 +333,7 @@ describe('PUT /api/state ownership guard', () => {
               gen: { f_fakultet: 'FPZG', f_izvori: 'tajni tekst', wc_total: '1200', f_brutal: 'yes' },
               hist: [{ t: 'not-a-timestamp', prompt: 'tajni tekst' }],
               log: [{ t: 123, kind: 'ai_response', txt: 'tajni AI odgovor', done: 'yes' }],
+              logf: { prompt: 'tajni AI prompt' },
             },
             error: null,
           }),
@@ -344,5 +350,6 @@ describe('PUT /api/state ownership guard', () => {
     expect(body.gen).toEqual({ f_fakultet: 'FPZG', wc_total: 1200 })
     expect(body.hist).toEqual([])
     expect(body.log).toEqual([{ t: 123, kind: 'ai_response' }])
+    expect(body).not.toHaveProperty('logf')
   })
 })
