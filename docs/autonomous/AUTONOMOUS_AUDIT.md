@@ -1,5 +1,34 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bl — full local gate revalidation
+
+### Root cause selected
+
+Priority: readiness verification. The codebase needed a fresh complete local
+quality-gate run after the writing-workspace browser smoke. No new
+code-fixable P0, P1 or P2 issue was found.
+
+### Verification
+
+- `npm.cmd test`: PASS (142 test files, 499 passed, 4 skipped).
+- `npm.cmd run test:ci`: PASS (142 test files, 499 passed, 4 skipped).
+- `npm.cmd run typecheck`: PASS.
+- `npm.cmd run lint`: PASS.
+- `npm.cmd run build`: PASS; Next.js generated 31 routes.
+- `npm.cmd run preflight:agentic`: expected fail-closed result; all eight
+  canonical worker/contract variables remain absent locally.
+- `npm.cmd run preflight:production`: expected fail-closed result; staging
+  Supabase, Stripe, provider, mail, billing and project-lock variables remain
+  absent locally.
+- `npm.cmd run audit:dependencies`: `BLOCKED_EXTERNAL`; npm's bulk advisory
+  endpoint was unreachable and did not produce a vulnerability report.
+
+### Remaining issues
+
+- No new local code-fixable issue was selected. Canonical Lekta deployment and
+  staging commerce/agent proof remain required before the external journeys
+  can be promoted from `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bk — local writing workspace smoke
 
 ### Root cause selected
