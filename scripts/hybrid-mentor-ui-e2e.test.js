@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const scriptPath = resolve(process.cwd(), 'scripts/hybrid-mentor-ui-e2e.mjs')
 const source = existsSync(scriptPath) ? readFileSync(scriptPath, 'utf8') : ''
+const freePlanSource = readFileSync(resolve(process.cwd(), 'app/pisi/components/free-project-plan.tsx'), 'utf8')
 const legacySource = readFileSync(resolve(process.cwd(), 'scripts/agentic-workspace-ui-e2e.mjs'), 'utf8')
 const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'))
 
@@ -55,6 +56,22 @@ describe('hybrid mentor workspace browser contract', () => {
     expect(source).toContain('contrastRatio')
     expect(source).toContain('backgroundColor')
     expect(source).toContain('color')
+  })
+
+  it('keeps mobile and desktop workspace assertions at their supported breakpoints', () => {
+    expect(source).toContain('width < 901')
+    expect(source).toContain("page.locator('.pis-prosemirror:visible')")
+    expect(source).toContain("mobileNav.locator('[aria-current=\"page\"]')")
+    expect(source).toContain('width >= 901')
+    expect(source).toContain("page.getByRole('navigation', { name: 'Struktura rada' })")
+    expect(source).toContain("page.getByRole('complementary', { name: 'Katedra urednik' })")
+  })
+
+  it('uses the explicit primary-action contract on Completion Scan and home', () => {
+    expect(freePlanSource).toContain('data-primary-action="true"')
+    expect(source).toContain("scan.locator('[data-primary-action=\"true\"]')")
+    expect(source).toContain("page.locator('[data-primary-action=\"true\"]')")
+    expect(source).not.toContain('scan.locator(\'.pis-primary-button\')')
   })
 
   it('exposes a runtime npm command and keeps the legacy agentic gate truthful', () => {

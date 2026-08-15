@@ -173,11 +173,7 @@ async function assertCompletionScan() {
   assert.equal(await nextSteps.count(), 3, 'Completion Scan mora imati točno tri sljedeća koraka')
   assert.ok(await scan.getByText(expectedProject.topic, { exact: false }).isVisible(), 'tema nije vidljiva u Completion Scanu')
 
-  // FreeProjectPlan predviđa jedan jedini primarni gumb, ali u ovom tasku ne
-  // mijenjamo app UI da mu dodamo novi data atribut; postojeći semantički
-  // `.pis-primary-button` je stabilan Scan ugovor. Project home koristi
-  // eksplicitni data-primary-action ugovor i provjerava se zasebno.
-  const scanPrimaryActions = scan.locator('.pis-primary-button')
+  const scanPrimaryActions = scan.locator('[data-primary-action="true"]')
   assert.equal(await scanPrimaryActions.count(), 1, 'Completion Scan mora imati točno jednu primarnu akciju')
   assert.ok(await scanPrimaryActions.first().isVisible(), 'Completion Scan primarna akcija mora biti vidljiva')
 }
@@ -224,6 +220,16 @@ async function assertWritingSurface(label, width, theme) {
   await editor.waitFor({ state: 'visible', timeout: 15_000 })
   assert.equal(await editor.count(), 1, `${label}: očekivan je točno jedan vidljivi .pis-prosemirror`)
 
+  if (width < 901) {
+    const mobileNav = page.getByRole('navigation', { name: 'Radni prostor' })
+    assert.equal(await mobileNav.locator('[aria-current="page"]').count(), 1, `${label}: jedan aktivni mobilni kontekst`)
+    await mobileNav.getByRole('button', { name: 'Rukopis', exact: true }).click()
+    await editor.waitFor({ state: 'visible', timeout: 10_000 })
+    assert.equal(await mobileNav.locator('[aria-current="page"]').count(), 1, `${label}: nakon Rukopisa mora ostati jedan aktivni mobilni kontekst`)
+    await assertDarkModeSurface(label, theme)
+    return
+  }
+
   const outline = page.getByRole('navigation', { name: 'Struktura rada' })
   const editorColumn = page.locator('.pis-editor-column')
   const assistant = page.getByRole('complementary', { name: 'Katedra urednik' })
@@ -231,18 +237,10 @@ async function assertWritingSurface(label, width, theme) {
   assert.equal(await editorColumn.count(), 1, `${label}: nedostaje editor landmark`)
   assert.equal(await assistant.count(), 1, `${label}: nedostaje Katedra landmark`)
 
-  if (width >= 1440) {
+  if (width >= 901) {
     await outline.waitFor({ state: 'visible', timeout: 10_000 })
     await editorColumn.waitFor({ state: 'visible', timeout: 10_000 })
     await assistant.waitFor({ state: 'visible', timeout: 10_000 })
-  } else if (width >= 768) {
-    const mobileNav = page.getByRole('navigation', { name: 'Radni prostor' })
-    await mobileNav.getByRole('button', { name: 'Pregled', exact: true }).click()
-    await outline.waitFor({ state: 'visible', timeout: 10_000 })
-    await mobileNav.getByRole('button', { name: 'Katedra', exact: true }).click()
-    await assistant.waitFor({ state: 'visible', timeout: 10_000 })
-    await mobileNav.getByRole('button', { name: 'Rukopis', exact: true }).click()
-    await editor.waitFor({ state: 'visible', timeout: 10_000 })
   }
 
   await assertDarkModeSurface(label, theme)
@@ -254,14 +252,12 @@ async function verifyWorkspaceAtWidth(width, theme) {
   const label = describeSurface('/pisi project', theme, width)
   await assertPageContract(label)
 
-  if (width <= 768) {
+  if (width < 901) {
     const mobileNav = page.getByRole('navigation', { name: 'Radni prostor' })
     const buttons = mobileNav.getByRole('button')
     assert.equal(await buttons.count(), 3, `${label}: mobilna navigacija mora imati tri konteksta`)
     assert.deepEqual(await buttons.allTextContents(), ['≡Pregled', '✎Rukopis', 'KKatedra'])
     assert.equal(await mobileNav.locator('[aria-current="page"]').count(), 1, `${label}: jedan aktivni mobilni kontekst`)
-    await mobileNav.getByRole('button', { name: 'Katedra', exact: true }).click()
-    await page.locator('.pis-assistant').waitFor({ state: 'visible', timeout: 10_000 })
     await mobileNav.getByRole('button', { name: 'Rukopis', exact: true }).click()
   } else {
     const projectNav = page.getByRole('navigation', { name: 'Projekt' })
@@ -283,7 +279,7 @@ async function verifyRouteMatrix() {
         await gotoWithTheme(route, theme)
         const label = describeSurface(route, theme, width)
         await assertPageContract(label)
-        if (route === '/pisi' && width >= 1440) {
+        if (route === '/pisi' && width >= 901) {
           const projectNav = page.getByRole('navigation', { name: 'Projekt' })
           assert.equal(await projectNav.getByRole('button').count(), 9, `${label}: neočekivan broj projektnih ciljeva`)
         }

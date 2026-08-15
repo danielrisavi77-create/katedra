@@ -34,7 +34,7 @@ export function FreeProjectPlan({ projectId, title, scan, authenticated = false,
         <p className="pis-catalog-note">Ovo je besplatni projektni plan. Katedra ne generira puni rad bez aktivnog opsega i korisničke odluke.</p>
         <div className="pis-onboarding-actions">
           {!authenticated && <a className="pis-text-button" href={`/registracija?redirect=${encodeURIComponent(registrationRedirect)}`}>Spremi plan na račun</a>}
-          <button type="button" className="pis-primary-button" onClick={onContinue}>Nastavi u projektu →</button>
+          <button type="button" className="pis-primary-button" data-primary-action="true" onClick={onContinue}>Nastavi u projektu →</button>
         </div>
       </section>
     </main>

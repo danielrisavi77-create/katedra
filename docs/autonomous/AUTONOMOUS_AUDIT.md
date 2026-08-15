@@ -2012,23 +2012,28 @@ by `docs/autonomous/GOLDEN_JOURNEYS.md` and `BLOCKERS.md`.
   next steps, project-home primary action, writing landmarks, and computed
   dark-mode surface contrast.
 - Added the release command `npm run test:e2e:hybrid-ui`.
-- The focused source contract suite passed: `6/6` tests.
-- No application UI, API route, database or feature flag was modified. The
-  Scan assertion uses the existing `.pis-free-plan` and
-  `.pis-primary-button` contract because adding a new `data-primary-action`
-  attribute to the app is outside this task's allowed scope; project home
-  continues to assert its existing `data-primary-action` attribute.
+- The focused source contract suite passed: `8/8` tests.
+- The Completion Scan CTA now exposes the explicit
+  `data-primary-action="true"` contract; Scan and project home are asserted
+  separately.
+- The browser contract treats widths below `901px` as mobile: after selecting
+  `Rukopis` it asserts the visible `.pis-prosemirror` and exactly one active
+  mobile context. At `901px` and above it asserts the outline, editor and
+  Katedra landmarks as visible.
 - The authenticated agentic script now reports
   `BLOCKED_EXTERNAL` until canonical staging contracts are present and only
   emits `AGENTIC_WORKSPACE_UI_STAGING_E2E_PASS` after that gate.
 
-### Limitation
+### Fix-round verification
 
-The post-fix browser rerun was stopped before completion at the user's request;
-the earlier Task 7 local journey had passed, but this fix-round commit does not
-claim a fresh browser PASS. Authenticated checkout, webhook, entitlement,
-worker, provider, canonical Lekta and staging recovery remain
-`BLOCKED_EXTERNAL`. G2–G10 remain unmarked.
+- `npm.cmd run test:e2e:hybrid-ui`: PASS; `42/42` route/theme/width checks,
+  guest journey, writing surfaces, autosave/reload and dark-mode computed
+  styles.
+- `npm.cmd run typecheck`: PASS.
+- `npm.cmd run lint`: PASS.
+- Authenticated checkout, webhook, entitlement, worker, provider, canonical
+  Lekta and staging recovery remain `BLOCKED_EXTERNAL` because credentials and
+  canonical staging contracts are unavailable. G2–G10 remain unmarked.
 
 ## Cycle: 2026-08-15s
 
