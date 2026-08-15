@@ -1,5 +1,46 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ag
+
+### Root cause selected
+
+Priority: P1 manuscript input integrity. The server-side manuscript backup
+validator accepted empty or duplicate section/source IDs. That could make
+section lookup ambiguous and make citation evidence IDs ambiguous inside a
+private agent-run context.
+
+### Fix
+
+- Require non-empty section and source IDs.
+- Reject duplicate section IDs and duplicate source IDs before the context is
+  stored or passed to a worker.
+- Keep the existing content, size, link-safety and project ownership checks.
+
+### Verification
+
+- TDD regression: PASS; the new duplicate/empty-ID test failed before the
+  validator change and passed afterward.
+- Focused backup validation: PASS (8 tests).
+- Full test suite: PASS (133 test files, 467 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the validator changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G9-G10: private agent contexts now have unambiguous section and citation
+  identity before worker execution.
+- G0-G8: no behavior change.
+
+### Remaining issues
+
+- Canonical Lekta-side schema/RPC constraints still require staging proof;
+  local validation is defense in depth.
+- External staging, authenticated commerce and production dependency audit
+  blockers remain documented as `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15af
 
 ### Root cause selected
