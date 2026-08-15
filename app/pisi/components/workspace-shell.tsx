@@ -64,6 +64,7 @@ export function WorkspaceShell({
   workType?: 's' | 'z' | 'd'
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
+  const effectiveMobileView = view === 'home' ? 'overview' : normalizeMobileView(activeMobileView)
 
   return (
     <div className="pis-workspace" data-testid="pis-workspace-root" data-workspace-view={view} data-project-locked={projectLocked ? 'true' : 'false'}>
@@ -85,7 +86,7 @@ export function WorkspaceShell({
         : view !== 'writing' && agenticContent
         ? <main className="pis-agentic-main" aria-label="Agentički workspace">{agenticContent}</main>
         : <div className="pis-writing-frame" data-testid="pis-writing-frame">
-          <div className="pis-columns" data-mobile-view={normalizeMobileView(activeMobileView)}>
+          <div className="pis-columns" data-mobile-view={effectiveMobileView}>
             <nav className="pis-outline-column" aria-label="Struktura rada">{outline}</nav>
             <main className="pis-editor-column">{editor}</main>
             <aside className="pis-assistant-column" aria-label="Katedra urednik">{assistant}</aside>
@@ -94,7 +95,7 @@ export function WorkspaceShell({
         </div>
       </div>
 
-      <MobileWorkspaceNav activeMobileView={activeMobileView} onMobileViewChange={onMobileViewChange} />
+      <MobileWorkspaceNav activeMobileView={effectiveMobileView} onMobileViewChange={onMobileViewChange} />
     </div>
   )
 }

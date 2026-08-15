@@ -2,6 +2,8 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { createManuscript } from '../../../lib/manuscript/model'
 import { ThemeProvider } from '../../theme-provider'
@@ -83,6 +85,33 @@ describe('WorkspaceShell', () => {
 
     await user.click(within(nav).getByRole('button', { name: 'Katedra' }))
     expect(onMobileViewChange).toHaveBeenCalledWith('assistant')
+  })
+
+  it('derives the overview tab when the project home is displayed', () => {
+    render(<ThemeProvider><WorkspaceShell
+      manuscript={createManuscript({ projectId: 'project-1', workType: 'z' })}
+      saveStatus="saved"
+      activeMobileView="editor"
+      onMobileViewChange={vi.fn()}
+      onExport={vi.fn()}
+      view="home"
+      projectHome={<p>Pregled projekta</p>}
+      outline={<p>Struktura</p>}
+      editor={<p>Rukopis</p>}
+      assistant={<p>Urednik</p>}
+    /></ThemeProvider>)
+
+    const nav = screen.getByRole('navigation', { name: /radni prostor/i })
+    expect(within(nav).getByRole('button', { name: 'Pregled' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('main', { name: 'Projektna početna' }).textContent).toContain('Pregled projekta')
+  })
+
+  it('keeps the tablet workspace from clipping the editor or assistant', () => {
+    const css = readFileSync(resolve(process.cwd(), 'app/pisi/pisi.css'), 'utf8')
+
+    expect(css).toContain('@media (min-width: 901px) and (max-width: 1240px)')
+    expect(css).toContain('grid-template-columns: 180px minmax(480px, 1fr) 220px')
+    expect(css).toContain('@media (max-width: 900px)')
   })
 
   it('announces the active mobile context and calls the requested view', async () => {

@@ -720,6 +720,12 @@ html[data-theme='dark'] .pis-pass-warning strong { color: var(--pis-yellow); }
   .pis-sync-state { display: none; }
 }
 
+@media (min-width: 901px) and (max-width: 1240px) {
+  .pis-workspace-frame { display: block; }
+  .pis-project-nav { display: none; }
+  .pis-columns { grid-template-columns: 180px minmax(480px, 1fr) 220px; }
+}
+
 @media (min-width: 801px) and (max-width: 920px) {
   .pis-desktop-account,
   .pis-toolbar-button,
@@ -737,7 +743,7 @@ html[data-theme='dark'] .pis-pass-warning strong { color: var(--pis-yellow); }
   .pis-project-home-summary div:last-child { border-bottom: 0; }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   body:has(.pis-workspace) { overflow: hidden; }
   .pis-topbar { height: 60px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 0 12px; }
   .pis-topbar .pis-brand-mark { width: 30px; height: 30px; box-shadow: none; }

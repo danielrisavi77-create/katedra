@@ -298,6 +298,17 @@ export default function WorkspaceClient() {
     materials: manuscript.meta.materials,
   }) : undefined, [manuscript])
 
+  const enterProjectOverview = (projectId: string) => {
+    if (!projectId) return
+    setDrawerOpen(false)
+    setAgenticMode(false)
+    setProjectHome(true)
+    setMobileView('overview')
+    const storage = getBrowserStorage()
+    writeStorage(storage, `${MOBILE_VIEW_PREFIX}${projectId}`, 'overview')
+    persistWorkspaceView(projectId, 'home')
+  }
+
   const completeOnboarding = (result: OnboardingResult) => {
     if (!manuscript) return
     const next = migrateLegacyProject({
@@ -328,11 +339,10 @@ export default function WorkspaceClient() {
     const storage = getBrowserStorage()
     writeStorage(storage, `${READY_PREFIX}${next.projectId}`, '1')
     writeStorage(storage, `${PROJECT_SETUP_PREFIX}${next.projectId}`, '1')
-    persistWorkspaceView(next.projectId, 'home')
+    enterProjectOverview(next.projectId)
     persistManifest(next)
     setManuscript(next)
     setCompletionScan(scan)
-    setProjectHome(true)
     setShowOnboarding(false)
     void syncMetadata(next, Boolean(user)).then((result) => setSyncStatus(result.status))
   }
@@ -544,10 +554,7 @@ export default function WorkspaceClient() {
   const navigateProject = (item: ProjectNavItem) => {
     const destination = projectNavigationDestination(item)
     if (destination.kind === 'home') {
-      setDrawerOpen(false)
-      setAgenticMode(false)
-      setProjectHome(true)
-      persistWorkspaceView(manuscript.projectId, 'home')
+      enterProjectOverview(manuscript.projectId)
       return
     }
     if (destination.kind === 'writing') {
@@ -588,17 +595,13 @@ export default function WorkspaceClient() {
 
   const changeMobileView = (view: MobileView) => {
     const nextView = normalizeMobileView(view)
-    setMobileView(nextView)
-    writeStorage(getBrowserStorage(), `${MOBILE_VIEW_PREFIX}${manuscript.projectId}`, nextView)
-
     if (nextView === 'overview') {
-      setDrawerOpen(false)
-      setAgenticMode(false)
-      setProjectHome(true)
-      persistWorkspaceView(manuscript.projectId, 'home')
+      enterProjectOverview(manuscript.projectId)
       return
     }
 
+    setMobileView(nextView)
+    writeStorage(getBrowserStorage(), `${MOBILE_VIEW_PREFIX}${manuscript.projectId}`, nextView)
     setProjectHome(false)
     setAgenticMode(false)
     persistWorkspaceView(manuscript.projectId, 'writing')

@@ -42,7 +42,7 @@ export function AssistantPanel({
   const [instruction, setInstruction] = useState('')
 
   return (
-    <section className="pis-assistant" aria-label="Katedra urednik" data-context-surface="assistant">
+    <section className="pis-assistant" aria-label="Urednik sekcije" data-context-surface="assistant">
       <div className="pis-panel-heading pis-assistant-heading">
         <p>Katedra · AI urednik</p>
         <h2>{selectionText ? 'Radim s označenim tekstom' : sectionTitle}</h2>
@@ -66,7 +66,12 @@ export function AssistantPanel({
           <div className="pis-proposal-label"><span>Prijedlog</span><b>{proposal.status === 'streaming' ? 'Katedra piše…' : proposal.status === 'stale' ? 'Tekst se u međuvremenu promijenio' : 'Čeka tvoju odluku'}</b></div>
           <textarea aria-label="Tekst AI prijedloga" value={proposal.proposedText} onChange={(event) => onEdit(event.target.value)} readOnly={proposal.status === 'streaming'} />
           {proposal.status === 'stale' ? (
-            <p className="pis-proposal-warning">Prijedlog više ne odgovara trenutnoj verziji rukopisa. Odbaci ga i pokreni novu provjeru.</p>
+            <>
+              <p className="pis-proposal-warning">Prijedlog više ne odgovara trenutnoj verziji rukopisa. Odbaci ga i pokreni novu provjeru.</p>
+              <div className="pis-proposal-actions">
+                <button type="button" onClick={onReject}>Odbaci</button>
+              </div>
+            </>
           ) : proposal.status !== 'streaming' && (
             <div className="pis-proposal-actions">
               <button type="button" className="is-primary" onClick={onAccept}>Prihvati</button>
