@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15at
+
+### Root cause selected
+
+Priority: P1 G9 malformed local-state recovery. Malformed JSON in legacy
+storage was already ignored, but parsable values with the wrong runtime shape
+(for example an object in `rp_manifest.topic`) were passed into migration and
+could crash the React workspace during render.
+
+### Fix
+
+- Sanitize every legacy manifest value at the migration boundary.
+- Accept only bounded non-empty strings for project identity, title, work type
+  and migrated metadata.
+- Fall back to a new local project ID and the default work type when legacy
+  values are malformed.
+- Add a regression covering object, array and numeric values in legacy
+  manifest/state metadata.
+
+### Verification
+
+- TDD migration regression: PASS; malformed runtime values now produce a safe
+  empty manuscript instead of leaking objects into the document model.
+- Browser G9 recovery: PASS; contaminated `rp_manifest` and `rp_state` open a
+  usable workspace with no `pageerror`, stuck boot screen or horizontal
+  overflow.
+- Full suite: PASS (134 test files, 479 passed, 4 skipped); typecheck, lint
+  and production build: PASS.
+
+### Golden Journey impact
+
+- G9: malformed local state recovers to a usable local workspace.
+- G0-G8 and G10: no intended behavior change for valid project data.
+
+### Remaining issues
+
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15as
 
 ### Root cause selected
