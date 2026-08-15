@@ -1,5 +1,34 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bs — privacy and error-boundary audit
+
+### Root cause selected
+
+Priority: P0 security/privacy verification. A static review checked API error
+responses, provider failures, server logs, client-exposed environment names,
+account export and manuscript storage boundaries for raw academic content or
+internal provider/database details.
+
+### Verification
+
+- Provider adapters return generic user-facing messages for HTTP, malformed-SSE
+  and network failures; raw provider response details are not returned.
+- API routes return controlled Croatian errors rather than database/provider
+  payloads; internal logs contain identifiers and operational errors, not
+  manuscript text or prompts.
+- No `dangerouslySetInnerHTML`, suspicious `NEXT_PUBLIC_*` secret exposure or
+  raw manuscript/prompt local-storage write was found in the reviewed source.
+- Account export explicitly excludes manuscript text and prompts.
+- Existing chat, manuscript privacy and route tests cover the relevant
+  boundaries and remain green.
+- No local code-fixable P0, P1 or P2 issue was found; no production code was
+  changed in this cycle.
+
+### Remaining issues
+
+- A production security conclusion still requires authenticated staging,
+  deployed RLS and canonical Lekta proof; static review cannot replace it.
+
 ## Cycle: 2026-08-15br — commercial API boundary review
 
 ### Root cause selected
