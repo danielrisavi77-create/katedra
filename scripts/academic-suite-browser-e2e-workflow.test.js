@@ -15,4 +15,8 @@ describe('browser E2E release workflow', () => {
     expect(workflow).toContain("KATEDRA_BILLING_RPC_CONTRACT: 'v2'")
     expect(workflow).toContain("KATEDRA_RATE_LIMIT_STORE: 'supabase'")
   })
+
+  it('does not run the external Lekta browser gate without its preview URL', () => {
+    expect(workflow).toContain("if: ${{ env.LEKTA_PREVIEW_URL != '' }}")
+  })
 })

@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bh
+
+### Root cause selected
+
+Priority: P1 CI external-dependency handling. The PR browser workflow ran the
+Lekta integration E2E unconditionally even when `LEKTA_PREVIEW_URL` was not
+configured. That made an otherwise valid local PR fail on a missing external
+service rather than clearly separating local checks from the manual staging
+gate.
+
+### Fix
+
+- Run the Lekta browser loop only when `LEKTA_PREVIEW_URL` is present.
+- Keep the manual `workflow_dispatch` configuration check strict, so a manual
+  release cannot silently skip the external journey.
+- Add a workflow regression test for the conditional gate.
+
+### Verification
+
+- TDD red regression: PASS; the workflow test failed before the conditional
+  was added.
+- Focused workflow suite: PASS (3 tests).
+- Full suite: PASS (141 test files, 496 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G7-G10: PR CI no longer confuses absent external staging with a local code
+  failure; manual release still requires the real Lekta preview and auth gate.
+- G0-G6: no intended behavior change.
+
+### Remaining issues
+
+- The manual authenticated journeys remain unverified until staging
+  credentials, Lekta preview and canonical RPCs are available.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bg
 
 ### Root cause selected

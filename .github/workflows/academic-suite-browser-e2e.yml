@@ -207,6 +207,7 @@ jobs:
           exit 1
 
       - name: Run Lekta × Katedra browser loop
+        if: ${{ env.LEKTA_PREVIEW_URL != '' }}
         run: node scripts/academic-suite-browser-e2e.mjs
 
       - name: Run authenticated money-flow browser gate
