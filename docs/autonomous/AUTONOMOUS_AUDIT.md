@@ -1,5 +1,41 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15aq
+
+### Root cause selected
+
+Priority: P1 Completion Scan consistency. A user who pasted an existing draft
+without manually toggling the optional material list was told both that the
+text could be used and that an existing text, instructions or literature were
+still missing.
+
+### Fix
+
+- Treat non-empty imported text as available draft material.
+- Keep the material warning for projects with neither imported text nor a
+  selected material.
+- Add a regression for pasted text with an empty manual material list.
+
+### Verification
+
+- TDD regression: PASS; pasted text previously remained in `missing` and now
+  removes that contradiction.
+- Browser verification: PASS; the existing-text flow leaves only the mentor
+  and deadline gaps in the missing section.
+- Full suite: PASS (134 test files, 477 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+
+### Golden Journey impact
+
+- G0-G1: the free plan now reports the guest's actual starting materials
+  accurately.
+- G2-G10: no intended behavior change.
+
+### Remaining issues
+
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ap
 
 ### Root cause selected

@@ -30,7 +30,7 @@ export function createCompletionScan(input: CompletionScanInput): CompletionScan
   if (input.deadline) strengths.push('Rok predaje je postavljen.')
   else missing.push('postaviti rok predaje')
   if (input.materials.length) strengths.push(`Imaš ${input.materials.length} pripremljen${input.materials.length === 1 ? ' materijal' : 'a materijala'}.`)
-  else missing.push('dodati postojeći tekst, upute ili literaturu')
+  else if (!hasExistingDraft) missing.push('dodati postojeći tekst, upute ili literaturu')
   if (hasExistingDraft) strengths.push('Postojeći tekst može poslužiti kao početna verzija.')
 
   const stage = input.currentState === 'no_topic'

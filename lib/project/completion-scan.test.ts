@@ -32,4 +32,10 @@ describe('completion scan', () => {
     expect(scan.hasExistingDraft).toBe(false)
     expect(scan.strengths).not.toContain('Postojeći tekst može poslužiti kao početna verzija.')
   })
+
+  it('counts pasted draft text as available material without a manual material toggle', () => {
+    const scan = createCompletionScan({ ...base, startMode: 'existing', currentState: 'draft', importedText: 'Početni tekst rada.' })
+    expect(scan.hasExistingDraft).toBe(true)
+    expect(scan.missing).not.toContain('dodati postojeći tekst, upute ili literaturu')
+  })
 })
