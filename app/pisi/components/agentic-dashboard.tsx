@@ -23,10 +23,11 @@ type LocalDraftOverride = {
 
 const DRAFT_STORAGE_PREFIX = 'katedra_agent_draft_v1:'
 
-export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
+export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean> }) {
   const [run, setRun] = useState<AgenticRun | null>(null)
   const [draft, setDraft] = useState<AgenticReviewDraft | null>(null)
   const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
   const resultSignature = useRef('')
   const localOverridesRef = useRef<Record<string, LocalDraftOverride>>({})
 
@@ -36,24 +37,31 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
   }, [projectId, runId])
 
   const refresh = useCallback(async () => {
-    const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
-    if (!response?.ok) {
-      if (response) {
-        const body = await response.json().catch(() => ({}))
-        setMessage(agentRequestMessage(response.status, body?.error, 'Tijek trenutačno nije moguće učitati.'))
+    try {
+      const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
+      if (!response?.ok) {
+        if (response) {
+          const body = await response.json().catch(() => ({}))
+          setMessage(agentRequestMessage(response.status, body?.error, 'Tijek trenutačno nije moguće učitati.'))
+        } else {
+          setMessage('Tijek trenutačno nije moguće učitati zbog mrežne greške. Pokušaj ponovno.')
+        }
+        return
       }
-      return
-    }
-    const body = await response.json().catch(() => ({}))
-    if (!body.run) return
-    setRun(normalizeRun(body))
-    const mergedDraft = mergeDraftOverrides(normalizeDraft(body, manuscript, projectId, runId), localOverridesRef.current)
-    localOverridesRef.current = mergedDraft.overrides
-    persistDraftOverrides(projectId, runId, mergedDraft.overrides)
-    const nextSignature = JSON.stringify(body.results || [])
-    if (nextSignature !== resultSignature.current) {
-      resultSignature.current = nextSignature
-      setDraft(mergedDraft.draft)
+      setMessage('')
+      const body = await response.json().catch(() => ({}))
+      if (!body.run) return
+      setRun(normalizeRun(body))
+      const mergedDraft = mergeDraftOverrides(normalizeDraft(body, manuscript, projectId, runId), localOverridesRef.current)
+      localOverridesRef.current = mergedDraft.overrides
+      persistDraftOverrides(projectId, runId, mergedDraft.overrides)
+      const nextSignature = JSON.stringify(body.results || [])
+      if (nextSignature !== resultSignature.current) {
+        resultSignature.current = nextSignature
+        setDraft(mergedDraft.draft)
+      }
+    } finally {
+      setLoading(false)
     }
   }, [manuscript, projectId, runId])
 
@@ -136,15 +144,19 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
   }
 
   const acceptDraft = async (sectionIds?: string[]) => {
-    if (!draft) return
-    if (onAcceptDraft) {
-      if (sectionIds) await onAcceptDraft(draft, sectionIds)
-      else await onAcceptDraft(draft)
+    if (!draft || !onAcceptDraft) {
+      setMessage('Verificirani rezultat nije moguće prihvatiti bez spremanja u glavni rukopis.')
+      return false
+    }
+    const merged = sectionIds ? await onAcceptDraft(draft, sectionIds) : await onAcceptDraft(draft)
+    if (!merged) {
+      setMessage('Verificirani rezultat nije prihvaćen u glavni rukopis.')
+      return false
     }
     const acceptedIds = sectionIds || draft.sections
       .filter((revision) => revision.status === 'verified' && manuscript.sections.some((section) => section.id === revision.sectionId && section.updatedAt === revision.baseRevision))
       .map((revision) => revision.sectionId)
-    if (acceptedIds.length === 0) return
+    if (acceptedIds.length === 0) return false
     const updatedAt = new Date().toISOString()
     setDraft((current) => current ? {
       ...current,
@@ -158,11 +170,12 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       localOverridesRef.current[sectionId] = { sectionId, baseRevision: revision.baseRevision, proposedContent: revision.proposedContent, status: 'accepted', verificationMessage: revision.verificationMessage, updatedAt }
     }
     persistDraftOverrides(projectId, runId, localOverridesRef.current)
+    return true
   }
 
-  return <section className="pis-agentic-dashboard" aria-live="polite">
+  return <section className="pis-agentic-dashboard" aria-live="polite" aria-busy={loading}>
     <header className="pis-agentic-dashboard-heading">
-      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Proces izrade rada'}</p><h2>Tijek izrade rada</h2><p>{activeSummary ? `${activeSummary.phaseLabel} je u tijeku. ${activeSummary.nextAction}` : run ? runDescription(run.status) : 'Učitavam zadnji checkpoint…'}</p></div>
+      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Proces izrade rada'}</p><h2>Tijek izrade rada</h2><p>{activeSummary ? activeSummaryCopy(activeSummary) : run ? runDescription(run.status) : loading ? 'Učitavam zadnji checkpoint…' : 'Tijek nije moguće učitati.'}</p></div>
       {run && <span className="pis-agent-run-mode">{modeLabel(run.mode)}</span>}
     </header>
     {run && <div className="pis-agentic-dashboard-actions">
@@ -178,8 +191,12 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       <ReadOnlyManuscriptPreview manuscript={manuscript} />
     </div>
     {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
-    {message && <p className="pis-agent-message" role="alert">{message}</p>}
+    {message && <><p className="pis-agent-message" role="alert">{message}</p>{!run && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
   </section>
+}
+
+function activeSummaryCopy(summary: ReturnType<typeof projectAgentStatus>): string {
+  return summary.state === 'preparing' ? summary.nextAction : `${summary.phaseLabel} je u tijeku. ${summary.nextAction}`
 }
 
 function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1, projectId: string, runId: string): AgenticReviewDraft | null {

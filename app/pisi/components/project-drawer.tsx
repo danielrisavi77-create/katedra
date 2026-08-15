@@ -47,7 +47,7 @@ export function ProjectDrawer({
   onBackup: () => void
   onRestore: (file: File) => void
   onImportText: (file: File) => void
-  onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void>
+  onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean>
   requestedTab?: ProjectDrawerTab
   onTabChange?: (tab: ProjectDrawerTab) => void
   historyEntries?: LocalHistoryEntry[]

@@ -14,7 +14,7 @@ export type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-vi
 const RUN_STORAGE_PREFIX = 'katedra_agent_run_v1:'
 const RESUMABLE_STATUSES = new Set(['pending', 'running', 'paused', 'blocked'])
 
-export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript, requestedPhase, onPhaseChange, onAcceptDraft }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
+export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript, requestedPhase, onPhaseChange, onAcceptDraft }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean> }) {
   const [runId, setRunId] = useState('')
   const [intervention, setIntervention] = useState(false)
 

@@ -134,7 +134,7 @@ describe('AgenticDashboard', () => {
 
   it('shows verified worker output in review before it can enter the manuscript', async () => {
     const user = userEvent.setup()
-    const onAcceptDraft = vi.fn().mockResolvedValue(undefined)
+    const onAcceptDraft = vi.fn().mockResolvedValue(true)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
       steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
@@ -146,6 +146,56 @@ describe('AgenticDashboard', () => {
     expect(screen.getByDisplayValue('Verificirani novi uvod.')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Prihvati sve provjerene' }))
     expect(onAcceptDraft).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      const proposal = screen.getByRole('heading', { level: 3, name: 'Uvod' }).closest('[data-status]')
+      expect(proposal?.getAttribute('data-status')).toBe('accepted')
+    })
+    expect(screen.queryByRole('button', { name: 'Prihvati Uvod' })).toBeNull()
+  })
+
+  it('does not mark a proposal accepted when the workspace rejects the merge', async () => {
+    const user = userEvent.setup()
+    const onAcceptDraft = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Rezultat za odbijeni merge.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onAcceptDraft={onAcceptDraft} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Prihvati sve provjerene' }))
+    expect(onAcceptDraft).toHaveBeenCalledTimes(1)
+    const proposal = screen.getByRole('heading', { level: 3, name: 'Uvod' }).closest('[data-status]')
+    expect(proposal?.getAttribute('data-status')).toBe('verified')
+    expect(screen.getByRole('button', { name: 'Prihvati Uvod' })).toBeTruthy()
+    expect(screen.queryByText('Prihvaćeno')).toBeNull()
+  })
+
+  it('shows a readable network error, ends loading and offers retry', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ ok: true, json: async () => runningBody })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/mrež.*greš/i)
+    expect(screen.getByRole('button', { name: /Pokušaj ponovno/i })).toBeTruthy()
+    expect(document.querySelector('.pis-agentic-dashboard')?.getAttribute('aria-busy')).toBe('false')
+    await user.click(screen.getByRole('button', { name: /Pokušaj ponovno/i }))
+    expect(await screen.findByText('Tijek izrade rada')).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('describes a pending step as waiting in line, not in progress', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { ...runningBody.run, status: 'pending' },
+      steps: [{ step_id: 'step-3', agent: 'planning', verifier: 'planning_verifier', status: 'pending', attempt: 1 }],
+    }) }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+      expect(await screen.findAllByText('Plan rada čeka svoj red.')).toHaveLength(2)
+    expect(screen.queryByText(/Plan rada je u tijeku/i)).toBeNull()
   })
 
   it('invalidates verification when a verified proposal is edited', async () => {

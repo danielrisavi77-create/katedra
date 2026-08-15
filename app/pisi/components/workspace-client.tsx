@@ -362,12 +362,12 @@ export default function WorkspaceClient() {
     }))
   }
 
-  const acceptAgenticDraft = async (draft: AgenticDraftV1, sectionIds?: string[]) => {
-    if (!manuscript) return
+  const acceptAgenticDraft = async (draft: AgenticDraftV1, sectionIds?: string[]): Promise<boolean> => {
+    if (!manuscript) return false
     const merged = mergeVerifiedAgenticSections({ manuscript, draft, sectionIds })
     if (merged.ok === false) {
       setAssistantError(merged.error)
-      return
+      return false
     }
     try {
       await storeRef.current?.snapshot(manuscript, 'Prije prihvata verificiranog agenticnog rezultata')
@@ -375,8 +375,10 @@ export default function WorkspaceClient() {
       setSaveStatus('saving')
       clearAiContext()
       merged.acceptedSectionIds.forEach((sectionId) => appendProcessLog(manuscript.projectId, 'Verificirani agenticni rezultat', sectionId))
+      return true
     } catch {
       setAssistantError('Verificirani rezultat nije moguće spremiti u lokalnu verziju.')
+      return false
     }
   }
 

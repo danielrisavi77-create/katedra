@@ -20,7 +20,7 @@ describe('AgenticReview', () => {
       { sectionId: first.id, baseRevision: first.updatedAt, proposedContent: plainTextDocument('Novi uvod.'), status: 'verified' as const, verificationMessage: 'Provjereno.', updatedAt: '2026-08-14T10:02:00.000Z' },
       { sectionId: second.id, baseRevision: second.updatedAt, proposedContent: plainTextDocument('Nedovršeni tekst.'), status: 'blocked' as const, verificationMessage: 'Nedostaje izvor.', updatedAt: '2026-08-14T10:02:00.000Z' },
     ].reduce((current, revision) => upsertSectionRevision(current, revision), createAgenticDraft({ projectId: manuscript.projectId, runId: 'run-1', base: manuscript }))
-    const onAccept = vi.fn()
+    const onAccept = vi.fn().mockResolvedValue(true)
     render(<AgenticReview manuscript={manuscript} draft={draft} onAccept={onAccept} onEdit={vi.fn()} onReject={vi.fn()} />)
 
     expect(screen.getByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()

@@ -10,7 +10,7 @@ export type AgenticReviewEvidence = { id: string; title?: string; url?: string; 
 export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[] }
 export type AgenticReviewDraft = Omit<AgenticDraftV1, 'sections'> & { sections: AgenticReviewRevision[] }
 
-export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticReviewDraft; onAccept: (sectionIds?: string[]) => Promise<void>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
+export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticReviewDraft; onAccept: (sectionIds?: string[]) => Promise<boolean>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
   const [acceptedSectionIds, setAcceptedSectionIds] = useState<Set<string>>(() => new Set())
   const verifiedIds = draft.sections.filter((revision) => !acceptedSectionIds.has(revision.sectionId) && isAcceptable(manuscript, revision)).map((revision) => revision.sectionId)
   const textareas = useRef<Record<string, HTMLTextAreaElement | null>>({})
@@ -18,9 +18,10 @@ export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }:
   const accept = async (sectionIds?: string[]) => {
     const acceptedIds = sectionIds || verifiedIds
     if (acceptedIds.length === 0) return
-    if (sectionIds) await onAccept(sectionIds)
-    else await onAccept()
+    const accepted = sectionIds ? await onAccept(sectionIds) : await onAccept()
+    if (!accepted) return false
     setAcceptedSectionIds((current) => new Set([...current, ...acceptedIds]))
+    return true
   }
 
   return <section className="pis-agentic-review" aria-labelledby="pis-agentic-review-title">
