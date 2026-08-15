@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ak
+
+### Root cause selected
+
+Priority: P0 institutional AI-policy enforcement. The chat route mapped
+`paraphrase_for_submission` to the paid `section_writing` product capability,
+but its policy guard only resolved and blocked the two explicit generation
+capability names. A user could therefore send the paraphrase capability and
+reach the provider despite a banned or unverified submission-writing policy.
+
+### Fix
+
+- Define one server-side set of policy-gated submission-writing capabilities.
+- Resolve the exact capability for `paraphrase_for_submission`,
+  `generate_submission_text` and `generate_large_sections`.
+- Block all three before provider access when the policy is blocked and keep
+  mentor acknowledgements bound to the exact resolved fact.
+
+### Verification
+
+- TDD runtime regression: PASS; the new paraphrase test reached the provider
+  before the guard fix and now returns 403 with no provider call.
+- Chat runtime suite: PASS (15 tests).
+- Full suite and global quality gates: pending for this cycle.
+- Staging faculty-policy proof: still unavailable externally.
+
+### Golden Journey impact
+
+- G9-G10: switching from generation to paraphrase cannot bypass a prohibited
+  submission-writing policy.
+- G0-G8: no intended behavior change.
+
+### Remaining issues
+
+- Real institution policy facts and RLS still require staging proof; local
+  tests cover the server control flow, not canonical policy deployment.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15aj
 
 ### Root cause selected

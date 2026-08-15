@@ -56,6 +56,12 @@ Nepregovorljiva granica proizvoda:
 Kanonicalna podjela: Katedra pomaže da rad postane bolji. Lekta provjerava što stvarno postoji u dokumentu.
 `.trim()
 
+const POLICY_GATED_CHAT_CAPABILITIES = new Set([
+  'paraphrase_for_submission',
+  'generate_submission_text',
+  'generate_large_sections',
+])
+
 // Audit 5 — same "server is the authority, not just client copy" pattern as
 // KATEDRA_SYSTEM_BOUNDARY above, applied to the academic AI-policy gate.
 // Appended only when the resolved policy for this project's unit blocks
@@ -338,21 +344,23 @@ async function handlePOST(req, requestContext = {}) {
     }
     const unitId = row?.unit_id || ''
     const facts = await loadProcessFactsFromDisk()
-    const policyCapability = capability === 'generate_submission_text' ? 'generate_submission_text' : 'generate_large_sections'
-    const resolved = resolveCapability(facts, unitId, policyCapability)
-    const ack = row?.gen?.aiAck?.[policyCapability]
-    const mentorUnlocked = Boolean(
-      resolved.condition?.mentorApproval && ack?.factId && ack.factId === resolved.sourceFactId,
-    )
-    policyBlocked = resolved.effective === 'blocked' && !mentorUnlocked
-    if (policyBlocked && (capability === 'generate_large_sections' || capability === 'generate_submission_text')) {
-      await releaseReservation()
-      return json(403, {
-        error: 'Tvoja odobrena AI razina ne dopušta generiranje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.',
-        reason: 'ACADEMIC_POLICY_BLOCK',
-        capability: policyCapability,
-        stance: resolved.stance,
-      })
+    const policyCapability = POLICY_GATED_CHAT_CAPABILITIES.has(capability) ? capability : null
+    if (policyCapability) {
+      const resolved = resolveCapability(facts, unitId, policyCapability)
+      const ack = row?.gen?.aiAck?.[policyCapability]
+      const mentorUnlocked = Boolean(
+        resolved.condition?.mentorApproval && ack?.factId && ack.factId === resolved.sourceFactId,
+      )
+      policyBlocked = resolved.effective === 'blocked' && !mentorUnlocked
+      if (policyBlocked) {
+        await releaseReservation()
+        return json(403, {
+          error: 'Tvoja odobrena AI razina ne dopušta generiranje ili preoblikovanje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.',
+          reason: 'ACADEMIC_POLICY_BLOCK',
+          capability: policyCapability,
+          stance: resolved.stance,
+        })
+      }
     }
   }
 
