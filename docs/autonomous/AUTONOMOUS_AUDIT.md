@@ -1,5 +1,53 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ac
+
+### Root cause selected
+
+Priority: P1 source-gate integrity. Source-bound agent results could contain
+verified citations while omitting the required mapping from factual claims to
+those citations. Because the verifier only checked mappings when a `claims`
+array happened to be present, a provider returning plain text could pass the
+writing/source gate without auditable claim evidence.
+
+### Fix
+
+- Require `claims` evidence for `sources`, `writing`, `citation` and `review`
+  results; missing evidence now fails closed as `blocked`.
+- Add a structured JSON result contract to the provider execution bridge and
+  parse validated claim IDs, texts and citation IDs from the provider output.
+- Preserve claim evidence in temporary agent-result payloads and validate it on
+  reload so the evidence cannot disappear between verification and UI review.
+- Update the runtime integration fixture to exercise the structured contract.
+
+### Verification
+
+- TDD regression: PASS; the new verifier test failed before the fix and passed
+  after it.
+- Focused source/provider/storage tests: PASS (3 files, 14 tests).
+- Agent test package: PASS (26 files, 90 tests).
+- Full test suite: PASS (133 test files, 459 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the tracked isolated changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G9 and G10: strengthens source-gate enforcement and preserves evidence for
+  agent-run review before activation in staging.
+- G0-G8: no behavior change.
+
+### Remaining issues
+
+- Real provider/staging proof is still `BLOCKED_EXTERNAL` until the canonical
+  Lekta worker/RPC contract and credentials are deployed and verified.
+- This deterministic gate validates the provider's structured claim map; a
+  future verifier-provider may add independent semantic claim detection.
+- Authenticated commerce, material deletion tombstoning, dependency advisory
+  service and Docker/Supabase availability remain documented blockers.
+
 ## Cycle: 2026-08-15ab
 
 ### Root cause selected

@@ -1,5 +1,5 @@
 import { registerAgentPayload } from './backend-contract'
-import type { AgentResultV1, CitationEvidence, UsageRecord, VerificationResultV1 } from './contracts'
+import type { AgentResultV1, CitationEvidence, ClaimEvidence, UsageRecord, VerificationResultV1 } from './contracts'
 import type { AgentStepRecord } from './run-state'
 import type { RunPayloadManifest, RunPayloadManifestStore, RunPayloadStorage } from './run-context-loader'
 
@@ -22,6 +22,7 @@ export interface AgentStepResultPayloadV1 {
   attempt: 1 | 2 | 3
   output: string
   citations: CitationEvidence[]
+  claims?: ClaimEvidence[]
   verification: VerificationResultV1
   provider: string
   usage: UsageRecord
@@ -79,6 +80,7 @@ export async function storeAgentStepResult(
     attempt: input.step.attempt,
     output,
     citations: Array.isArray(input.result.citations) ? input.result.citations.slice(0, 100) : [],
+    ...(Array.isArray(input.result.claims) ? { claims: input.result.claims.slice(0, 200) } : {}),
     verification: input.verification,
     provider: input.result.provider,
     usage: input.result.usage || { inputTokens: 0, outputTokens: 0 },
@@ -147,10 +149,22 @@ function validatePayload(value: Record<string, unknown>, entry: RunPayloadManife
   if (value.materialId !== entry.materialId || value.projectId !== entry.projectId || value.runId !== entry.runId) return null
   if (typeof value.stepId !== 'string' || typeof value.agent !== 'string' || typeof value.verifier !== 'string' || typeof value.output !== 'string') return null
   if (!Array.isArray(value.citations) || !value.verification || typeof value.verification !== 'object') return null
+  if (value.claims !== undefined && (!Array.isArray(value.claims) || !value.claims.every(isClaimEvidence))) return null
   if (typeof value.provider !== 'string' || !value.usage || typeof value.usage !== 'object') return null
   if (value.billingState !== undefined && !['settled', 'released', 'pending_reconciliation'].includes(String(value.billingState))) return null
   if (typeof value.createdAt !== 'string' || !isActiveTemporaryPayload(value.expiresAt, now)) return null
   return value as unknown as AgentStepResultPayloadV1
+}
+
+function isClaimEvidence(value: unknown): value is ClaimEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const claim = value as Record<string, unknown>
+  return typeof claim.id === 'string'
+    && claim.id.trim().length > 0
+    && typeof claim.text === 'string'
+    && claim.text.trim().length > 0
+    && Array.isArray(claim.citationIds)
+    && claim.citationIds.every((citationId) => typeof citationId === 'string' && citationId.trim().length > 0)
 }
 
 function isActiveTemporaryPayload(value: unknown, now: number): boolean {

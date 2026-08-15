@@ -25,6 +25,45 @@ describe('provider execution bridge', () => {
     })
   })
 
+  it('parses structured claim evidence and adds the source gate instruction', async () => {
+    const testProvider: AgentProvider = {
+      id: 'anthropic',
+      capabilities: ['text'],
+      async *run(providerInput) {
+        const payload = providerInput.payload as { system?: unknown }
+        expect(payload.system).toEqual(expect.stringContaining('claims'))
+        yield {
+          type: 'completed',
+          value: {
+            output: JSON.stringify({
+              output: 'Argument iz izvora.',
+              claims: [{ id: 'claim-1', text: 'Argument iz izvora.', citationIds: ['source-1'] }],
+            }),
+            usage: { inputTokens: 5, outputTokens: 8 },
+          },
+        }
+      },
+    }
+
+    await expect(executeAgentProvider(testProvider, { ...input, payload: { system: 'Postojeća uputa.' } })).resolves.toMatchObject({
+      output: 'Argument iz izvora.',
+      claims: [{ id: 'claim-1', citationIds: ['source-1'] }],
+    })
+  })
+
+  it('leaves an unstructured provider response without claims so source agents fail closed', async () => {
+    const testProvider: AgentProvider = {
+      id: 'anthropic',
+      capabilities: ['text'],
+      async *run() {
+        yield { type: 'completed', value: { output: 'Samo plain text.', usage: { inputTokens: 1, outputTokens: 1 } } }
+      },
+    }
+
+    await expect(executeAgentProvider(testProvider, input)).resolves.toMatchObject({ output: 'Samo plain text.' })
+    await expect(executeAgentProvider(testProvider, input)).resolves.not.toHaveProperty('claims')
+  })
+
   it('fails closed when provider emits an error or never completes', async () => {
     const errorProvider: AgentProvider = {
       id: 'anthropic',
