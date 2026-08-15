@@ -19,13 +19,13 @@ try {
   await page.getByRole('button', { name: /Prijavi se/i }).click()
   await page.waitForURL(/\/pisi(?:\?|$)/u, { timeout: 20_000 })
   await page.getByRole('button', { name: 'Revizija', exact: true }).click()
-  await page.getByRole('heading', { name: 'Priprema rada' }).waitFor({ state: 'visible', timeout: 30_000 })
+  await page.getByRole('heading', { name: 'Pregled rezultata' }).waitFor({ state: 'visible', timeout: 30_000 })
 
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: width < 800 ? 844 : 900 })
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1)
     assert.equal(overflow, false, `horizontal overflow at ${width}px`)
-    assert.ok(await page.getByText('Priprema rada', { exact: true }).count(), `phase label missing at ${width}px`)
+    assert.ok(await page.getByText('Pregled rezultata', { exact: true }).count(), `review label missing at ${width}px`)
   }
 
   await page.getByRole('button', { name: /tamnu temu|dark/i }).click()

@@ -7,7 +7,7 @@ import { createManuscript } from '../../../lib/manuscript/model'
 import { PaidProjectSetup } from './paid-project-setup'
 
 vi.mock('./agent-run-panel', () => ({
-  AgentRunPanel: ({ runId }: { runId: string }) => <div data-testid="agent-run-panel">{runId}</div>,
+  AgentRunPanel: ({ runId, requestedPhase }: { runId: string; requestedPhase?: string }) => <div data-testid="agent-run-panel" data-requested-phase={requestedPhase}>{runId}</div>,
 }))
 
 vi.mock('./agentic-preparation', () => ({
@@ -39,6 +39,23 @@ describe('PaidProjectSetup run recovery', () => {
 
     await waitFor(() => expect(screen.getByTestId('agent-run-panel').textContent).toBe('run-active'))
     expect(fetch).toHaveBeenCalledWith('/api/agent-runs?projectId=project-1', expect.objectContaining({ cache: 'no-store' }))
+  })
+
+  it('passes the selected review phase through to a resumed run panel', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ runs: [{ run_id: 'run-active', status: 'running' }] }),
+    }))
+
+    render(<PaidProjectSetup
+      projectId="project-1"
+      passActive
+      requestedPhase="review"
+      sectionIds={['section-1']}
+      manuscript={createManuscript({ projectId: 'project-1', workType: 'z' })}
+    />)
+
+    await waitFor(() => expect(screen.getByTestId('agent-run-panel').getAttribute('data-requested-phase')).toBe('review'))
   })
 
   it('discards a stale local run id when the canonical list no longer contains it', async () => {

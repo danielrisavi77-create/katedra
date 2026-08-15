@@ -49,6 +49,14 @@ describe('AgenticDashboard', () => {
     expect(screen.getByText(/Pokušaj 2\/3/)).toBeTruthy()
   })
 
+  it('keeps the review label while it shows an existing run checkpoint', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => runningBody }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} requestedPhase="review" />)
+
+    expect(await screen.findByText('Pregled rezultata')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Autonomni tijek' })).toBeTruthy()
+  })
+
   it('pauses the server-side run and refreshes its status', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn()

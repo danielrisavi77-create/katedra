@@ -79,3 +79,41 @@ Implemented and committed. Every rendered project-navigation item now has an exp
 ### Concerns
 
 - The authenticated browser workflows remain unexecutable in this local environment without staging credentials; their syntax and updated selectors were verified locally.
+
+---
+
+## Fix round 2 — scoped re-review
+
+### Status
+
+Implemented and committed as a Task 2 UI-only correction. `Revizija` now selects and persists a per-project `review` agentic phase, presents a truthful empty review surface when no run is known, and keeps the review label when an existing run checkpoint is shown.
+
+### Changed files
+
+- `lib/manuscript/workspace-view.ts` and test — validates/restores persisted agentic phases and prevents a dashboard event from displacing an explicitly selected review phase.
+- `app/pisi/components/workspace-client.tsx` — stores `katedra_agentic_workspace_phase_v1:<projectId>`, restores it with the generic agents workspace, and routes all agentic phase changes through the persistence/preservation helper.
+- `app/pisi/components/paid-project-setup.tsx` and tests — accepts `requestedPhase`, renders the `Pregled rezultata` empty state with a preparation action, and preserves review when a run is created from that requested surface.
+- `app/pisi/components/agent-run-panel.tsx` and `agentic-dashboard.tsx` — forward the requested phase to the existing run dashboard and retain the `Pregled rezultata` label while showing a checkpoint or results.
+- `scripts/agentic-workspace-ui-e2e.mjs` and `scripts/agentic-workflow-e2e.mjs` — verify the `Revizija` review surface; the workflow then explicitly opens preparation before it starts a run. No removed topbar `Agenti` selector remains.
+
+### Commands and results
+
+- `npx.cmd vitest run lib/manuscript/workspace-view.test.ts app/pisi/components/paid-project-setup.test.tsx app/pisi/components/agentic-dashboard.test.tsx` — RED observed: missing phase helpers, review empty state, and checkpoint label.
+- `npx.cmd vitest run lib/manuscript/workspace-view.test.ts app/pisi/components/project-navigation-routing.test.ts app/pisi/components/project-navigation.test.tsx app/pisi/components/project-drawer.test.tsx app/pisi/components/paid-project-setup.test.tsx app/pisi/components/paid-project-setup.resume.test.tsx app/pisi/components/agentic-dashboard.test.tsx` — PASS, 26 tests.
+- `npm.cmd run typecheck` — PASS.
+- `npm.cmd run lint` — PASS.
+- `node --check scripts/agentic-workspace-ui-e2e.mjs; node --check scripts/agentic-workflow-e2e.mjs` — PASS.
+- `git diff --check` — PASS.
+
+### Self-review
+
+- Confirmed `review` remains the active navigation phase when a run component reports its normal dashboard checkpoint.
+- Confirmed the review empty state promises only verified post-run results and offers preparation rather than fabricating a result.
+- Confirmed the generic persisted view stays `agents`, while the separate project-scoped phase key restores `review` after reload.
+- Confirmed all first-round drawer/navigation mappings remain covered by the focused test run.
+- Confirmed both scripts enter through `Revizija`; only the Task 2 workflow hunk is staged, leaving pre-existing onboarding edits untouched.
+
+### Concerns
+
+- Authenticated browser E2E was not run because this workspace has no `KATEDRA_INTEGRATION_URL`, `KATEDRA_AUTH_E2E_EMAIL`, or `KATEDRA_AUTH_E2E_PASSWORD`; syntax, selectors, and fail-closed waits were verified locally.
+- Vitest continues to emit the existing Vite native-config-loader deprecation warning, but all commands passed.

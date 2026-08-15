@@ -23,7 +23,7 @@ import { canApplyProposal, isCurrentAiRequest } from '../../../lib/manuscript/pr
 import { createManuscriptStore } from '../../../lib/manuscript/storage'
 import { getBrowserStorage, readStorage, writeStorage } from '../../../lib/manuscript/browser-storage'
 import { syncMetadata, type SyncStatus } from '../../../lib/manuscript/sync-status'
-import { initialWorkspaceView, parseWorkspaceView, type WorkspaceViewPreference } from '../../../lib/manuscript/workspace-view'
+import { initialAgenticWorkspacePhase, initialWorkspaceView, nextAgenticWorkspacePhase, parseWorkspaceView, type AgenticWorkspacePhase, type WorkspaceViewPreference } from '../../../lib/manuscript/workspace-view'
 import { selectWorkspaceProject } from '../../../lib/manuscript/workspace-project'
 import type {
   AiProposalV1,
@@ -38,7 +38,7 @@ import { ManuscriptEditor, type EditorApplyRequest, type EditorSelection } from 
 import { OnboardingFlow, type OnboardingInitialValues, type OnboardingResult } from './onboarding-flow'
 import { OutlinePanel } from './outline-panel'
 import { PassDialog } from './pass-dialog'
-import { PaidProjectSetup, type AgenticWorkspacePhase } from './paid-project-setup'
+import { PaidProjectSetup } from './paid-project-setup'
 import { FreeProjectPlan } from './free-project-plan'
 import { ProjectHome } from './project-home'
 import { ProjectDrawer } from './project-drawer'
@@ -50,6 +50,7 @@ const READY_PREFIX = 'katedra_manuscript_ready:'
 const PROJECT_SETUP_PREFIX = 'katedra_project_setup_v1:'
 const MENTOR_PREFIX = 'katedra_mentor_tasks:'
 const WORKSPACE_VIEW_PREFIX = 'katedra_workspace_view_v1:'
+const AGENTIC_PHASE_PREFIX = 'katedra_agentic_workspace_phase_v1:'
 
 type MentorTask = { id: string; text: string; done: boolean; sectionId?: string }
 type PassStatus = 'idle' | 'checking' | 'active' | 'needed' | 'error'
@@ -153,6 +154,7 @@ export default function WorkspaceClient() {
       const projectSetupConfirmed = readStorage(storage, `${PROJECT_SETUP_PREFIX}${migrated.projectId}`) === '1'
       const restoredManuscript = stored || migrated
       const persistedView = parseWorkspaceView(readStorage(storage, `${WORKSPACE_VIEW_PREFIX}${migrated.projectId}`))
+      const persistedAgenticPhase = initialAgenticWorkspacePhase(readStorage(storage, `${AGENTIC_PHASE_PREFIX}${migrated.projectId}`))
       const needsOnboarding = shouldShowManuscriptOnboarding({
         hasStoredManuscript: Boolean(stored),
         hasWorkspaceReadyMarker: readStorage(storage, `${READY_PREFIX}${migrated.projectId}`) === '1',
@@ -167,6 +169,7 @@ export default function WorkspaceClient() {
       setShowOnboarding(needsOnboarding)
       setProjectHome(!needsOnboarding && restoredView === 'home')
       setAgenticMode(!needsOnboarding && restoredView === 'agents')
+      setAgenticView(!needsOnboarding && restoredView === 'agents' ? persistedAgenticPhase : 'preparation')
       setBooting(false)
     }
     void bootstrap().catch(() => {
@@ -524,6 +527,15 @@ export default function WorkspaceClient() {
       : workspaceView === 'writing'
         ? 'writing'
         : 'mentor'
+  const selectAgenticPhase = (requestedPhase: AgenticWorkspacePhase) => {
+    const nextPhase = nextAgenticWorkspacePhase(agenticView, requestedPhase)
+    setDrawerOpen(false)
+    setProjectHome(false)
+    setAgenticMode(true)
+    setAgenticView(nextPhase)
+    persistWorkspaceView(manuscript.projectId, 'agents')
+    persistAgenticWorkspacePhase(manuscript.projectId, nextPhase)
+  }
   const navigateProject = (item: ProjectNavItem) => {
     const destination = projectNavigationDestination(item)
     if (destination.kind === 'home') {
@@ -541,11 +553,7 @@ export default function WorkspaceClient() {
       return
     }
     if (destination.kind === 'agentic-review') {
-      setDrawerOpen(false)
-      setProjectHome(false)
-      setAgenticMode(true)
-      setAgenticView('review')
-      persistWorkspaceView(manuscript.projectId, 'agents')
+      selectAgenticPhase('review')
       return
     }
     setDrawerTab(destination.tab)
@@ -568,8 +576,8 @@ export default function WorkspaceClient() {
         workType={manuscript.workType}
         view={workspaceView}
         projectLocked={agenticMode && passStatus === 'active'}
-        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} onPhaseChange={setAgenticView} onAcceptDraft={acceptAgenticDraft} /> : undefined}
-        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }} onPrepare={() => { setProjectHome(false); setAgenticMode(true); setAgenticView('preparation'); persistWorkspaceView(manuscript.projectId, 'agents') }} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
+        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} requestedPhase={agenticView} onPhaseChange={selectAgenticPhase} onAcceptDraft={acceptAgenticDraft} /> : undefined}
+        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }} onPrepare={() => selectAgenticPhase('preparation')} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>
@@ -669,6 +677,11 @@ function persistManifest(manuscript: ManuscriptV1) {
 function persistWorkspaceView(projectId: string, view: WorkspaceViewPreference) {
   if (!projectId) return
   writeStorage(getBrowserStorage(), `${WORKSPACE_VIEW_PREFIX}${projectId}`, view)
+}
+
+function persistAgenticWorkspacePhase(projectId: string, phase: AgenticWorkspacePhase) {
+  if (!projectId) return
+  writeStorage(getBrowserStorage(), `${AGENTIC_PHASE_PREFIX}${projectId}`, phase)
 }
 
 async function responseMessage(response: Response): Promise<string> {

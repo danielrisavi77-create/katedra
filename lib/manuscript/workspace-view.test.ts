@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { initialWorkspaceView, parseWorkspaceView, type WorkspaceViewPreference } from './workspace-view'
+import { initialAgenticWorkspacePhase, initialWorkspaceView, nextAgenticWorkspacePhase, parseAgenticWorkspacePhase, parseWorkspaceView, type WorkspaceViewPreference } from './workspace-view'
 
 describe('workspace view persistence', () => {
   it('accepts only known persisted views', () => {
@@ -22,5 +22,13 @@ describe('workspace view persistence', () => {
     views.forEach((persistedView) => {
       expect(initialWorkspaceView({ needsOnboarding: true, persistedView })).toBe('home')
     })
+  })
+
+  it('restores a persisted agentic phase and keeps review selected when a run opens its checkpoint', () => {
+    expect(parseAgenticWorkspacePhase('review')).toBe('review')
+    expect(initialAgenticWorkspacePhase('review')).toBe('review')
+    expect(initialAgenticWorkspacePhase('unknown')).toBe('preparation')
+    expect(nextAgenticWorkspacePhase('review', 'dashboard')).toBe('review')
+    expect(nextAgenticWorkspacePhase('preparation', 'dashboard')).toBe('dashboard')
   })
 })

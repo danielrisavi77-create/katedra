@@ -28,6 +28,17 @@ describe('paid project setup', () => {
     expect(screen.queryByText('Pokreni tijek')).toBeNull()
   })
 
+  it('shows a truthful review empty state and lets the student open preparation', async () => {
+    const user = userEvent.setup()
+    const onPhaseChange = vi.fn()
+    render(<PaidProjectSetup projectId="project-1" passActive={false} sectionIds={[]} manuscript={manuscript} requestedPhase="review" onPhaseChange={onPhaseChange} />)
+
+    expect(screen.getByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
+    expect(screen.getByText(/Provjereni rezultati pojavit će se nakon pokrenutog tijeka/i)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Pripremi tijek' }))
+    expect(onPhaseChange).toHaveBeenCalledWith('preparation')
+  })
+
   it('starts a run with the selected mode and source policy', async () => {
     const user = userEvent.setup()
     const onPhaseChange = vi.fn()

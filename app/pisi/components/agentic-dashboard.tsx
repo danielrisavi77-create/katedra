@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createAgenticDraft, upsertSectionRevision, type AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import { plainTextDocument } from '../../../lib/manuscript/model'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
+import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 import { AgenticTimeline, type AgenticTimelineStep } from './agentic-timeline'
 import { AgenticReview } from './agentic-review'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
@@ -22,7 +23,7 @@ type LocalDraftOverride = {
 
 const DRAFT_STORAGE_PREFIX = 'katedra_agent_draft_v1:'
 
-export function AgenticDashboard({ runId, projectId, manuscript, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
+export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
   const [run, setRun] = useState<AgenticRun | null>(null)
   const [draft, setDraft] = useState<AgenticDraftV1 | null>(null)
   const [message, setMessage] = useState('')
@@ -128,7 +129,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, onReset, onInte
 
   return <section className="pis-agentic-dashboard" aria-live="polite">
     <header className="pis-agentic-dashboard-heading">
-      <div><p className="pis-kicker">Agentički workspace</p><h2>Autonomni tijek</h2><p>{activeStep ? `${label(activeStep.agent)} trenutno radi, a ${label(activeStep.verifier)} priprema provjeru.` : run ? runDescription(run.status) : 'Učitavam zadnji checkpoint…'}</p></div>
+      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Agentički workspace'}</p><h2>Autonomni tijek</h2><p>{activeStep ? `${label(activeStep.agent)} trenutno radi, a ${label(activeStep.verifier)} priprema provjeru.` : run ? runDescription(run.status) : 'Učitavam zadnji checkpoint…'}</p></div>
       {run && <span className="pis-agent-run-mode">{run.mode || 'autonomno'}</span>}
     </header>
     {run && <div className="pis-agentic-dashboard-actions">

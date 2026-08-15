@@ -7,13 +7,14 @@ import { AgenticPreparation } from './agentic-preparation'
 import { AgenticIntervention } from './agentic-intervention'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 
-export type AgenticWorkspacePhase = 'preparation' | 'dashboard' | 'intervention' | 'review'
+export type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 
 const RUN_STORAGE_PREFIX = 'katedra_agent_run_v1:'
 const RESUMABLE_STATUSES = new Set(['pending', 'running', 'paused', 'blocked'])
 
-export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript, onPhaseChange, onAcceptDraft }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
+export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript, requestedPhase, onPhaseChange, onAcceptDraft }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void> }) {
   const [runId, setRunId] = useState('')
   const [intervention, setIntervention] = useState(false)
 
@@ -52,7 +53,7 @@ export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript
   const rememberRun = (nextRunId: string) => {
     writeStoredRunId(`${RUN_STORAGE_PREFIX}${projectId}`, nextRunId)
     setRunId(nextRunId)
-    onPhaseChange?.('dashboard')
+    onPhaseChange?.(requestedPhase === 'review' ? 'review' : 'dashboard')
   }
 
   const resetRun = () => {
@@ -63,7 +64,8 @@ export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript
   }
 
   if (runId && intervention) return <AgenticIntervention runId={runId} projectId={projectId} manuscript={manuscript} reason="Verifikator je zatražio dodatni kontekst prije nastavka." onResumed={() => { setIntervention(false); onPhaseChange?.('dashboard') }} />
-  if (runId) return <AgentRunPanel runId={runId} projectId={projectId} manuscript={manuscript} onReset={resetRun} onIntervention={() => { setIntervention(true); onPhaseChange?.('intervention') }} onAcceptDraft={onAcceptDraft} />
+  if (runId) return <AgentRunPanel runId={runId} projectId={projectId} manuscript={manuscript} requestedPhase={requestedPhase} onReset={resetRun} onIntervention={() => { setIntervention(true); onPhaseChange?.('intervention') }} onAcceptDraft={onAcceptDraft} />
+  if (requestedPhase === 'review') return <section className="pis-agentic-preparation" aria-labelledby="pis-agentic-review-empty-title"><p className="pis-kicker">Revizija</p><h2 id="pis-agentic-review-empty-title">Pregled rezultata</h2><p>Provjereni rezultati pojavit će se nakon pokrenutog tijeka i njegove verifikacije.</p><button type="button" className="is-primary" onClick={() => onPhaseChange?.('preparation')}>Pripremi tijek</button></section>
   return <AgenticPreparation projectId={projectId} passActive={passActive} sectionIds={sectionIds} manuscript={manuscript} onRunCreated={rememberRun} />
 }
 
