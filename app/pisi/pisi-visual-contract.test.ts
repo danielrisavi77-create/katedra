@@ -64,3 +64,16 @@ it('defines phase-aware agentic workspace surfaces', () => {
   expect(css).toContain('.pis-review-actions')
   expect(css).toContain("html[data-theme='dark'] .pis-phase-state b")
 })
+
+it('defines the hybrid workspace surface and navigation tokens', () => {
+  expect(css).toContain('--pis-workspace-nav-width')
+  expect(css).toContain('--pis-content-max')
+  expect(css).toContain('.pis-project-nav')
+  expect(css).toContain("html[data-theme='dark'] .pis-project-nav")
+})
+
+it('keeps reduced motion and visible focus contracts on the new primitives', () => {
+  expect(css).toContain('.pis-primary-button:focus-visible')
+  expect(css).toContain('@media (prefers-reduced-motion: reduce)')
+  expect(css).toContain('.pis-project-nav')
+})
