@@ -10,4 +10,9 @@ describe('browser E2E release workflow', () => {
     expect(workflow).not.toContain('npm install --no-save --package-lock=false playwright@')
     expect(workflow).not.toContain('playwright@1.55.0')
   })
+
+  it('passes the canonical non-secret agentic contracts to the manual gate', () => {
+    expect(workflow).toContain("KATEDRA_BILLING_RPC_CONTRACT: 'v2'")
+    expect(workflow).toContain("KATEDRA_RATE_LIMIT_STORE: 'supabase'")
+  })
 })

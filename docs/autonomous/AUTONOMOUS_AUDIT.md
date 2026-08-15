@@ -1,5 +1,45 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bg
+
+### Root cause selected
+
+Priority: P1 manual staging gate configuration. The GitHub browser workflow
+invoked `preflight:agentic` but did not pass the required non-secret values
+`KATEDRA_BILLING_RPC_CONTRACT` and `KATEDRA_RATE_LIMIT_STORE`. A manually
+dispatched release gate would therefore fail even when all secret credentials
+were present.
+
+### Fix
+
+- Pass `KATEDRA_BILLING_RPC_CONTRACT=v2` and
+  `KATEDRA_RATE_LIMIT_STORE=supabase` in the browser workflow environment.
+- Add workflow contract coverage so both values remain present and canonical.
+- Keep secrets and provider credentials in GitHub secrets/variables rather than
+  hard-coding them.
+
+### Verification
+
+- TDD red regression: PASS; the workflow test failed before both contract
+  values were added.
+- Focused workflow suite: PASS (2 tests).
+- Full suite: PASS (141 test files, 495 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G4-G10: manual staging gates can now reach the actual authenticated checks
+  instead of failing on omitted non-secret contract configuration.
+- G0-G3: no intended behavior change.
+
+### Remaining issues
+
+- The gate still correctly fails without real staging credentials, deployed
+  Lekta RPCs and an available provider.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bf
 
 ### Root cause selected
