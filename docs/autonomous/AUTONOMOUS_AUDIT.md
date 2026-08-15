@@ -1,5 +1,28 @@
 # Autonomous product-completion audit
 
+## Fresh UX/readiness review: 2026-08-15q
+
+### Scope and evidence
+
+- `/pisi?tip=d` was inspected in a fresh browser context at 1440px and
+  390px.
+- The guest onboarding presents one dominant next action, readable step
+  hierarchy and no horizontal overflow.
+- The same screens were checked in dark mode; text, dividers, controls and
+  progress indicators remain legible.
+- No new code-fixable P0, P1 or P2 issue was found in this review.
+
+### Preflight result
+
+- `npm.cmd run preflight:agentic`: `BLOCKED_EXTERNAL`; worker, canonical
+  billing/rate-limit and project-lock configuration is absent.
+- `npm.cmd run preflight:production`: `BLOCKED_EXTERNAL`; production
+  Supabase, Stripe, Anthropic, Resend, app URL and contract configuration is
+  absent.
+
+These are deployment/staging blockers, not reasons to weaken the local
+fail-closed behavior.
+
 ## Cycle: 2026-08-15p
 
 ### Root cause selected
