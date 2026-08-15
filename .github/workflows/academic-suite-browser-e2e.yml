@@ -1,0 +1,230 @@
+name: Academic Suite browser E2E
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KATEDRA_E2E_URL: http://127.0.0.1:3000
+      LEKTA_PREVIEW_URL: ${{ secrets.LEKTA_PREVIEW_URL }}
+      E2E_DOCX_PATH: /tmp/academic-suite-bad-formatting.docx
+      KATEDRA_INTEGRATION_URL: ${{ secrets.KATEDRA_INTEGRATION_URL }}
+      KATEDRA_AUTH_E2E_EMAIL: ${{ secrets.KATEDRA_AUTH_E2E_EMAIL }}
+      KATEDRA_AUTH_E2E_PASSWORD: ${{ secrets.KATEDRA_AUTH_E2E_PASSWORD }}
+      KATEDRA_WORKER_APP_URL: ${{ secrets.KATEDRA_WORKER_APP_URL || secrets.KATEDRA_INTEGRATION_URL }}
+      KATEDRA_AGENT_WORKER_TOKEN: ${{ secrets.KATEDRA_AGENT_WORKER_TOKEN }}
+      KATEDRA_AGENT_WORKER_CRON_SECRET: ${{ secrets.KATEDRA_AGENT_WORKER_CRON_SECRET }}
+      KATEDRA_AGENT_MODEL: ${{ vars.KATEDRA_AGENT_MODEL }}
+      KATEDRA_AGENT_RUNS_ENABLED: ${{ vars.KATEDRA_AGENT_RUNS_ENABLED }}
+      KATEDRA_PROJECT_LOCKS_ENABLED: ${{ vars.KATEDRA_PROJECT_LOCKS_ENABLED }}
+      KATEDRA_AUTH_E2E_CHECKOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Require staging configuration for manual release gate
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          missing=0
+          for name in LEKTA_PREVIEW_URL KATEDRA_INTEGRATION_URL KATEDRA_AUTH_E2E_EMAIL KATEDRA_AUTH_E2E_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "$name is required for the manual authenticated release gate."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Generate intake-valid DOCX with deterministic formatting errors
+        run: |
+          python3 - <<'PY'
+          import os
+          import random
+          from zipfile import ZipFile, ZIP_DEFLATED
+          from xml.sax.saxutils import escape
+
+          path = os.environ['E2E_DOCX_PATH']
+          rng = random.Random(20260803)
+          vocab = [
+              'analiza','politika','istraživanje','institucija','metodologija','rezultat','rasprava','uzorak',
+              'student','dokument','teorija','pristup','podatak','argument','zaključak','literatura','proces',
+              'provjera','struktura','akademski','sustav','kriterij','primjer','pokazatelj','varijabla','model',
+              'kontekst','primjena','razina','odnos','obrazloženje','hipoteza','izvor','istraživački','postupak',
+          ]
+
+          sections = [
+              '1. Uvod',
+              '2. Teorijski okvir',
+              '3. Metodologija',
+              '4. Rezultati i rasprava',
+              '5. Zaključak',
+              'Literatura',
+          ]
+
+          blocks = [
+              ('Sveučilište u Zagrebu', None),
+              ('Fakultet političkih znanosti', None),
+              ('Automatizirani E2E uzorak', None),
+              ('Diplomski rad', None),
+          ]
+          for section_index, section in enumerate(sections):
+              blocks.append((section, 'Heading1'))
+              if section == 'Literatura':
+                  for i in range(12):
+                      blocks.append((f'Horvat, I. ({2010+i}). Sintetski izvor {i+1} za automatizirani test. Zagreb: Test.', None))
+                  continue
+              for para_index in range(18):
+                  words = [rng.choice(vocab) for _ in range(42)]
+                  unique = f' sekcija-{section_index+1} odlomak-{para_index+1} identifikator-{section_index:02d}{para_index:02d}.'
+                  blocks.append((' '.join(words).capitalize() + unique, None))
+
+          def p(text, style=None):
+              p_style = f'<w:pStyle w:val="{style}"/>' if style else ''
+              return (
+                  f'<w:p><w:pPr>{p_style}<w:spacing w:line="240" w:lineRule="auto"/></w:pPr>'
+                  '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
+                  '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>'
+                  f'<w:t xml:space="preserve">{escape(text)}</w:t></w:r></w:p>'
+              )
+
+          document = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:body>''' + ''.join(p(text, style) for text, style in blocks) + '''
+              <w:sectPr>
+                <w:pgSz w:w="11906" w:h="16838"/>
+                <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>
+              </w:sectPr>
+            </w:body>
+          </w:document>'''
+
+          styles = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+              <w:name w:val="Normal"/>
+              <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>
+              <w:pPr><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>
+            </w:style>
+            <w:style w:type="paragraph" w:styleId="Heading1">
+              <w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>
+              <w:pPr><w:outlineLvl w:val="0"/><w:spacing w:line="240" w:lineRule="auto"/></w:pPr>
+              <w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>
+            </w:style>
+          </w:styles>'''
+
+          app_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+            <Application>Microsoft Office Word</Application><Words>3900</Words><Paragraphs>110</Paragraphs><Pages>18</Pages>
+          </Properties>'''
+
+          core_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <dc:title>Automatizirani E2E uzorak</dc:title><dc:creator>Academic Suite E2E</dc:creator>
+          </cp:coreProperties>'''
+
+          settings = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:zoom w:percent="100"/></w:settings>'''
+
+          content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+            <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+            <Default Extension="xml" ContentType="application/xml"/>
+            <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+            <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+            <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+            <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+            <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+          </Types>'''
+
+          root_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+            <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+            <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+          </Relationships>'''
+
+          document_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+            <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+          </Relationships>'''
+
+          with ZipFile(path, 'w', ZIP_DEFLATED) as z:
+              z.writestr('[Content_Types].xml', content_types)
+              z.writestr('_rels/.rels', root_rels)
+              z.writestr('docProps/app.xml', app_xml)
+              z.writestr('docProps/core.xml', core_xml)
+              z.writestr('word/document.xml', document)
+              z.writestr('word/styles.xml', styles)
+              z.writestr('word/settings.xml', settings)
+              z.writestr('word/_rels/document.xml.rels', document_rels)
+
+          size = os.path.getsize(path)
+          assert size >= 4096, f'E2E DOCX must clear Lekta intake minimum; got {size} bytes'
+          print(f'Generated {path} ({size} bytes, intake-valid)')
+          PY
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run unit and component tests
+        run: npm run test:ci
+
+      - name: Build Katedra
+        run: npm run build
+
+      - name: Start Katedra
+        run: |
+          npm run start -- -p 3000 > /tmp/katedra-e2e.log 2>&1 &
+          echo $! > /tmp/katedra-e2e.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/katedra-e2e.log
+          exit 1
+
+      - name: Run Lekta × Katedra browser loop
+        run: node scripts/academic-suite-browser-e2e.mjs
+
+      - name: Run authenticated money-flow browser gate
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: node scripts/authenticated-money-flow-e2e.mjs
+
+      - name: Require agentic staging worker configuration
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: npm run preflight:agentic
+
+      - name: Run authenticated agentic-workflow browser gate
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          KATEDRA_AGENT_E2E_TIMEOUT_MS: '300000'
+        run: npm run test:e2e:agentic
+
+      - name: Run HTTP integration gate when staging is configured
+        if: ${{ env.KATEDRA_INTEGRATION_URL != '' }}
+        run: npm run test:ci -- app/api/checkout/route.integration.test.js app/api/chat/route.integration.test.js app/api/webhook/route.integration.test.js app/api/state/route.integration.test.js
+
+      - name: Print Katedra server log on failure
+        if: failure()
+        run: cat /tmp/katedra-e2e.log || true

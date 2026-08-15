@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bf
+
+### Root cause selected
+
+Priority: P2 browser release-gate reproducibility. The GitHub browser workflow
+ran `npm ci` with Playwright 1.61.1 from the project lockfile, then installed a
+different ephemeral Playwright 1.55.0 before running E2E. The release result
+could therefore differ from the locally tested dependency graph.
+
+### Fix
+
+- Use the Playwright runner installed by `npm ci`.
+- Keep browser runtime installation explicit with
+  `npx playwright install --with-deps chromium`.
+- Add a regression test preventing a second pinned Playwright version from
+  returning to the release workflow.
+
+### Verification
+
+- TDD regression: PASS; the workflow contract now rejects the old ephemeral
+  install and requires the lockfile runner.
+- Focused workflow suite: PASS (1 test).
+- Full suite: PASS (141 test files, 494 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G7-G10: the browser release gate now tests against the same Playwright
+  dependency version declared by the application.
+- G0-G6: no intended behavior change.
+
+### Remaining issues
+
+- Authenticated browser journeys still require staging credentials and the
+  canonical Lekta/Stripe environment.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15be
 
 ### Root cause selected

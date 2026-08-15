@@ -1,0 +1,13 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/academic-suite-browser-e2e.yml'), 'utf8')
+
+describe('browser E2E release workflow', () => {
+  it('uses the Playwright version installed by npm ci', () => {
+    expect(workflow).toContain('npx playwright install --with-deps chromium')
+    expect(workflow).not.toContain('npm install --no-save --package-lock=false playwright@')
+    expect(workflow).not.toContain('playwright@1.55.0')
+  })
+})
