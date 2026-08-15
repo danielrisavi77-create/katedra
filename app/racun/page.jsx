@@ -107,7 +107,7 @@ export default function RacunPage() {
               : <p className="account-usage-note" role="status">AI potrošnja trenutačno nije dostupna; broj zahtjeva nije moguće potvrditi.</p>}
             <section className="account-subsection" aria-labelledby="account-projects-title">
               <h3 id="account-projects-title">Moji projekti</h3>
-              {projectRows && projectRows.length > 0 && <ul className="account-project-list">{projectRows.map((project) => <li key={project.project_id}><div><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
+              {projectRows && projectRows.length > 0 && <ul className="account-project-list">{projectRows.map((project) => <li key={project.project_id}><div className="account-project-copy"><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
               {projectRows && projectRows.length === 0 && <p role="status">Još nema spremljenih projekata.</p>}
               {account.projects === null && <p role="status">Projekti trenutačno nisu dostupni.</p>}
             </section>

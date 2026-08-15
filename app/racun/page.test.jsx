@@ -36,3 +36,11 @@ it('presents account identity, projects and Pass scope as separate truthful sect
   expect(source).toContain('Pass po projektu')
   expect(source).toContain('canonical identity servis')
 })
+
+it('allows long project titles to wrap inside the account row', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/racun/page.jsx'), 'utf8')
+  const styles = readFileSync(resolve(process.cwd(), 'app/katedra-scoped.css'), 'utf8')
+
+  expect(source).toContain('className="account-project-copy"')
+  expect(styles).toContain('.account-project-copy{min-width:0;overflow-wrap:anywhere;flex:1 1 auto}')
+})

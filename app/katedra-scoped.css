@@ -1526,6 +1526,7 @@
 .account-overview-grid span { margin-top: 2px; color: var(--mut); font-size: 12px; }
 .account-project-list { margin: 18px 0 0; padding: 0; list-style: none; }
 .account-project-list li { display: flex; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line, #d8d1c4); }
+.account-project-copy{min-width:0;overflow-wrap:anywhere;flex:1 1 auto}
 .account-project-list b, .account-project-list small { display: block; }
 .account-project-list small { margin-top: 3px; color: var(--mut); font-size: 12px; }
 .account-project-list a, .account-data-actions a { color: var(--acc); }
