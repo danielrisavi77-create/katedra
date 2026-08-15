@@ -1,5 +1,28 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bm — public light/dark route smoke
+
+### Root cause selected
+
+Priority: readiness verification. A fresh mobile browser pass was needed to
+check the public route contract after the prior local gate revalidation. No
+new code-fixable P0, P1 or P2 issue was found.
+
+### Verification
+
+- Playwright smoke passed for `/`, `/pisi`, `/racun`, `/prijava`,
+  `/registracija`, `/privatnost` and `/uvjeti` in both light and dark themes.
+- All 14 route/theme combinations returned successfully with exactly one
+  `main` landmark and one `h1`.
+- All 14 combinations had no horizontal overflow and no page errors.
+- The theme was changed through the real accessible theme-toggle control, not
+  by mutating application state from the test.
+
+### Remaining issues
+
+- No new local code-fixable issue was selected. Paid commerce, canonical Lekta
+  deployment and staging verification remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15bl — full local gate revalidation
 
 ### Root cause selected
