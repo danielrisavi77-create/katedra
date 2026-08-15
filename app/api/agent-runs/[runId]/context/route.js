@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { readProjectLock } from '@/lib/academic-suite/project-lock'
+import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
 import { MAX_AGENT_CONTEXT_BYTES, validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
@@ -63,6 +63,11 @@ export async function POST(req, { params }) {
     const status = validatedContext.reason === 'project_mismatch' ? 403 : validatedContext.reason === 'too_large' ? 413 : 400
     return Response.json({ error: validatedContext.error }, { status })
   }
+  const lockValidation = validateLockedProjectMutation(lock.lock, {
+    topic: validatedContext.manuscript.title,
+    workType: validatedContext.manuscript.workType,
+  })
+  if (!lockValidation.ok) return Response.json({ error: lockValidation.error }, { status: lockValidation.status })
   const materialIds = body?.materialIds === undefined ? [] : body.materialIds
   if (!Array.isArray(materialIds) || materialIds.length > 100 || materialIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 200)) {
     return Response.json({ error: 'Popis materijala nije valjan.' }, { status: 400 })
@@ -86,7 +91,7 @@ export async function POST(req, { params }) {
     userId: user.id,
     projectId: run.project_id,
     runId,
-    manuscript: body?.manuscript,
+    manuscript: validatedContext.manuscript,
     bucket: BUCKET,
   })
   if (!stored.ok) return Response.json({ error: stored.error }, { status: stored.status })

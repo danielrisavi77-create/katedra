@@ -25,4 +25,10 @@ describe('agent run context route contract', () => {
     expect(source).not.toContain("['completed', 'failed', 'cancelled']")
     expect(source).toContain('Svi odabrani materijali nisu potvrđeni')
   })
+
+  it('keeps a revised run context on the locked topic and work type', () => {
+    expect(source).toContain('validateLockedProjectMutation')
+    expect(source).toContain('validatedContext.manuscript.title')
+    expect(source).toContain('validatedContext.manuscript.workType')
+  })
 })

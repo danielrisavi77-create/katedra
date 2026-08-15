@@ -1,5 +1,52 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ae
+
+### Root cause selected
+
+Priority: P0/P1 paid-project boundary. Agent-run creation and paused-context
+updates validated ownership of `projectId` and Pass availability, but did not
+compare the submitted manuscript snapshot's title and legacy work type with
+the canonical paid-project lock. A manipulated client could therefore ask an
+otherwise valid run to work on another topic inside the same project.
+
+### Fix
+
+- Validate the manuscript snapshot before creating or replacing a run context.
+- Read the canonical project lock and apply `validateLockedProjectMutation` to
+  the snapshot title and work type.
+- Reject mismatches with HTTP 409 before storage or material attachment.
+- Store the already validated manuscript context rather than the unchecked
+  request body.
+- Keep the existing product-specific Pass and ownership checks unchanged.
+
+### Verification
+
+- TDD route-contract regressions: PASS; both run creation and context update
+  tests failed before the lock comparison existed and passed after it.
+- Runtime context mismatch regression: PASS (5 tests), including no storage
+  call after a changed topic.
+- Project-lock semantic tests: PASS (27 tests in the focused route/lock set).
+- Full test suite: PASS (133 test files, 463 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated route changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G2-G4 and G9-G10: a paid Pass cannot be redirected to another topic or
+  work type through a forged agent-run manuscript snapshot.
+- G0-G1 and G5-G8: no behavior change.
+
+### Remaining issues
+
+- Canonical Lekta lock/RPC deployment and authenticated staging proof remain
+  `BLOCKED_EXTERNAL`; local route tests do not prove production RLS behavior.
+- The client may still display a locally edited title after payment, but any
+  server-backed run now fails closed until it matches the lock.
+
 ## Cycle: 2026-08-15ad
 
 ### Root cause selected

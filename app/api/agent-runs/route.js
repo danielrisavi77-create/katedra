@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
+import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
 import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun } from '@/lib/agents/backend-contract'
 import { parseAgentRunRequest } from '@/lib/agents/run-request'
+import { validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { resolveProjectCapability } from '@/lib/product/server-capabilities'
 
@@ -23,6 +25,20 @@ export async function POST(req) {
   try { parsed = parseAgentRunRequest(await req.json()) } catch { parsed = { ok: false, status: 400, error: 'Neispravan zahtjev.' } }
   if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
   if (parsed.value.manuscript === undefined) return Response.json({ error: 'Snapshot rukopisa je obavezan za agenticni run.' }, { status: 400 })
+
+  const validatedContext = validateAgentRunContext({ manuscript: parsed.value.manuscript }, project.projectId)
+  if (!validatedContext.ok) {
+    const status = validatedContext.reason === 'project_mismatch' ? 403 : validatedContext.reason === 'too_large' ? 413 : 400
+    return Response.json({ error: validatedContext.error }, { status })
+  }
+  const lock = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
+  if (!lock.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
+  if (!lock.lock) return Response.json({ error: 'Aktivan Pass za ovaj projekt je potreban.' }, { status: 402 })
+  const lockValidation = validateLockedProjectMutation(lock.lock, {
+    topic: validatedContext.manuscript.title,
+    workType: validatedContext.manuscript.workType,
+  })
+  if (!lockValidation.ok) return Response.json({ error: lockValidation.error }, { status: lockValidation.status })
 
   const capability = parsed.value.mode === 'autonomous'
     ? 'autonomous_run'
@@ -71,7 +87,7 @@ export async function POST(req) {
     userId: user.id,
     projectId: project.projectId,
     runId: created.runId,
-    manuscript: parsed.value.manuscript,
+    manuscript: validatedContext.manuscript,
     bucket: BUCKET,
   })
   if (!context.ok) {

@@ -41,4 +41,11 @@ describe('agent run route contract', () => {
     expect(source).toContain("const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'")
     expect(source).toContain('bucket: BUCKET')
   })
+
+  it('compares the submitted run snapshot with the canonical paid-project lock', () => {
+    expect(source).toContain('validateAgentRunContext')
+    expect(source).toContain('validateLockedProjectMutation')
+    expect(source).toContain('manuscript.title')
+    expect(source).toContain('manuscript.workType')
+  })
 })
