@@ -112,7 +112,7 @@ it('keeps exact focus, radius, content-width, and reduced-motion contracts', () 
   expect(css.match(/html\[data-theme='dark'\] \.pis-project-nav/g)).toHaveLength(1)
 
   const reducedMotion = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\n\}/)?.[1] ?? ''
-  expect(reducedMotion).toContain('.pis-primary-button')
-  expect(reducedMotion).toContain('.pis-secondary-button')
-  expect(reducedMotion).toContain('.pis-project-nav button')
+  expect(reducedMotion).toMatch(
+    /\.pis-primary-button,\s*\.pis-secondary-button,\s*\.pis-project-nav button\s*\{\s*transition:\s*none;\s*animation:\s*none;\s*\}/,
+  )
 })
