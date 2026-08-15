@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15aw
+
+### Root cause selected
+
+Priority: P1 G9 active-run recovery. `PaidProjectSetup` kept its `runId` only
+in component state. Although the server exposed project-scoped run listings,
+the UI never queried them, so a reload, tab close or drawer unmount returned
+the user to preparation and hid a still-running server-side workflow.
+
+### Fix
+
+- Persist newly created run IDs under a project-scoped localStorage key.
+- On mount, restore that ID when available.
+- When local state is absent, query `GET /api/agent-runs?projectId=...` and
+  resume the newest resumable run (`pending`, `running`, `paused`, `blocked` or
+  `failed`).
+- Clear the project run marker when the user starts a new run.
+- Keep the manuscript local-first; only the opaque run ID is stored locally.
+
+### Verification
+
+- TDD regression: PASS; the component previously stayed in preparation and now
+  reopens the mocked active server run after mount.
+- Full suite: PASS (138 test files, 484 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- The authenticated server continuation itself remains staging-dependent and
+  was not represented as a local production proof.
+
+### Golden Journey impact
+
+- G9: a reload/tab close no longer intentionally hides an active run in the
+  UI; recovery falls back to the canonical project-scoped run list.
+- G5-G6/G10: paid workflows can resume at their latest run checkpoint once
+  staging is configured.
+- G0-G4, G7-G8: no intended behavior change.
+
+### Remaining issues
+
+- Canonical worker execution, authenticated session recovery and billing
+  reconciliation still require Lekta/staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15av
 
 ### Root cause selected
