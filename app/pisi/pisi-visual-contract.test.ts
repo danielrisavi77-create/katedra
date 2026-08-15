@@ -74,7 +74,7 @@ it('defines the hybrid workspace surface and navigation tokens', () => {
 })
 
 it('keeps the mobile project home independently scrollable above the safe area', () => {
-  expect(css).toMatch(/@media \(max-width: 800px\) \{[\s\S]*?\.pis-project-home-main \{[^}]*height: calc\(100vh - 112px - env\(safe-area-inset-bottom\)\);[^}]*max-height: calc\(100vh - 112px - env\(safe-area-inset-bottom\)\);[^}]*overflow-y: auto;[^}]*padding: 32px 20px calc\(90px \+ env\(safe-area-inset-bottom\)\);/)
+  expect(css).toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.pis-project-home-main \{[^}]*height: calc\(100vh - 112px - env\(safe-area-inset-bottom\)\);[^}]*max-height: calc\(100vh - 112px - env\(safe-area-inset-bottom\)\);[^}]*overflow-y: auto;[^}]*padding: 32px 20px calc\(90px \+ env\(safe-area-inset-bottom\)\);/)
 })
 
 it('defines exact light and dark values for the mentor workspace tokens', () => {
@@ -117,7 +117,6 @@ it('keeps exact focus, radius, content-width, and reduced-motion contracts', () 
   expect(css.match(/html\[data-theme='dark'\] \.pis-project-nav/g)).toHaveLength(1)
 
   const reducedMotion = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\n\}/)?.[1] ?? ''
-  expect(reducedMotion).toMatch(
-    /\.pis-primary-button,\s*\.pis-secondary-button,\s*\.pis-project-nav button\s*\{\s*transition:\s*none;\s*animation:\s*none;\s*\}/,
-  )
+  expect(reducedMotion).toMatch(/\.pis-primary-button,\s*\.pis-secondary-button,\s*\.pis-project-nav button,/)
+  expect(reducedMotion).toMatch(/\.pis-writing-frame,\s*\.pis-assistant\s*\{\s*transition:\s*none;\s*animation:\s*none;\s*\}/)
 })

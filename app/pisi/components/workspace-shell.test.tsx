@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
 
 import { createManuscript } from '../../../lib/manuscript/model'
 import { ThemeProvider } from '../../theme-provider'
-import { WorkspaceShell } from './workspace-shell'
+import { normalizeWorkspaceResumeState, WorkspaceShell } from './workspace-shell'
 
 afterEach(cleanup)
 
@@ -104,6 +104,17 @@ describe('WorkspaceShell', () => {
     const nav = screen.getByRole('navigation', { name: /radni prostor/i })
     expect(within(nav).getByRole('button', { name: 'Pregled' }).getAttribute('aria-current')).toBe('page')
     expect(screen.getByRole('main', { name: 'Projektna početna' }).textContent).toContain('Pregled projekta')
+  })
+
+  it('normalizes restored project home to the overview mobile context', () => {
+    expect(normalizeWorkspaceResumeState({ projectHome: true, mobileView: 'editor' })).toEqual({
+      projectHome: true,
+      mobileView: 'overview',
+    })
+    expect(normalizeWorkspaceResumeState({ projectHome: false, mobileView: 'outline' })).toEqual({
+      projectHome: false,
+      mobileView: 'overview',
+    })
   })
 
   it('keeps the tablet workspace from clipping the editor or assistant', () => {

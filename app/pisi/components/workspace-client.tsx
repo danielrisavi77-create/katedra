@@ -44,7 +44,7 @@ import { ProjectHome } from './project-home'
 import { ProjectDrawer } from './project-drawer'
 import type { ProjectNavItem } from './project-navigation'
 import { projectNavigationDestination, type ProjectDrawerTab } from './project-navigation-routing'
-import { normalizeMobileView, WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
+import { normalizeMobileView, normalizeWorkspaceResumeState, WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
 
 const READY_PREFIX = 'katedra_manuscript_ready:'
 const PROJECT_SETUP_PREFIX = 'katedra_project_setup_v1:'
@@ -171,8 +171,10 @@ export default function WorkspaceClient() {
       setShowOnboarding(needsOnboarding)
       const shouldResumeAgentic = !needsOnboarding && restoredView === 'agents'
       const shouldResumeHome = !needsOnboarding && !shouldResumeAgentic && (restoredView === 'home' || persistedMobileView === 'overview')
-      setMobileView(persistedMobileView)
-      setProjectHome(shouldResumeHome)
+      const resumeState = normalizeWorkspaceResumeState({ projectHome: shouldResumeHome, mobileView: persistedMobileView })
+      setMobileView(resumeState.mobileView)
+      setProjectHome(resumeState.projectHome)
+      if (resumeState.projectHome) writeStorage(storage, `${MOBILE_VIEW_PREFIX}${migrated.projectId}`, 'overview')
       setAgenticMode(shouldResumeAgentic)
       setAgenticView(shouldResumeAgentic ? persistedAgenticPhase : 'preparation')
       setBooting(false)

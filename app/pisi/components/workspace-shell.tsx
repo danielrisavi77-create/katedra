@@ -19,6 +19,19 @@ export function normalizeMobileView(value: unknown): MobileView {
   return 'editor'
 }
 
+export function normalizeWorkspaceResumeState({
+  projectHome,
+  mobileView,
+}: {
+  projectHome: boolean
+  mobileView: unknown
+}): { projectHome: boolean; mobileView: MobileView } {
+  return {
+    projectHome,
+    mobileView: projectHome ? 'overview' : normalizeMobileView(mobileView),
+  }
+}
+
 export function WorkspaceShell({
   manuscript,
   saveStatus,
@@ -64,7 +77,7 @@ export function WorkspaceShell({
   workType?: 's' | 'z' | 'd'
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
-  const effectiveMobileView = view === 'home' ? 'overview' : normalizeMobileView(activeMobileView)
+  const effectiveMobileView = normalizeWorkspaceResumeState({ projectHome: view === 'home', mobileView: activeMobileView }).mobileView
 
   return (
     <div className="pis-workspace" data-testid="pis-workspace-root" data-workspace-view={view} data-project-locked={projectLocked ? 'true' : 'false'}>
