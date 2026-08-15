@@ -42,7 +42,7 @@ the route had authenticated the user with the server client.
 
 ### Commit
 
-- Pending selected-file commit after audit ledger update.
+- Isolated changeset: `fix: preserve session for chat capability checks`.
 
 ### Remaining issues
 
