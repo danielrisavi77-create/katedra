@@ -1,5 +1,34 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bk — local writing workspace smoke
+
+### Root cause selected
+
+Priority: readiness verification. After the accessibility pass, the actual
+guest-to-writing route needed a fresh browser check covering the user-visible
+path from onboarding to an editable, reload-persistent manuscript. No new
+code-fixable P0, P1 or P2 issue was found.
+
+### Verification
+
+- Playwright browser smoke: PASS; guest `?tip=d` onboarding accepted the FPZG
+  faculty search result and a topic, opened Completion Scan, entered the
+  project dashboard and opened the writing workspace.
+- Local manuscript smoke: PASS; text entered in the Tiptap editor survived an
+  800 ms autosave window and a full page reload from IndexedDB.
+- Responsive smoke: PASS at 390, 768 and 1440 px; no horizontal overflow and
+  no page errors.
+- The workspace exposed one `main` landmark and one level-one heading, and
+  mobile workspace controls were available.
+- Playwright was already present in the lockfile, so no additional package was
+  installed for this check.
+
+### Remaining issues
+
+- No new local code-fixable issue was selected. Authenticated commerce,
+  canonical Lekta deployment, Docker/Supabase and staging release proof
+  remain external blockers documented in `docs/autonomous/BLOCKERS.md`.
+
 ## Cycle: 2026-08-15bj — accessibility landmarks and contrast
 
 ### Root cause selected
