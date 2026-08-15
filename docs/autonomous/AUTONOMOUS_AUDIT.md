@@ -2003,6 +2003,33 @@ credentials and canonical contracts (`KATEDRA_AUTH_E2E_EMAIL`,
 G2–G10 are not marked PASS by this UI evidence; their statuses remain governed
 by `docs/autonomous/GOLDEN_JOURNEYS.md` and `BLOCKERS.md`.
 
+## Cycle: 2026-08-15i — Task 7 fix round
+
+### Evidence
+
+- Added contract coverage for `?tip=d` active state, faculty/program
+  `inputValue()`, persisted manifest values, Completion Scan sections and three
+  next steps, project-home primary action, writing landmarks, and computed
+  dark-mode surface contrast.
+- Added the release command `npm run test:e2e:hybrid-ui`.
+- The focused source contract suite passed: `6/6` tests.
+- No application UI, API route, database or feature flag was modified. The
+  Scan assertion uses the existing `.pis-free-plan` and
+  `.pis-primary-button` contract because adding a new `data-primary-action`
+  attribute to the app is outside this task's allowed scope; project home
+  continues to assert its existing `data-primary-action` attribute.
+- The authenticated agentic script now reports
+  `BLOCKED_EXTERNAL` until canonical staging contracts are present and only
+  emits `AGENTIC_WORKSPACE_UI_STAGING_E2E_PASS` after that gate.
+
+### Limitation
+
+The post-fix browser rerun was stopped before completion at the user's request;
+the earlier Task 7 local journey had passed, but this fix-round commit does not
+claim a fresh browser PASS. Authenticated checkout, webhook, entitlement,
+worker, provider, canonical Lekta and staging recovery remain
+`BLOCKED_EXTERNAL`. G2–G10 remain unmarked.
+
 ## Cycle: 2026-08-15s
 
 ### Root cause selected

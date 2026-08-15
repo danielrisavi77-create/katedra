@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 const scriptPath = resolve(process.cwd(), 'scripts/hybrid-mentor-ui-e2e.mjs')
 const source = existsSync(scriptPath) ? readFileSync(scriptPath, 'utf8') : ''
+const legacySource = readFileSync(resolve(process.cwd(), 'scripts/agentic-workspace-ui-e2e.mjs'), 'utf8')
+const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'))
 
 describe('hybrid mentor workspace browser contract', () => {
   it('covers the public route, theme and viewport matrix', () => {
@@ -31,5 +33,34 @@ describe('hybrid mentor workspace browser contract', () => {
     expect(source).toContain('KATEDRA_AUTH_E2E_EMAIL')
     expect(source).toContain('KATEDRA_AUTH_E2E_PASSWORD')
     expect(source).not.toContain('KATEDRA_AGENT_MODEL=')
+  })
+
+  it('proves the guest journey state, scan, home and writing surfaces', () => {
+    expect(source).toContain("getAttribute('class')")
+    expect(source).toContain('inputValue()')
+    expect(source).toContain('Već imaš')
+    expect(source).toContain('Nedostaje')
+    expect(source).toContain('Sljedeća tri koraka')
+    expect(source).toContain('nextSteps')
+    expect(source).toContain('data-primary-action="true"')
+    expect(source).toContain("page.locator('.pis-prosemirror')")
+    expect(source).toContain('Fakultet političkih znanosti')
+    expect(source).toContain('Politologija')
+  })
+
+  it('checks writing landmarks and meaningful dark-mode computed styles', () => {
+    expect(source).toContain('Struktura rada')
+    expect(source).toContain('Katedra urednik')
+    expect(source).toContain('getComputedStyle')
+    expect(source).toContain('contrastRatio')
+    expect(source).toContain('backgroundColor')
+    expect(source).toContain('color')
+  })
+
+  it('exposes a runtime npm command and keeps the legacy agentic gate truthful', () => {
+    expect(packageJson.scripts?.['test:e2e:hybrid-ui']).toBe('node scripts/hybrid-mentor-ui-e2e.mjs')
+    expect(legacySource).toContain('evaluateAgenticStagingEnvironment')
+    expect(legacySource).toContain('AGENTIC_WORKSPACE_UI_STAGING_E2E_PASS')
+    expect(legacySource).not.toContain('AGENTIC_WORKSPACE_UI_BROWSER_E2E_PASS')
   })
 })

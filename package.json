@@ -13,6 +13,7 @@
     "test:e2e:authenticated": "node scripts/authenticated-money-flow-e2e.mjs",
     "test:e2e:agentic": "node scripts/agentic-workflow-e2e.mjs",
     "test:e2e:agentic-ui": "node scripts/agentic-workspace-ui-e2e.mjs",
+    "test:e2e:hybrid-ui": "node scripts/hybrid-mentor-ui-e2e.mjs",
     "audit:dependencies": "npm audit --omit=dev --audit-level=high",
     "preflight:production": "node scripts/production-preflight.mjs",
     "preflight:agentic": "node scripts/agentic-staging-preflight.mjs",

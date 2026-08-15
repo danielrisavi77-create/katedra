@@ -6,6 +6,11 @@ const themes = ['light', 'dark']
 const widths = [390, 768, 1440]
 const browserErrors = []
 const storageKey = 'katedra-theme'
+const expectedProject = {
+  faculty: 'Fakultet političkih znanosti',
+  program: 'Politologija',
+  topic: 'Utjecaj javne komunikacije na povjerenje građana',
+}
 
 const { chromium } = await import('playwright')
 const browser = await chromium.launch({ headless: true })
@@ -48,6 +53,62 @@ async function assertPageContract(label) {
   )
 }
 
+function contrastRatio(foreground, background) {
+  const parse = (value) => {
+    const match = String(value).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/u)
+    if (!match) return null
+    return match.slice(1, 4).map(Number).map((channel) => channel / 255)
+  }
+  const foregroundRgb = parse(foreground)
+  const backgroundRgb = parse(background)
+  if (!foregroundRgb || !backgroundRgb) return 0
+  const luminance = (rgb) => rgb.reduce((sum, channel, index) => {
+    const linear = channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    return sum + linear * [0.2126, 0.7152, 0.0722][index]
+  }, 0)
+  const foregroundLuminance = luminance(foregroundRgb)
+  const backgroundLuminance = luminance(backgroundRgb)
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+}
+
+async function assertDarkModeSurface(label, theme) {
+  if (theme !== 'dark') return
+  const styles = await page.evaluate(() => {
+    const read = (selector) => {
+      const element = document.querySelector(selector)
+      if (!element) return null
+      const computed = window.getComputedStyle(element)
+      return {
+        display: computed.display,
+        visibility: computed.visibility,
+        opacity: computed.opacity,
+        color: computed.color,
+        backgroundColor: computed.backgroundColor,
+      }
+    }
+    return {
+      paper: read('.pis-paper'),
+      editor: read('.pis-prosemirror'),
+      primary: read('.pis-primary-button, .pis-export-button'),
+    }
+  })
+
+  assert.equal(styles.paper?.display, 'block', `${label}: paper nije vidljiv u dark modu`)
+  assert.notEqual(styles.paper?.visibility, 'hidden', `${label}: paper je skriven u dark modu`)
+  assert.ok(Number(styles.paper?.opacity || 0) > 0, `${label}: paper ima nevidljivu opacity vrijednost`)
+  assert.ok(styles.editor?.color, `${label}: editor nema computed tekstualnu boju`)
+  assert.ok(styles.paper?.backgroundColor, `${label}: paper nema computed pozadinu`)
+  assert.ok(
+    contrastRatio(styles.editor.color, styles.paper.backgroundColor) >= 4.5,
+    `${label}: kontrast teksta editora i papira je prenizak`,
+  )
+  assert.ok(styles.primary?.color && styles.primary?.backgroundColor, `${label}: primarna kontrola nema computed boje`)
+  assert.ok(
+    contrastRatio(styles.primary.color, styles.primary.backgroundColor) >= 3,
+    `${label}: kontrast primarne kontrole je prenizak`,
+  )
+}
+
 async function gotoWithTheme(path, theme) {
   await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [storageKey, theme])
   await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' })
@@ -58,32 +119,67 @@ async function completeGuestOnboarding() {
   await page.goto(`${baseUrl}/pisi?tip=d`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: /Novi rad/i }).click()
 
+  const graduateType = page.getByRole('button', { name: /Diplomski/i }).first()
+  assert.match(await graduateType.getAttribute('class') || '', /\bis-active\b/, '?tip=d mora aktivirati Diplomski')
+
   const faculty = page.getByRole('combobox', { name: /Fakultet ili ustanova/i })
   await faculty.fill('FPZG')
   const facultyOption = page.getByRole('option').filter({ hasText: /Fakultet političkih znanosti/i }).first()
   await facultyOption.waitFor({ state: 'visible', timeout: 15_000 })
   await facultyOption.click()
+  assert.equal(await faculty.inputValue(), expectedProject.faculty, 'odabrani fakultet nije upisan u combobox')
 
   const program = page.getByRole('combobox', { name: /Smjer \/ studij/i })
   await program.fill('Politologija')
   const programOption = page.getByRole('option').filter({ hasText: /Politologija/i }).first()
   await programOption.waitFor({ state: 'visible', timeout: 15_000 })
   await programOption.click()
+  assert.match(await program.inputValue(), /Politologija/i, 'odabrani program nije upisan u combobox')
   await page.getByRole('button', { name: /Dalje/i }).click()
 
   await page.getByRole('button', { name: /Imam temu/i }).click()
   await page.getByRole('button', { name: /Dalje/i }).click()
-  await page.getByLabel(/Tema rada/i).fill('Utjecaj javne komunikacije na povjerenje građana')
+  await page.getByLabel(/Tema rada/i).fill(expectedProject.topic)
   await page.getByRole('button', { name: /Dalje/i }).click()
   await page.getByRole('button', { name: /Otvori projekt/i }).click()
 
   await page.getByRole('heading', { name: /Znaš gdje si/i }).waitFor({ state: 'visible', timeout: 15_000 })
+  await assertCompletionScan()
+
+  const storedManifest = await page.evaluate(() => {
+    try { return JSON.parse(window.localStorage.getItem('rp_manifest') || 'null') } catch { return null }
+  })
+  assert.equal(storedManifest?.institution, expectedProject.faculty, 'fakultet nije spremljen u projektni manifest')
+  assert.match(String(storedManifest?.program || ''), /Politologija/i, 'program nije spremljen u projektni manifest')
+  assert.equal(storedManifest?.workType, 'd', 'spremljena vrsta rada nije Diplomski')
+
   await page.getByRole('button', { name: /Nastavi u projektu/i }).click()
-  await page.getByRole('heading', { name: 'Utjecaj javne komunikacije na povjerenje građana', exact: true }).waitFor({ state: 'visible', timeout: 15_000 })
+  const home = page.getByRole('main', { name: 'Projektna početna' })
+  await home.getByRole('heading', { name: expectedProject.topic, exact: true }).waitFor({ state: 'visible', timeout: 15_000 })
+  assert.ok(await home.getByText(expectedProject.faculty, { exact: false }).isVisible(), 'fakultet nije vidljiv na projektnoj početnoj')
+  assert.ok(await home.getByText(/Politologija/i).isVisible(), 'program nije vidljiv na projektnoj početnoj')
 
   const primaryActions = page.locator('[data-primary-action="true"]')
   assert.equal(await primaryActions.count(), 1, 'projektni pregled mora imati točno jednu primarnu akciju')
   assert.ok(await primaryActions.first().isVisible(), 'primarna akcija mora biti vidljiva')
+}
+
+async function assertCompletionScan() {
+  const scan = page.locator('main.pis-free-plan')
+  await scan.waitFor({ state: 'visible', timeout: 15_000 })
+  await scan.getByRole('heading', { name: 'Već imaš', exact: true }).waitFor({ state: 'visible' })
+  await scan.getByRole('heading', { name: 'Nedostaje', exact: true }).waitFor({ state: 'visible' })
+  const nextSteps = scan.getByRole('heading', { name: 'Sljedeća tri koraka', exact: true }).locator('..').getByRole('listitem')
+  assert.equal(await nextSteps.count(), 3, 'Completion Scan mora imati točno tri sljedeća koraka')
+  assert.ok(await scan.getByText(expectedProject.topic, { exact: false }).isVisible(), 'tema nije vidljiva u Completion Scanu')
+
+  // FreeProjectPlan predviđa jedan jedini primarni gumb, ali u ovom tasku ne
+  // mijenjamo app UI da mu dodamo novi data atribut; postojeći semantički
+  // `.pis-primary-button` je stabilan Scan ugovor. Project home koristi
+  // eksplicitni data-primary-action ugovor i provjerava se zasebno.
+  const scanPrimaryActions = scan.locator('.pis-primary-button')
+  assert.equal(await scanPrimaryActions.count(), 1, 'Completion Scan mora imati točno jednu primarnu akciju')
+  assert.ok(await scanPrimaryActions.first().isVisible(), 'Completion Scan primarna akcija mora biti vidljiva')
 }
 
 async function enterWritingWorkspace() {
@@ -123,6 +219,35 @@ async function verifyDrawerAndAssistant() {
   await page.getByRole('complementary', { name: /Katedra urednik/i }).waitFor({ state: 'visible', timeout: 10_000 })
 }
 
+async function assertWritingSurface(label, width, theme) {
+  const editor = page.locator('.pis-prosemirror:visible')
+  await editor.waitFor({ state: 'visible', timeout: 15_000 })
+  assert.equal(await editor.count(), 1, `${label}: očekivan je točno jedan vidljivi .pis-prosemirror`)
+
+  const outline = page.getByRole('navigation', { name: 'Struktura rada' })
+  const editorColumn = page.locator('.pis-editor-column')
+  const assistant = page.getByRole('complementary', { name: 'Katedra urednik' })
+  assert.equal(await outline.count(), 1, `${label}: nedostaje outline landmark`)
+  assert.equal(await editorColumn.count(), 1, `${label}: nedostaje editor landmark`)
+  assert.equal(await assistant.count(), 1, `${label}: nedostaje Katedra landmark`)
+
+  if (width >= 1440) {
+    await outline.waitFor({ state: 'visible', timeout: 10_000 })
+    await editorColumn.waitFor({ state: 'visible', timeout: 10_000 })
+    await assistant.waitFor({ state: 'visible', timeout: 10_000 })
+  } else if (width >= 768) {
+    const mobileNav = page.getByRole('navigation', { name: 'Radni prostor' })
+    await mobileNav.getByRole('button', { name: 'Pregled', exact: true }).click()
+    await outline.waitFor({ state: 'visible', timeout: 10_000 })
+    await mobileNav.getByRole('button', { name: 'Katedra', exact: true }).click()
+    await assistant.waitFor({ state: 'visible', timeout: 10_000 })
+    await mobileNav.getByRole('button', { name: 'Rukopis', exact: true }).click()
+    await editor.waitFor({ state: 'visible', timeout: 10_000 })
+  }
+
+  await assertDarkModeSurface(label, theme)
+}
+
 async function verifyWorkspaceAtWidth(width, theme) {
   await page.setViewportSize({ width, height: width < 800 ? 844 : 900 })
   await gotoWithTheme('/pisi', theme)
@@ -145,6 +270,8 @@ async function verifyWorkspaceAtWidth(width, theme) {
     }
     assert.equal(await projectNav.locator('[aria-current="page"]').count(), 1, `${label}: jedan aktivni projektni kontekst`)
   }
+
+  await assertWritingSurface(label, width, theme)
 }
 
 async function verifyRouteMatrix() {
