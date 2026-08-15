@@ -43,6 +43,7 @@ import { FreeProjectPlan } from './free-project-plan'
 import { ProjectHome } from './project-home'
 import { ProjectDrawer } from './project-drawer'
 import type { ProjectNavItem } from './project-navigation'
+import { projectNavigationDestination, type ProjectDrawerTab } from './project-navigation-routing'
 import { WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
 
 const READY_PREFIX = 'katedra_manuscript_ready:'
@@ -80,6 +81,7 @@ export default function WorkspaceClient() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local_only')
   const [mobileView, setMobileView] = useState<MobileView>('editor')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerTab, setDrawerTab] = useState<ProjectDrawerTab>('plan')
   const [agenticMode, setAgenticMode] = useState(false)
   const [agenticView, setAgenticView] = useState<AgenticWorkspacePhase>('preparation')
   const [selection, setSelection] = useState<EditorSelection | null>(null)
@@ -508,36 +510,45 @@ export default function WorkspaceClient() {
   if (!activeSection) return null
 
   const workspaceView: WorkspaceView = projectHome ? 'home' : agenticMode ? agenticView : 'writing'
-  const activeNavItem: ProjectNavItem = workspaceView === 'home'
+  const drawerNavItem: ProjectNavItem = drawerTab === 'sources' || drawerTab === 'mentor' || drawerTab === 'lekta' || drawerTab === 'history' || drawerTab === 'defense'
+    ? drawerTab
+    : 'plan'
+  const activeNavItem: ProjectNavItem = drawerOpen
+    ? drawerNavItem
+    : workspaceView === 'home'
     ? 'home'
     : workspaceView === 'preparation'
       ? 'plan'
+      : workspaceView === 'review'
+        ? 'review'
       : workspaceView === 'writing'
         ? 'writing'
         : 'mentor'
   const navigateProject = (item: ProjectNavItem) => {
-    if (item === 'home') {
+    const destination = projectNavigationDestination(item)
+    if (destination.kind === 'home') {
       setDrawerOpen(false)
       setAgenticMode(false)
       setProjectHome(true)
       persistWorkspaceView(manuscript.projectId, 'home')
       return
     }
-    if (item === 'writing') {
+    if (destination.kind === 'writing') {
       setDrawerOpen(false)
       setProjectHome(false)
       setAgenticMode(false)
       persistWorkspaceView(manuscript.projectId, 'writing')
       return
     }
-    if (item === 'plan') {
+    if (destination.kind === 'agentic-review') {
       setDrawerOpen(false)
       setProjectHome(false)
       setAgenticMode(true)
-      setAgenticView('preparation')
+      setAgenticView('review')
       persistWorkspaceView(manuscript.projectId, 'agents')
       return
     }
+    setDrawerTab(destination.tab)
     setDrawerOpen(true)
   }
 
@@ -608,6 +619,9 @@ export default function WorkspaceClient() {
         })()}
         onImportText={(file) => void importTextFile(file)}
         onAcceptDraft={acceptAgenticDraft}
+        requestedTab={drawerTab}
+        onTabChange={setDrawerTab}
+        historyEntries={(readJson<Array<{ occurredAt?: unknown; action?: unknown; sectionId?: unknown }>>(`katedra_manuscript_log:${manuscript.projectId}`) || []).flatMap((entry) => typeof entry.occurredAt === 'string' && typeof entry.action === 'string' && typeof entry.sectionId === 'string' ? [{ occurredAt: entry.occurredAt, action: entry.action, sectionId: entry.sectionId }] : [])}
       />
       {checkoutNotice && <div className="pis-checkout-notice" role="status"><span>{checkoutNotice}</span><button type="button" onClick={() => setCheckoutNotice('')} aria-label="Zatvori obavijest">×</button></div>}
       <PassDialog

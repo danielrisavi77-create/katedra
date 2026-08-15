@@ -67,7 +67,7 @@ try {
   await editor.click()
   await editor.fill('Agentic staging odlomak.')
 
-  await page.getByRole('button', { name: 'Agenti', exact: true }).click()
+  await page.getByRole('button', { name: 'Revizija', exact: true }).click()
   const pass = page.getByText('Pass aktivan', { exact: true })
   await pass.waitFor({ state: 'visible', timeout: 30_000 })
   await page.getByRole('button', { name: /Pokreni (autonomni )?tijek/i }).click()

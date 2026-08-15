@@ -8,7 +8,7 @@ import { AgenticIntervention } from './agentic-intervention'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 
-export type AgenticWorkspacePhase = 'preparation' | 'dashboard' | 'intervention'
+export type AgenticWorkspacePhase = 'preparation' | 'dashboard' | 'intervention' | 'review'
 
 const RUN_STORAGE_PREFIX = 'katedra_agent_run_v1:'
 const RESUMABLE_STATUSES = new Set(['pending', 'running', 'paused', 'blocked'])

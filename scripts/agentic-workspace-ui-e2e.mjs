@@ -18,7 +18,7 @@ try {
   await page.locator('input[type="password"]').fill(password)
   await page.getByRole('button', { name: /Prijavi se/i }).click()
   await page.waitForURL(/\/pisi(?:\?|$)/u, { timeout: 20_000 })
-  await page.getByRole('button', { name: 'Agenti', exact: true }).click()
+  await page.getByRole('button', { name: 'Revizija', exact: true }).click()
   await page.getByRole('heading', { name: 'Priprema rada' }).waitFor({ state: 'visible', timeout: 30_000 })
 
   for (const width of [390, 768, 1440]) {

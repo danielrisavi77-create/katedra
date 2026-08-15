@@ -7,8 +7,9 @@ import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { LektaWorkspaceSummary } from './workspace-client'
 import { FocusTrap } from './focus-trap'
 import { PaidProjectSetup } from './paid-project-setup'
+import type { ProjectDrawerTab } from './project-navigation-routing'
 
-type DrawerTab = 'plan' | 'agents' | 'sources' | 'mentor' | 'rules' | 'lekta' | 'help'
+type LocalHistoryEntry = { occurredAt: string; action: string; sectionId: string }
 
 export function ProjectDrawer({
   open,
@@ -27,6 +28,9 @@ export function ProjectDrawer({
   onRestore,
   onImportText,
   onAcceptDraft,
+  requestedTab,
+  onTabChange,
+  historyEntries = [],
 }: {
   open: boolean
   manuscript: ManuscriptV1
@@ -44,12 +48,22 @@ export function ProjectDrawer({
   onRestore: (file: File) => void
   onImportText: (file: File) => void
   onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<void>
+  requestedTab?: ProjectDrawerTab
+  onTabChange?: (tab: ProjectDrawerTab) => void
+  historyEntries?: LocalHistoryEntry[]
 }) {
-  const [tab, setTab] = useState<DrawerTab>('plan')
+  const requestedDrawerTab = requestedTab === 'defense' && manuscript.workType === 's' ? 'plan' : requestedTab
+  const [uncontrolledTab, setUncontrolledTab] = useState<ProjectDrawerTab>(requestedDrawerTab || 'plan')
+  const tab = requestedDrawerTab || uncontrolledTab
   const [sourceTitle, setSourceTitle] = useState('')
   const [sourceUrl, setSourceUrl] = useState('')
   const [mentorText, setMentorText] = useState('')
   const completedLegacy = Object.values(legacyChecks).filter(Boolean).length
+
+  const selectTab = (nextTab: ProjectDrawerTab) => {
+    setUncontrolledTab(nextTab)
+    onTabChange?.(nextTab)
+  }
 
   if (!open) return null
 
@@ -77,7 +91,9 @@ export function ProjectDrawer({
           {([
             ['plan', 'Plan'], ['agents', 'Agenti'], ['sources', 'Izvori'], ['mentor', 'Mentor'],
             ['rules', 'Pravila'], ['lekta', 'Lekta'], ['help', 'Pomoć'],
-          ] as const).map(([value, label]) => <button type="button" key={value} className={tab === value ? 'is-active' : ''} onClick={() => setTab(value)}>{label}</button>)}
+          ] as const).map(([value, label]) => <button type="button" key={value} className={tab === value ? 'is-active' : ''} onClick={() => selectTab(value)}>{label}</button>)}
+          <button type="button" className={tab === 'history' ? 'is-active' : ''} onClick={() => selectTab('history')}>Povijest</button>
+          {manuscript.workType !== 's' && <button type="button" className={tab === 'defense' ? 'is-active' : ''} onClick={() => selectTab('defense')}>Obrana</button>}
         </nav>
 
         <div className="pis-drawer-content">
@@ -148,6 +164,26 @@ export function ProjectDrawer({
               {lektaSummary.fixedTotal > 0 && <p className="pis-lekta-fixed">Lekta je potvrdila {lektaSummary.fixedTotal} ranije riješenih nalaza.</p>}
               <a className="pis-primary-link" href={lektaUrl(manuscript)} target="_blank" rel="noopener">Otvori projekt u Lekti ↗</a>
               <p className="pis-boundary-note">Lekta provjerava font, margine, strukturu dokumenta, citatnu mehaniku i formalna pravila. Katedra pomaže riješiti sadržajne posljedice nalaza.</p>
+            </section>
+          )}
+
+          {tab === 'history' && (
+            <section>
+              <p className="pis-kicker">Samo na ovom uređaju</p><h3>Lokalna povijest projekta</h3>
+              <p className="pis-boundary-note">Ovdje su samo lokalno evidentirane prihvaćene promjene. Tekst rukopisa ne odlazi u povijest projekta.</p>
+              {historyEntries.length > 0 ? <ul className="pis-tool-list">{historyEntries.map((entry) => <li key={`${entry.occurredAt}:${entry.sectionId}`}><div><b>{entry.action}</b><small>{entry.occurredAt} · sekcija {entry.sectionId}</small></div></li>)}</ul> : <p className="pis-boundary-note">Još nema lokalno evidentiranih promjena.</p>}
+            </section>
+          )}
+
+          {tab === 'defense' && manuscript.workType !== 's' && (
+            <section>
+              <p className="pis-kicker">Priprema obrane</p><h3>Pripremi obranu iz svog rada.</h3>
+              <p className="pis-boundary-note">Katedra ovdje ne procjenjuje ishod obrane. Koristi lokalne podatke projekta da pripremiš temu, argumente i pitanja za mentora.</p>
+              <dl className="pis-project-facts">
+                <div><dt>Rok projekta</dt><dd>{manuscript.meta.deadline || 'Nije postavljen'}</dd></div>
+                <div><dt>Mentorovi zadaci</dt><dd>{mentorTasks.filter((task) => !task.done).length} otvoreno</dd></div>
+                <div><dt>Sekcije rukopisa</dt><dd>{manuscript.sections.length}</dd></div>
+              </dl>
             </section>
           )}
 

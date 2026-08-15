@@ -42,3 +42,40 @@ Vitest emits the pre-existing Vite native-config-loader deprecation warning; no 
 ## Concerns
 
 - `scripts/agentic-workspace-ui-e2e.mjs` cannot be executed locally without authenticated staging credentials. It also still targets the removed `Agenti` topbar button, so it needs a separate browser-E2E maintenance task rather than an unscoped change here.
+
+---
+
+## Fix round 1 — review changes requested
+
+### Status
+
+Implemented and committed. Every rendered project-navigation item now has an explicit destination. The drawer supports controlled requested tabs, with local-only history and defense surfaces. `review` is an explicit agentic review destination and remains the active project item while that agentic view is selected.
+
+### Changed files
+
+- `app/pisi/components/project-navigation-routing.ts` and test — tested exhaustive destination mapping for all navigation IDs.
+- `app/pisi/components/project-navigation.test.tsx` — verifies every rendered button forwards its exact navigation ID.
+- `app/pisi/components/project-drawer.tsx` and test — controlled `requestedTab`/`onTabChange`, plus truthful local history and defense surfaces.
+- `app/pisi/components/workspace-client.tsx` — routes each navigation destination, synchronizes drawer tab state, maps agentic review to `review`, and passes sanitized local history entries.
+- `app/pisi/components/paid-project-setup.tsx` — recognizes the review workspace phase.
+- `scripts/agentic-workflow-e2e.mjs` and `scripts/agentic-workspace-ui-e2e.mjs` — enter the agentic flow through the `Revizija` project-navigation action instead of the removed topbar `Agenti` action.
+
+### Commands and results
+
+- `npx.cmd vitest run app/pisi/components/project-navigation-routing.test.ts app/pisi/components/project-drawer.test.tsx` — RED observed: missing resolver and missing controlled history/defense surfaces.
+- `npx.cmd vitest run app/pisi/components/project-navigation.test.tsx app/pisi/components/project-navigation-routing.test.ts app/pisi/components/project-drawer.test.tsx app/pisi/components/paid-project-setup.resume.test.tsx app/pisi/components/workspace-shell.test.tsx` — PASS, 12 tests.
+- `npm.cmd run typecheck` — PASS.
+- `npm.cmd run lint` — PASS.
+- `node --check scripts/agentic-workflow-e2e.mjs; node --check scripts/agentic-workspace-ui-e2e.mjs` — PASS.
+- `git diff --check` — PASS.
+
+### Self-review
+
+- Confirmed `home`, `writing`, `review`, `plan`, `sources`, `mentor`, `lekta`, `history`, and `defense` each resolve to one exact destination.
+- Confirmed `history` reads only the existing local event log and never exposes manuscript text.
+- Confirmed `defense` is unavailable for seminarski work and explicitly states that Katedra does not assess a defense outcome.
+- Confirmed both authenticated E2E scripts no longer use the removed topbar `Agenti` selector.
+
+### Concerns
+
+- The authenticated browser workflows remain unexecutable in this local environment without staging credentials; their syntax and updated selectors were verified locally.

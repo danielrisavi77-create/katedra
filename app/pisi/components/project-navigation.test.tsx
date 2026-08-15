@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ProjectNavigation } from './project-navigation'
@@ -21,5 +22,17 @@ describe('ProjectNavigation', () => {
     render(<ProjectNavigation activeItem="home" workType="s" onNavigate={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Obrana' })).toBeNull()
+  })
+
+  it('forwards the exact item id for every rendered navigation action', async () => {
+    const user = userEvent.setup()
+    const onNavigate = vi.fn()
+    render(<ProjectNavigation activeItem="home" workType="d" onNavigate={onNavigate} />)
+
+    for (const label of ['Početna', 'Plan', 'Literatura', 'Pisanje', 'Mentor', 'Revizija', 'Provjera u Lekti', 'Obrana', 'Povijest']) {
+      await user.click(screen.getByRole('button', { name: label }))
+    }
+
+    expect(onNavigate.mock.calls.map(([item]) => item)).toEqual(['home', 'plan', 'sources', 'writing', 'mentor', 'review', 'lekta', 'defense', 'history'])
   })
 })
