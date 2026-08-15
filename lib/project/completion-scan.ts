@@ -21,6 +21,7 @@ export interface CompletionScan {
 export function createCompletionScan(input: CompletionScanInput): CompletionScan {
   const strengths: string[] = []
   const missing: string[] = []
+  const hasExistingDraft = Boolean(input.importedText.trim())
 
   if (input.title.trim()) strengths.push('Imaš početnu temu ili naslov rada.')
   else missing.push('definirati temu ili radni naslov')
@@ -30,7 +31,7 @@ export function createCompletionScan(input: CompletionScanInput): CompletionScan
   else missing.push('postaviti rok predaje')
   if (input.materials.length) strengths.push(`Imaš ${input.materials.length} pripremljen${input.materials.length === 1 ? ' materijal' : 'a materijala'}.`)
   else missing.push('dodati postojeći tekst, upute ili literaturu')
-  if (input.startMode === 'existing' || input.importedText.trim()) strengths.push('Postojeći tekst može poslužiti kao početna verzija.')
+  if (hasExistingDraft) strengths.push('Postojeći tekst može poslužiti kao početna verzija.')
 
   const stage = input.currentState === 'no_topic'
     ? 'started'
@@ -52,5 +53,5 @@ export function createCompletionScan(input: CompletionScanInput): CompletionScan
           ? ['Nastavi najbliže nedovršeno poglavlje.', 'Poveži tvrdnje s provjerenim izvorima.', 'Zatraži sadržajnu reviziju prije izvoza.']
           : ['Prođi otvorene nalaze i komentare.', 'Izvezi zadnju lokalnu verziju u DOCX.', 'Pošalji dokument u Lektu na tehničku provjeru.']
 
-  return { stage, strengths, missing, nextActions, hasExistingDraft: input.startMode === 'existing' || Boolean(input.importedText.trim()) }
+  return { stage, strengths, missing, nextActions, hasExistingDraft }
 }

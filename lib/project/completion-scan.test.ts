@@ -26,4 +26,10 @@ describe('completion scan', () => {
     expect(scan.missing).toEqual([])
     expect(scan.strengths.length).toBeGreaterThanOrEqual(4)
   })
+
+  it('does not claim an existing draft when the user has not supplied text', () => {
+    const scan = createCompletionScan({ ...base, startMode: 'existing', importedText: '' })
+    expect(scan.hasExistingDraft).toBe(false)
+    expect(scan.strengths).not.toContain('Postojeći tekst može poslužiti kao početna verzija.')
+  })
 })

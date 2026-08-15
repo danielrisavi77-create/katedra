@@ -1,5 +1,42 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ao
+
+### Root cause selected
+
+Priority: P1 lifecycle correctness in the free `?screen=scan` entry flow.
+The scan shortcut initialized the onboarding mode as `existing`, so an empty
+scan could report that the user already had a draft even when no text had been
+entered or imported.
+
+### Fix
+
+- Define `hasExistingDraft` from actual non-empty imported text only.
+- Show the existing-draft strength only when text is present.
+- Add a regression proving an empty scan cannot claim an existing draft while
+  preserving the positive case for real imported text.
+
+### Verification
+
+- TDD regression: PASS; the empty `existing` scan reported a draft before the
+  fix and no longer does.
+- Browser verification: PASS; `/pisi?screen=scan&tip=d` no longer shows the
+  false existing-text strength after completing the scan.
+- Full suite: PASS (134 test files, 475 passed, 4 skipped); typecheck, lint
+  and production build: PASS.
+- Existing text regression: PASS; a non-empty imported draft remains detected.
+
+### Golden Journey impact
+
+- G1: Completion Scan now reflects the user's actual materials instead of the
+  shortcut's default entry mode.
+- G0 and G2-G10: no intended behavior change for valid project data.
+
+### Remaining issues
+
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15an
 
 ### Root cause selected
