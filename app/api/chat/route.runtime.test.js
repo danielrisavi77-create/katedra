@@ -242,6 +242,20 @@ describe('POST /api/chat runtime guards', () => {
     expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
   })
 
+  it('rejects an oversized request body before JSON parsing', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }, { 'content-length': String(33 * 1024 * 1024) }))
+
+    expect(response.status).toBe(413)
+    expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
+    expect(mocks.validateChatRequest).not.toHaveBeenCalled()
+  })
+
   it('fails closed in production when the distributed rate-limit store is missing', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')

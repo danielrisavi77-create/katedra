@@ -1,5 +1,45 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15am
+
+### Root cause selected
+
+Priority: P1 request-boundary hardening for the billable chat route. Message
+and attachment validation ran only after parsing the complete JSON body. An
+oversized request with unknown fields could therefore consume parser memory
+before the semantic validator rejected it.
+
+### Fix
+
+- Reject authenticated chat requests whose declared `Content-Length` exceeds
+  32 MiB before calling `req.json()`.
+- Keep the existing message, attachment, input-character and cost ceilings as
+  the authoritative semantic validation after the transport guard.
+- Return a generic 413 without touching ownership, rate-limit or provider
+  paths.
+
+### Verification
+
+- TDD regression: PASS; the new oversized-body test reached billing/provider
+  setup before the guard and now returns 413 before JSON validation.
+- Chat runtime suite: PASS (16 tests).
+- Full suite and global quality gates: pending for this cycle.
+- The guard is defense in depth for requests without a usable content length;
+  staging infrastructure should still enforce an upstream body limit.
+
+### Golden Journey impact
+
+- G0-G10: no intended behavior change for valid requests.
+- Abuse resistance: oversized billable bodies are rejected before downstream
+  work or billing reservation.
+
+### Remaining issues
+
+- Chunked requests without `Content-Length` still rely on the semantic parser
+  and hosting-layer body limits; production deployment must configure both.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15al
 
 ### Root cause selected

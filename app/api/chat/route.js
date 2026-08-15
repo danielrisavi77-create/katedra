@@ -29,6 +29,7 @@ import { getRequestId, withRequestId } from '../../../lib/observability/request-
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
 const MIN_OUTPUT_TOKENS = 128
+const MAX_CHAT_REQUEST_BYTES = 32 * 1024 * 1024
 const OUTPUT_WEIGHT = 5            // output je ~5× skuplji od inputa (isti omjer za sva tri modela)
 const KATEDRA_BILLING_RPC_CONTRACT = 'v2'
 
@@ -89,6 +90,11 @@ async function handlePOST(req, requestContext = {}) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return json(401, { error: 'Prijavi se za korištenje Katedre.' })
   const userId = user.id
+
+  const contentLength = Number(req.headers.get('content-length') || 0)
+  if (Number.isFinite(contentLength) && contentLength > MAX_CHAT_REQUEST_BYTES) {
+    return json(413, { error: 'Zahtjev je prevelik.' })
+  }
 
   if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
     console.error(JSON.stringify({ eventName: 'project_lock_enforcement_unavailable', userId }))
