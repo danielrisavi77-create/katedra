@@ -1,5 +1,30 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bq — local Lekta contract verification
+
+### Root cause selected
+
+Priority: external-readiness verification. The Katedra agentic boundary depends
+on the local Lekta checkout, so its current contract branch needed an
+independent check before treating the blocker as purely unverified.
+
+### Verification
+
+- Lekta checkout is on `codex/agentic-run-contract` and already contains local
+  work for readiness, stale-run recovery and atomic project-lock idempotency.
+- Targeted agentic contract suite: PASS (4 files, 11 tests).
+- Full Lekta `npm run check`: PASS; TypeScript, full Vitest suite and Vite build
+  completed successfully in the extended read-only run.
+- No Lekta files were changed by these commands; its pre-existing dirty
+  migrations, worker and snapshot files remain untouched.
+
+### Remaining issues
+
+- Local source correctness is not deployment proof. Canonical Supabase
+  migrations/RPCs, RLS, worker lease/claim behavior and staging credentials
+  still require owner-controlled deployment and authenticated tests.
+- Katedra's agentic and production preflights therefore remain fail-closed.
+
 ## Cycle: 2026-08-15bp — work-type entry flows
 
 ### Root cause selected
