@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15an
+
+### Root cause selected
+
+Priority: P0 checkout/project identity integrity. `/api/state` accepted a
+non-string `topic`, while `validateCheckoutConfirmation` ignored a stored
+project topic that was not a string. A contaminated project row could
+therefore bypass the intended canonical-topic comparison immediately before
+Stripe checkout.
+
+### Fix
+
+- Bound and type-check `unitId`, `profileId`, `topic` and `rulesetVersion` in
+  `/api/state`, on both write and read.
+- Reject control characters and topics longer than 500 characters.
+- Make checkout fail closed for a non-string, malformed or oversized canonical
+  stored topic, and validate the checkout topic before comparing it.
+- Add direct checkout-validation regressions for malformed and oversized
+  topics.
+
+### Verification
+
+- TDD state regression: PASS; non-string topic reached the upsert path before
+  the fix and now returns 400 before writing.
+- TDD checkout regression: PASS; malformed/oversized topics were accepted or
+  misclassified before the fix and now fail closed.
+- State focused suite: PASS (11 tests); checkout-validation suite: PASS (2
+  tests).
+- Full suite: PASS (134 test files, 474 passed, 4 skipped); typecheck, lint,
+  production build and local `/pisi?tip=d` smoke: PASS.
+
+### Golden Journey impact
+
+- G2-G3: checkout cannot proceed with an invalid or ambiguous paid topic.
+- G0-G1 and G4-G10: no intended behavior change for valid metadata.
+
+### Remaining issues
+
+- Existing contaminated project rows require canonical cleanup; the Katedra
+  routes now refuse to use malformed topic values for checkout.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15am
 
 ### Root cause selected
@@ -23,7 +66,8 @@ before the semantic validator rejected it.
 - TDD regression: PASS; the new oversized-body test reached billing/provider
   setup before the guard and now returns 413 before JSON validation.
 - Chat runtime suite: PASS (16 tests).
-- Full suite and global quality gates: pending for this cycle.
+- Full suite: PASS (133 test files, 471 passed, 4 skipped); typecheck, lint,
+  production build and local `/pisi?tip=d` smoke: PASS.
 - The guard is defense in depth for requests without a usable content length;
   staging infrastructure should still enforce an upstream body limit.
 
@@ -62,7 +106,8 @@ shared project state.
 - TDD regression: PASS; contaminated `checks` input failed the new assertions
   before the sanitizer and passes after it.
 - State route focused suite: PASS (10 tests).
-- Full suite and global quality gates: pending for this cycle.
+- Full suite: PASS (133 test files, 470 passed, 4 skipped); typecheck, lint,
+  production build and local `/pisi?tip=d` smoke: PASS.
 - No database migration is required.
 
 ### Golden Journey impact
@@ -101,7 +146,8 @@ reach the provider despite a banned or unverified submission-writing policy.
 - TDD runtime regression: PASS; the new paraphrase test reached the provider
   before the guard fix and now returns 403 with no provider call.
 - Chat runtime suite: PASS (15 tests).
-- Full suite and global quality gates: pending for this cycle.
+- Full suite: PASS (133 test files, 470 passed, 4 skipped); typecheck, lint,
+  production build and local `/pisi?tip=d` smoke: PASS.
 - Staging faculty-policy proof: still unavailable externally.
 
 ### Golden Journey impact
@@ -140,7 +186,8 @@ prompt/response or document-derived JSON in shared project state.
 - TDD regression: PASS; both new assertions failed before the allowlist fix and
   pass after it.
 - State route focused suite: PASS (10 tests).
-- Full suite and global quality gates: pending for this cycle.
+- Full suite: PASS (133 test files, 469 passed, 4 skipped); typecheck, lint,
+  production build and local `/pisi?tip=d` smoke: PASS.
 - No database migration is required; the legacy column remains untouched in
   the canonical backend but is no longer part of Katedra's sync contract.
 
@@ -182,7 +229,8 @@ remain in Stripe retry instead of reconciling the duplicate payment.
   the route attempted `lockPaidProject`, then passed after it refunded the
   duplicate session without granting wallet or entitlement.
 - Webhook/project-lock focused suite: PASS (25 passed, 1 skipped).
-- Full test suite and global quality gates: pending for this cycle.
+- Full suite: PASS (133 test files, 469 passed, 4 skipped); typecheck, lint,
+  production build and local `/pisi?tip=d` smoke: PASS.
 - Staging Stripe/Lekta concurrency proof: still unavailable externally.
 
 ### Golden Journey impact

@@ -87,13 +87,13 @@ function rowToCamel(row) {
     id: row.id,
     projectId: row.project_id,
     contractVersion: row.contract_version,
-    unitId: row.unit_id,
-    profileId: row.profile_id,
+    unitId: sanitizeStateText(row.unit_id, 200) ?? null,
+    profileId: sanitizeStateText(row.profile_id, 200) ?? null,
     workType: row.work_type, // legacy UI compatibility
     workTypeCanonical: row.work_type_canonical,
-    topic: row.topic,
+    topic: sanitizeStateText(row.topic, 500) ?? null,
     deadline: row.deadline,
-    rulesetVersion: row.ruleset_version,
+    rulesetVersion: sanitizeStateText(row.ruleset_version, 120) ?? null,
     lektaScore: row.lekta_score,
     lektaCheckedAt: row.lekta_checked_at,
     lektaIssues: sanitizeLektaIssues(row.lekta_issues),
@@ -277,6 +277,31 @@ function sanitizeShortText(value, maxLength) {
   return normalized
 }
 
+function sanitizeStateText(value, maxLength) {
+  if (value === null || value === '') return value
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  if (!normalized) return ''
+  if (normalized.length > maxLength || /[\u0000-\u001f\u007f]/u.test(normalized)) return undefined
+  return normalized
+}
+
+function sanitizeUnitId(value) {
+  return sanitizeStateText(value, 200)
+}
+
+function sanitizeProfileId(value) {
+  return sanitizeStateText(value, 200)
+}
+
+function sanitizeTopic(value) {
+  return sanitizeStateText(value, 500)
+}
+
+function sanitizeRulesetVersion(value) {
+  return sanitizeStateText(value, 120)
+}
+
 function boundedInteger(value, min, max) {
   const number = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/u.test(value.trim()) ? Number(value) : NaN
   return Number.isSafeInteger(number) && number >= min && number <= max ? number : undefined
@@ -458,11 +483,23 @@ async function handlePUT(req) {
 
   // Full-sync consent never overrides the Constitution's privacy boundary:
   // free-form academic text and document-derived strings stay local.
-  const SANITIZERS = { checks: sanitizeChecks, gen: sanitizeGen, hist: sanitizeHist, log: sanitizeLog, lektaIssues: sanitizeLektaIssues }
+  const SANITIZERS = {
+    unitId: sanitizeUnitId,
+    profileId: sanitizeProfileId,
+    topic: sanitizeTopic,
+    rulesetVersion: sanitizeRulesetVersion,
+    checks: sanitizeChecks,
+    gen: sanitizeGen,
+    hist: sanitizeHist,
+    log: sanitizeLog,
+    lektaIssues: sanitizeLektaIssues,
+  }
   for (const [camel, column] of Object.entries(WRITABLE_FIELDS)) {
     if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
     const sanitize = SANITIZERS[camel]
-    patch[column] = sanitize ? sanitize(body[camel]) : body[camel]
+    const value = sanitize ? sanitize(body[camel]) : body[camel]
+    if (value === undefined) return Response.json({ error: `Neispravan podatak: ${camel}.` }, { status: 400 })
+    patch[column] = value
   }
 
   const { data: row, error } = await supabase

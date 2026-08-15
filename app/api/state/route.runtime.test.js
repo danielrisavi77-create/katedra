@@ -85,6 +85,22 @@ describe('PUT /api/state ownership guard', () => {
     expect(response.status).toBe(404)
   })
 
+  it('rejects a non-string topic before writing project metadata', async () => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+    })
+    mocks.resolveOwnedProject.mockResolvedValue({ projectId: 'project-1', guestProjectId: 'guest-1' })
+
+    const response = await PUT(request({
+      projectId: 'project-1',
+      workTypeCanonical: 'seminar',
+      topic: { prompt: 'nevaljan topic' },
+    }))
+
+    expect(response.status).toBe(400)
+  })
+
   it('allows the first authenticated sync of an explicitly carried guest project', async () => {
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
     let written
