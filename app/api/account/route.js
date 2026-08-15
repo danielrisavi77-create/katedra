@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { katedraPassProductFilter } from '@/lib/katedra-pass-catalog.js'
+import { KATEDRA_PASS_PRODUCT_IDS, KATEDRA_PASS_WORK_TYPES, katedraPassAccountFilter } from '@/lib/katedra-pass-catalog.js'
 
 export async function GET() {
   const supabase = await createClient()
@@ -8,7 +8,7 @@ export async function GET() {
 
   const [projects, passes, usage] = await Promise.all([
     safeQuery(() => supabase.from('katedra_projects').select('project_id, guest_project_id, topic, unit_id, profile_id, work_type, work_type_canonical, deadline, lekta_score, lekta_checked_at, updated_at').eq('user_id', user.id).order('updated_at', { ascending: false })),
-    safeQuery(() => supabase.from('entitlements').select('id, academic_project_id, product_id, work_type, status, purchase_expires_at, created_at').eq('user_id', user.id).eq('provider', 'stripe').or(katedraPassProductFilter()).order('created_at', { ascending: false })),
+    safeQuery(() => supabase.from('entitlements').select('id, academic_project_id, product_id, work_type, status, purchase_expires_at, created_at').eq('user_id', user.id).eq('provider', 'stripe').or(katedraPassAccountFilter()).order('created_at', { ascending: false })),
     safeQuery(() => supabase.from('katedra_usage').select('input_tokens, output_tokens, charged, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500)),
   ])
 
@@ -35,13 +35,18 @@ export async function GET() {
 }
 
 function normalizePasses(rows) {
-  return rows.map((row) => {
+  return rows.filter(isKatedraPassRow).map((row) => {
     if (row?.status !== 'active') return row
     const expiresAt = Date.parse(row.purchase_expires_at || '')
     return Number.isFinite(expiresAt) && expiresAt > Date.now()
       ? row
       : { ...row, status: 'expired' }
   })
+}
+
+function isKatedraPassRow(row) {
+  return KATEDRA_PASS_PRODUCT_IDS.includes(row?.product_id)
+    || (row?.product_id == null && KATEDRA_PASS_WORK_TYPES.includes(row?.work_type))
 }
 
 async function safeQuery(run) {

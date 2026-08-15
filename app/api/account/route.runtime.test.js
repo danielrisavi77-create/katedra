@@ -68,11 +68,34 @@ describe('GET /api/account', () => {
     expect(passQuery.filter).toContain('katedra_pass_seminarski')
     expect(passQuery.filter).toContain('katedra_pass_zavrsni')
     expect(passQuery.filter).toContain('katedra_pass_diplomski')
+    expect(passQuery.filter).toContain('work_type.in.(seminarski,zavrsni,diplomski)')
+  })
+
+  it('excludes unknown legacy null-product entitlements from the Katedra Pass list', async () => {
+    const passes = [
+      { id: 'other-product', product_id: null, work_type: 'doktorski', status: 'active', purchase_expires_at: '2099-01-01T00:00:00.000Z' },
+      { id: 'legacy-zavrsni', product_id: null, work_type: 'zavrsni', status: 'active', purchase_expires_at: '2099-01-01T00:00:00.000Z' },
+      { id: 'catalog-pass', product_id: 'katedra_pass_diplomski', work_type: 'anything', status: 'active', purchase_expires_at: '2099-01-01T00:00:00.000Z' },
+    ]
+    const passQuery = query(passes)
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      from(table) {
+        if (table === 'entitlements') return passQuery
+        return query([])
+      },
+    })
+
+    const body = await (await GET()).json()
+
+    expect(body.passes).toEqual([passes[1], passes[2]])
   })
 
   it('does not report an expired active entitlement as active', async () => {
     const passes = [{
       id: 'expired-pass',
+      product_id: null,
+      work_type: 'seminarski',
       status: 'active',
       purchase_expires_at: '2020-01-01T00:00:00.000Z',
     }]

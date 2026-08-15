@@ -1,5 +1,46 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ba
+
+### Root cause selected
+
+Priority: P2 account/commercial catalog ambiguity. The account endpoint reused
+the compatibility filter that accepts any Stripe entitlement with a null
+`product_id`. Without a second `work_type` check, a non-Katedra entitlement in
+the shared table could be displayed and counted as an active Katedra Pass.
+
+### Fix
+
+- Add an account-specific PostgREST filter: null-product legacy rows must use
+  `seminarski`, `zavrsni` or `diplomski` work types.
+- Keep non-null canonical Katedra product IDs accepted by product catalog.
+- Add defense-in-depth normalization so malformed or unrelated rows are
+  excluded even if a backend query returns them.
+- Leave the shared entitlement compatibility filter unchanged for checkout,
+  webhook and entitlement authority paths.
+
+### Verification
+
+- TDD red regression: PASS; an active null-product `doktorski` row was returned
+  before the account-only guard.
+- Focused account runtime suite: PASS (7 tests).
+- Full suite: PASS (138 test files, 490 passed, 4 skipped); typecheck, lint and
+  production build: PASS.
+- No shared schema or Lekta migration was introduced.
+
+### Golden Journey impact
+
+- G3-G6: account summaries cannot turn an unrelated legacy entitlement into a
+  displayed Katedra Pass; canonical checkout/webhook behavior is unchanged.
+- G0-G2 and G7-G10: no intended behavior change.
+
+### Remaining issues
+
+- Canonical entitlement deployment, authenticated commerce and billing proof
+  still require Lekta/staging evidence.
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15az
 
 ### Root cause selected
