@@ -559,6 +559,26 @@ export default function WorkspaceClient() {
     setDrawerTab(destination.tab)
     setDrawerOpen(true)
   }
+  const navigateNextAction = (destination: 'writing' | 'preparation' | 'sources' | 'review' | 'lekta') => {
+    if (destination === 'writing') {
+      navigateProject('writing')
+      return
+    }
+    if (destination === 'preparation') {
+      if (passStatus !== 'active') {
+        setPassOpen(true)
+        return
+      }
+      selectAgenticPhase('preparation')
+      return
+    }
+    if (destination === 'review') {
+      selectAgenticPhase('review')
+      return
+    }
+    setDrawerTab(destination)
+    setDrawerOpen(true)
+  }
 
   return (
     <>
@@ -577,7 +597,7 @@ export default function WorkspaceClient() {
         view={workspaceView}
         projectLocked={agenticMode && passStatus === 'active'}
         agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} requestedPhase={agenticView} onPhaseChange={selectAgenticPhase} onAcceptDraft={acceptAgenticDraft} /> : undefined}
-        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onContinueWriting={() => { setProjectHome(false); setAgenticMode(false); persistWorkspaceView(manuscript.projectId, 'writing') }} onPrepare={() => selectAgenticPhase('preparation')} onOpenTools={() => setDrawerOpen(true)} /> : undefined}
+        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onNavigate={navigateNextAction} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>

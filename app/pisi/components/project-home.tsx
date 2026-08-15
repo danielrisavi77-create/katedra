@@ -1,11 +1,16 @@
 'use client'
 
+import { resolveNextAction, type NextAction } from '../../../lib/project/next-action'
 import { createCompletionScan } from '../../../lib/project/completion-scan'
 import { countDocumentWords } from '../../../lib/manuscript/model'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import { NextActionCard } from './next-action-card'
+import { ProjectTimeline, type ProjectTimelineItem } from './project-timeline'
 
-export function ProjectHome({ manuscript, passActive, syncStatus, onContinueWriting, onPrepare, onOpenTools }: { manuscript: ManuscriptV1; passActive: boolean; syncStatus: string; onContinueWriting: () => void; onPrepare: () => void; onOpenTools: () => void }) {
+export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: { manuscript: ManuscriptV1; passActive: boolean; syncStatus: string; onNavigate: (destination: NextAction['destination']) => void }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
+  const reviewSectionCount = manuscript.sections.filter((section) => section.status === 'review').length
+  const materialCount = (manuscript.meta.materials || []).length + manuscript.sources.length
   const scan = createCompletionScan({
     startMode: totalWords > 0 ? 'existing' : 'new',
     currentState: manuscript.meta.currentState || (totalWords > 0 ? 'draft' : 'topic'),
@@ -14,6 +19,15 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onContinueWrit
     mentor: manuscript.meta.mentor || '',
     deadline: manuscript.meta.deadline || '',
     materials: manuscript.meta.materials || [],
+  })
+  const stage = projectStage(scan.stage, totalWords, reviewSectionCount)
+  const action = resolveNextAction({
+    stage,
+    totalWords,
+    sectionCount: manuscript.sections.length,
+    reviewSectionCount,
+    hasMaterials: materialCount > 0,
+    passActive,
   })
 
   return (
@@ -24,38 +38,47 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onContinueWrit
           <h1 id="project-home-title">{manuscript.title || 'Rad bez naslova'}</h1>
           <p>{manuscript.meta.institution || 'Fakultet nije odabran'}{manuscript.meta.program ? ` · ${manuscript.meta.program}` : ''}</p>
         </div>
-        <span className="pis-project-stage">{stageLabel(scan.stage)}</span>
+        <span className="pis-project-stage">{stageLabel(stage)}</span>
       </header>
 
       <div className="pis-project-home-grid">
-        <section className="pis-next-action-card" aria-labelledby="next-action-title">
-          <p className="pis-kicker">Tvoj sljedeći korak</p>
-          <h2 id="next-action-title">{scan.nextActions[0]}</h2>
-          <p>{scan.missing.length ? `Nedostaje: ${scan.missing[0]}.` : 'Projekt ima dovoljno konteksta za nastavak rada.'}</p>
-          <button type="button" className="pis-primary-button" onClick={onContinueWriting}>Nastavi pisati →</button>
-        </section>
-
-        <section className="pis-project-timeline" aria-labelledby="project-timeline-title">
-          <div className="pis-section-heading"><div><p className="pis-kicker">Put rada</p><h2 id="project-timeline-title">Od teme do predaje</h2></div><span>{totalWords.toLocaleString('hr-HR')} riječi</span></div>
-          <ol>
-            {['Tema', 'Plan', 'Pisanje', 'Revizija', 'Lekta', 'Predaja'].map((label, index) => <li key={label} data-active={index <= activeIndex(scan.stage) ? 'true' : 'false'}><i aria-hidden="true" />{label}</li>)}
-          </ol>
-        </section>
+        <NextActionCard action={action} onNavigate={onNavigate} />
+        <ProjectTimeline items={timelineItems(stage)} totalWords={totalWords} />
       </div>
+
+      <section className="pis-project-home-summary" aria-label="Sažetak projekta">
+        <div><span>Materijali</span><b>{materialCount ? `${materialCount} ${materialCount === 1 ? 'zapis' : 'zapisa'}` : 'Nisu dodani'}</b></div>
+        <div><span>Rok</span><b>{manuscript.meta.deadline || 'Nije postavljen'}</b></div>
+        <div><span>Mentor</span><b>{manuscript.meta.mentor || 'Nije dodan'}</b></div>
+        <div><span>Pass</span><b>{passActive ? 'Aktivan za ovaj projekt' : 'Nije aktivan'}</b></div>
+        <div><span>Lekta</span><b>{manuscript.meta.unitId ? 'Profil povezan' : 'Profil nije odabran'}</b></div>
+      </section>
 
       <div className="pis-project-home-links">
-        <button type="button" onClick={onPrepare}><b>{passActive ? 'Pripremi projekt' : 'Pogledaj što dobivaš Passom'}</b><span>{passActive ? 'Materijali, izvori i agenticni tijek' : 'Plan ostaje besplatan; pisanje se otključava za projekt'}</span></button>
-        <button type="button" onClick={onOpenTools}><b>Projektni alati</b><span>Izvori, mentor, pravila i Lekta</span></button>
+        <button type="button" onClick={() => onNavigate('sources')}><b>Izvori i materijali</b><span>{materialCount ? 'Otvori lokalnu biblioteku projekta' : 'Dodaj literaturu, upute ili postojeći tekst'}</span></button>
+        <button type="button" onClick={() => onNavigate('preparation')}><b>{passActive ? 'Pripremi projekt' : 'Pogledaj što dobivaš Passom'}</b><span>{passActive ? 'Materijali, izvori i agentični tijek' : 'Plan ostaje besplatan; plaćeni koraci se otključavaju za projekt'}</span></button>
         <div><b>{syncStatus === 'synced' ? 'Metapodaci sinkronizirani' : 'Rukopis je lokalno spremljen'}</b><span>Tekst ostaje na ovom uređaju</span></div>
       </div>
+
+      {scan.missing.length > 0 && <p className="pis-project-home-note">Sljedeće još nedostaje: {scan.missing.join(', ')}.</p>}
     </section>
   )
 }
 
-function stageLabel(stage: string) {
-  return ({ started: 'Početak', scanned: 'Procjena', planned: 'Plan', researching: 'Istraživanje', writing: 'Pisanje', review: 'Revizija' } as Record<string, string>)[stage] || 'Projekt'
+function projectStage(scanStage: string, totalWords: number, reviewSectionCount: number): string {
+  if (reviewSectionCount > 0) return 'review'
+  if (totalWords > 0) return 'writing'
+  return scanStage
 }
 
-function activeIndex(stage: string) {
-  return ({ started: 0, scanned: 0, planned: 1, researching: 2, writing: 2, review: 3, lekta: 4, completed: 5 } as Record<string, number>)[stage] ?? 0
+function stageLabel(stage: string) {
+  return ({ started: 'Početak', scanned: 'Procjena', planned: 'Plan', researching: 'Istraživanje', writing: 'Pisanje', review: 'Revizija', lekta: 'Lekta', completed: 'Predaja' } as Record<string, string>)[stage] || 'Projekt'
+}
+
+function timelineItems(stage: string): ProjectTimelineItem[] {
+  const stages = [
+    ['started', 'Tema'], ['planned', 'Plan'], ['writing', 'Pisanje'], ['review', 'Revizija'], ['lekta', 'Lekta'], ['completed', 'Predaja'],
+  ] as const
+  const active = ({ started: 0, scanned: 0, planned: 1, researching: 1, writing: 2, review: 3, lekta: 4, completed: 5 } as Record<string, number>)[stage] ?? 0
+  return stages.map(([id, label], index) => ({ id, label, state: index < active ? 'complete' : index === active ? 'active' : 'upcoming' }))
 }

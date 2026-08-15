@@ -242,11 +242,18 @@ body:has(.pis-boot) {
 .pis-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .pis-section-heading h2 { margin: 0; font-family: var(--pis-serif); font-size: 26px; font-weight: 500; }
 .pis-section-heading > span { color: var(--pis-muted); font-size: 12px; }
-.pis-project-timeline ol { display: grid; gap: 0; margin: 28px 0 0; padding: 0; list-style: none; }
-.pis-project-timeline li { display: flex; align-items: center; gap: 12px; min-height: 38px; color: var(--pis-faint); font-size: 13px; }
-.pis-project-timeline li[data-active="true"] { color: var(--pis-ink); }
-.pis-project-timeline li i { width: 9px; height: 9px; border: 1px solid currentColor; border-radius: 50%; }
-.pis-project-timeline li[data-active="true"] i { background: var(--pis-blue); border-color: var(--pis-blue); }
+.pis-project-timeline ol { display: grid; gap: 0; margin: 28px 0 0 5px; padding: 0 0 0 18px; border-left: 1px solid var(--pis-line-strong); list-style: none; }
+.pis-project-timeline li { position: relative; display: flex; align-items: center; min-height: 38px; color: var(--pis-faint); font-size: 13px; }
+.pis-project-timeline li[data-state='complete'], .pis-project-timeline li[data-state='active'] { color: var(--pis-ink); }
+.pis-project-timeline li i { position: absolute; left: -23px; width: 9px; height: 9px; border: 1px solid currentColor; border-radius: 50%; background: var(--pis-paper); }
+.pis-project-timeline li[data-state='complete'] i { border-color: var(--pis-blue); background: var(--pis-blue); }
+.pis-project-timeline li[data-state='active'] i { border-color: var(--pis-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pis-blue), transparent 80%); }
+.pis-project-home-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 48px; border-block: 1px solid var(--pis-line); }
+.pis-project-home-summary div { display: grid; gap: 7px; min-height: 88px; padding: 17px 16px; border-right: 1px solid var(--pis-line); }
+.pis-project-home-summary div:first-child { padding-left: 0; }
+.pis-project-home-summary div:last-child { border-right: 0; }
+.pis-project-home-summary span { color: var(--pis-muted); font: 700 9px/1.2 var(--pis-sans); letter-spacing: .08em; text-transform: uppercase; }
+.pis-project-home-summary b { color: var(--pis-ink); font-size: 12px; line-height: 1.4; font-weight: 600; }
 .pis-project-home-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 58px; border-block: 1px solid var(--pis-line); }
 .pis-project-home-links > * { min-height: 120px; padding: 20px 18px 20px 0; border-right: 1px solid var(--pis-line); }
 .pis-project-home-links > * + * { padding-left: 18px; }
@@ -254,6 +261,7 @@ body:has(.pis-boot) {
 .pis-project-home-links button { color: var(--pis-ink); background: transparent; border: 0; text-align: left; cursor: pointer; font: inherit; }
 .pis-project-home-links b, .pis-project-home-links span { display: block; }
 .pis-project-home-links span { margin-top: 8px; color: var(--pis-muted); font-size: 13px; line-height: 1.5; }
+.pis-project-home-note { margin: 20px 0 0; padding-left: 14px; border-left: 2px solid var(--pis-yellow); color: var(--pis-muted); font-size: 11px; line-height: 1.55; }
 .pis-pass-includes { display: grid; gap: 5px; margin: 18px 0; padding-left: 20px; color: var(--pis-muted); font-size: 13px; line-height: 1.5; }
 .pis-pass-includes li::marker { color: var(--pis-yellow); }
 html[data-theme='dark'] .pis-catalog-menu button:hover, html[data-theme='dark'] .pis-catalog-menu button:focus-visible { background: #334750; }
@@ -717,6 +725,15 @@ html[data-theme='dark'] .pis-pass-warning strong { color: var(--pis-yellow); }
   .pis-export-button { display: none; }
   .pis-mobile-overflow { display: block; }
   .pis-topbar-actions { gap: 10px; }
+}
+
+@media (max-width: 900px) {
+  .pis-project-home-grid { grid-template-columns: 1fr; gap: 42px; }
+  .pis-project-home-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pis-project-home-summary div { border-bottom: 1px solid var(--pis-line); }
+  .pis-project-home-summary div:nth-child(2n) { border-right: 0; }
+  .pis-project-home-summary div:first-child { padding-left: 16px; }
+  .pis-project-home-summary div:last-child { border-bottom: 0; }
 }
 
 @media (max-width: 800px) {
