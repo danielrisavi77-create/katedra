@@ -1,5 +1,49 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ah
+
+### Root cause selected
+
+Priority: P0/P1 institutional AI-policy enforcement. Chat mapped both
+`generate_large_sections` and `generate_submission_text` to paid
+`full_generation`, but the final server policy guard only blocked the former.
+A client could request the latter and reach the provider despite a banned or
+unverified submission-generation policy.
+
+### Fix
+
+- Resolve the exact policy capability for `generate_submission_text` instead
+  of always resolving the large-section capability.
+- Block both generation requests before the provider is called when the
+  institutional policy is blocked.
+- Preserve the existing mentor-acknowledgment check against the exact policy
+  fact and return the actual blocked capability in the response.
+
+### Verification
+
+- TDD runtime regression: PASS; `generate_submission_text` reached the
+  provider before the guard fix and now returns 403 with no provider call.
+- Chat runtime suite: PASS (14 tests).
+- Full test suite: PASS (133 test files, 468 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated chat changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G9-G10: an institutional prohibition cannot be bypassed by switching to the
+  alternate client capability name.
+- G0-G8: no behavior change.
+
+### Remaining issues
+
+- Staging must still prove the canonical policy facts and RLS/entitlement
+  configuration for real faculties; local mocks do not establish that.
+- External Lekta, commerce and dependency advisory blockers remain
+  `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ag
 
 ### Root cause selected

@@ -157,6 +157,44 @@ describe('POST /api/chat runtime guards', () => {
     })
   })
 
+  it('blocks generate_submission_text when institutional policy blocks generated submission text', async () => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const db = {
+      from() {
+        const query = {
+          select() { return query },
+          eq() { return query },
+          async maybeSingle() { return { data: { balance: 50_000 }, error: null } },
+        }
+        return query
+      },
+    }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: true })
+    mocks.loadProcessFactsFromDisk.mockResolvedValue({})
+    mocks.resolveCapability.mockReturnValue({ effective: 'blocked', condition: {}, sourceFactId: 'policy-1', stance: 'banned' })
+    vi.stubGlobal('fetch', vi.fn())
+
+    const response = await POST(request({
+      projectId: project.projectId,
+      capability: 'generate_submission_text',
+      messages: [{ role: 'user', content: 'Napiši tekst za predaju.' }],
+    }))
+
+    expect(response.status).toBe(403)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects an anonymous request before reading the body', async () => {
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) } })
 

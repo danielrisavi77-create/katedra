@@ -338,18 +338,19 @@ async function handlePOST(req, requestContext = {}) {
     }
     const unitId = row?.unit_id || ''
     const facts = await loadProcessFactsFromDisk()
-    const resolved = resolveCapability(facts, unitId, 'generate_large_sections')
-    const ack = row?.gen?.aiAck?.generate_large_sections
+    const policyCapability = capability === 'generate_submission_text' ? 'generate_submission_text' : 'generate_large_sections'
+    const resolved = resolveCapability(facts, unitId, policyCapability)
+    const ack = row?.gen?.aiAck?.[policyCapability]
     const mentorUnlocked = Boolean(
       resolved.condition?.mentorApproval && ack?.factId && ack.factId === resolved.sourceFactId,
     )
     policyBlocked = resolved.effective === 'blocked' && !mentorUnlocked
-    if (policyBlocked && capability === 'generate_large_sections') {
+    if (policyBlocked && (capability === 'generate_large_sections' || capability === 'generate_submission_text')) {
       await releaseReservation()
       return json(403, {
         error: 'Tvoja odobrena AI razina ne dopušta generiranje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.',
         reason: 'ACADEMIC_POLICY_BLOCK',
-        capability: 'generate_large_sections',
+        capability: policyCapability,
         stance: resolved.stance,
       })
     }
