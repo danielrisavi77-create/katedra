@@ -28,6 +28,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
   const [draft, setDraft] = useState<AgenticReviewDraft | null>(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [retryable, setRetryable] = useState(false)
   const resultSignature = useRef('')
   const localOverridesRef = useRef<Record<string, LocalDraftOverride>>({})
 
@@ -41,13 +42,16 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
       if (!response?.ok) {
         if (response) {
+          setRetryable(false)
           const body = await response.json().catch(() => ({}))
           setMessage(agentRequestMessage(response.status, body?.error, 'Tijek trenutačno nije moguće učitati.'))
         } else {
+          setRetryable(true)
           setMessage('Tijek trenutačno nije moguće učitati zbog mrežne greške. Pokušaj ponovno.')
         }
         return
       }
+      setRetryable(false)
       setMessage('')
       const body = await response.json().catch(() => ({}))
       if (!body.run) return
@@ -191,7 +195,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       <ReadOnlyManuscriptPreview manuscript={manuscript} />
     </div>
     {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
-    {message && <><p className="pis-agent-message" role="alert">{message}</p>{!run && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
+    {message && <><p className="pis-agent-message" role="alert">{message}</p>{retryable && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
   </section>
 }
 

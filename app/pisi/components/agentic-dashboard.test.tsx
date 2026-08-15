@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -33,6 +33,7 @@ const runningBody = {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   window.localStorage.clear()
   vi.unstubAllGlobals()
 })
@@ -185,6 +186,42 @@ describe('AgenticDashboard', () => {
     await user.click(screen.getByRole('button', { name: /Pokušaj ponovno/i }))
     expect(await screen.findByText('Tijek izrade rada')).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers retry when polling loses the network after a run was loaded', async () => {
+    const pollers: Array<() => void> = []
+    vi.spyOn(window, 'setInterval').mockImplementation((handler) => {
+      pollers.push(handler as () => void)
+      return 1 as unknown as ReturnType<typeof setInterval>
+    })
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => runningBody })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ ok: true, json: async () => runningBody })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    expect(await screen.findByText('Tijek izrade rada')).toBeTruthy()
+    expect(pollers.length).toBeGreaterThan(0)
+    await act(async () => {
+      pollers[0]()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Tijek izrade rada')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toMatch(/mrež.*greš/i)
+    fireEvent.click(screen.getByRole('button', { name: /Pokušaj ponovno/i }))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(screen.getByText('Tijek izrade rada')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('describes a pending step as waiting in line, not in progress', async () => {
