@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
 import { createMaterialProvider } from '@/lib/materials/provider'
 import { MATERIAL_LIMITS } from '@/lib/materials/extractors'

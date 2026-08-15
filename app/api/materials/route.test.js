@@ -6,6 +6,8 @@ import { expect, it } from 'vitest'
 it('keeps temporary material uploads behind the project and private storage contracts', () => {
   const source = readFileSync(resolve(process.cwd(), 'app/api/materials/route.js'), 'utf8')
 
+  expect(source).toContain("import { createAdminClient } from '@/lib/supabase/admin'")
+  expect(source).not.toContain("import { createAdminClient } from '@/lib/supabase/server'")
   expect(source).toContain('KATEDRA_MATERIALS_ENABLED')
   expect(source).toContain('resolveProjectCapability')
   expect(source).toContain('.storage.from')

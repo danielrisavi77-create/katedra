@@ -1,5 +1,131 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15z
+
+### Root cause selected
+
+Priority: P2 server security/operational boundary. The temporary-material
+upload route imported its privileged Supabase client from the cookie-aware
+server module instead of the canonical admin module used by the other
+privileged routes. That bypassed the admin module's explicit service-role
+environment validation and made the route's distributed rate-limit path
+depend on an accidental legacy export.
+
+### Fix
+
+- Import `createAdminClient` from `lib/supabase/admin`.
+- Keep the authenticated cookie client separate from the service-role client.
+- Add a source-level regression and the matching runtime mock boundary.
+
+### Verification
+
+- TDD regression: PASS; the new source assertion failed on the old server
+  import and passed after the canonical admin import was applied.
+- Focused materials tests: PASS (2 files, 2 tests).
+- Full test suite: PASS (133 test files, 456 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated changes.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G3 and G9: strengthens the fail-closed privileged rate-limit path for
+  material uploads when the feature is activated.
+- G0-G2, G4-G8 and G10: no behavior change.
+
+### Remaining issues
+
+- Canonical material deletion tombstoning, authenticated commerce and other
+  Lekta/staging dependencies remain `BLOCKED_EXTERNAL` in `BLOCKERS.md`.
+
+## Cycle: 2026-08-15y
+
+### Root cause selected
+
+Priority: P2 mobile UX obstruction. The global scroll-to-top control used a
+viewport-bottom offset that ignored the fixed `/pisi` mobile navigation, so it
+overlapped the `Sadržaj / Rukopis / Katedra` controls while scrolling a project.
+
+### Fix
+
+- Add a `/pisi`-scoped mobile offset above the fixed navigation and safe-area
+  inset.
+- Add a regression assertion for the selector and calculated offset.
+- Keep the original position unchanged on non-workspace pages.
+
+### Verification
+
+- TDD regression: PASS; the new test failed before the CSS rule and passed after
+  the minimal offset was added.
+- Focused UI tests: PASS (2 files, 10 tests).
+- Browser geometry check at 390px: PASS; scroll-to-top bottom `779.21px`,
+  navigation top `792px`, gap `12.79px`.
+- Mobile screenshot review: PASS; the control no longer covers the fixed nav.
+- Full Katedra suite: PASS (133 test files, 456 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G1 and G8: improves mobile project persistence/returning-user usability.
+- G0, G2-G7, G9-G10: no behavior change.
+
+### Remaining issues
+
+- Canonical material deletion tombstoning and authenticated commerce remain
+  `BLOCKED_EXTERNAL` in `BLOCKERS.md`.
+
+## Cycle: 2026-08-15w
+
+### Root cause selected
+
+Priority: P1 continuity edge case in the guest-to-auth transition. Login and
+registration defaulted to `/pisi` without carrying the active local project
+identity explicitly. The current-tab case usually survived because the
+workspace read `rp_manifest`, but multiple local projects or an email
+confirmation callback could lose the intended project context.
+
+### Fix
+
+- Add `buildProjectAuthRedirect()` with an internal-only destination guard.
+- Preserve an explicit `redirect` through registration and the Supabase email
+  confirmation callback.
+- When no redirect is supplied, derive the active local `projectId` from the
+  manifest for both registration and login.
+- Keep the default `/pisi` destination when local storage is unavailable.
+- Add unit coverage for normal, encoded and missing project IDs.
+
+### Verification
+
+- Focused auth tests: PASS (2 files, 4 tests).
+- Full Katedra suite: PASS (133 test files, 455 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+- Guest workspace browser revalidation: PASS; onboarding, Completion Scan,
+  manuscript reload persistence and 390/768/1440px overflow checks passed.
+
+### Golden Journey impact
+
+- Auth browser smoke: PASS (`/registracija` and `/prijava` render with a
+  seeded local project manifest and no page errors).
+
+- G2: local redirect continuity is now explicit; authenticated Supabase
+  staging and real email/session proof remain externally blocked.
+- G0-G1 and G3-G10: no behavior change.
+
+### Remaining issues
+
+- Canonical material deletion tombstoning remains `BLOCKED_EXTERNAL` and is
+  recorded in `BLOCKERS.md`.
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain externally blocked.
+
 ## Cycle: 2026-08-15v
 
 ### Root cause selected

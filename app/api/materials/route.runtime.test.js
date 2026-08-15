@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
+  createAdminClient: vi.fn(),
   resolveOwnedProject: vi.fn(),
   resolveProjectCapability: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
 vi.mock('@/lib/academic-suite/repositories/projects', () => ({ resolveOwnedProject: mocks.resolveOwnedProject }))
 vi.mock('@/lib/product/server-capabilities', () => ({ resolveProjectCapability: mocks.resolveProjectCapability }))
 
