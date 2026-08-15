@@ -80,6 +80,16 @@ describe('OnboardingFlow', () => {
     expect(screen.queryByText(/učitaj docx/i)).toBeNull()
   })
 
+  it('defaults an existing-text project to the draft state', async () => {
+    const user = userEvent.setup()
+    render(<ThemeProvider><OnboardingFlow onComplete={vi.fn()} /></ThemeProvider>)
+
+    await user.click(screen.getByRole('button', { name: /imam tekst/i }))
+    await user.click(screen.getByRole('button', { name: /dalje/i }))
+
+    expect(screen.getByRole('button', { name: /^pišem nacrt/i }).classList.contains('is-active')).toBe(true)
+  })
+
   it('keeps legacy project details visible for confirmation before opening the workspace', async () => {
     const user = userEvent.setup()
     render(

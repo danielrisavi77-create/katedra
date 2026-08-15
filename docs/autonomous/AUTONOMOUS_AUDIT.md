@@ -1,5 +1,41 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15ap
+
+### Root cause selected
+
+Priority: P1 onboarding/lifecycle correctness for an existing draft. Choosing
+“Imam tekst” left the default current state at `no_topic` unless the user
+manually selected another state, so the summary and Completion Scan could
+recommend defining a topic instead of continuing to write.
+
+### Fix
+
+- When the user chooses “Imam tekst”, infer `draft` only if the state is still
+  the untouched `no_topic` default.
+- Keep the current-state selector fully editable so the user can choose a
+  different state afterward.
+- Add a component regression for the default existing-text state.
+
+### Verification
+
+- TDD regression: PASS; the existing-text path previously selected `no_topic`
+  and now selects `draft`.
+- Browser verification: PASS; the flow reaches Completion Scan with the
+  writing/revision next actions and preserves the entered title/text.
+- Focused onboarding suite: PASS (9 tests).
+
+### Golden Journey impact
+
+- G1: existing-text users receive a truthful writing-oriented plan by default.
+- G0 and G2-G10: no intended behavior change for new projects or explicit
+  state selections.
+
+### Remaining issues
+
+- External Lekta, commerce, Docker/Supabase and dependency advisory blockers
+  remain `BLOCKED_EXTERNAL`.
+
 ## Cycle: 2026-08-15ao
 
 ### Root cause selected

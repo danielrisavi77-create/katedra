@@ -94,6 +94,7 @@ export function OnboardingFlow({
 
   const chooseStart = (value: 'new' | 'existing') => {
     setStartMode(value)
+    if (value === 'existing' && currentState === 'no_topic') setCurrentState('draft')
     setStep(2)
   }
 
