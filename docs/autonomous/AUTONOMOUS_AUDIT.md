@@ -1,5 +1,29 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15bp — work-type entry flows
+
+### Root cause selected
+
+Priority: readiness verification. The guest entry point must preserve the
+selected work type because it controls the later project workflow and Pass
+selection. A fresh browser pass was run for all three supported query presets.
+No new code-fixable P0, P1 or P2 issue was found.
+
+### Verification
+
+- Playwright passed `?tip=s`, `?tip=z` and `?tip=d`.
+- Each preset preselected the expected work type in onboarding, preserved it
+  through the three onboarding transitions and reached Completion Scan.
+- No page errors occurred in any of the three flows.
+- The first attempt at the test was discarded because PowerShell mangled the
+  Croatian `š` in the test harness; the corrected run used stable ASCII
+  assertions and passed all three flows.
+
+### Remaining issues
+
+- No local code change was necessary. Paid workflow completion and canonical
+  entitlement proof remain dependent on staging external services.
+
 ## Cycle: 2026-08-15bo — account center guest smoke
 
 ### Root cause selected
