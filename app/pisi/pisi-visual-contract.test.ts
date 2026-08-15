@@ -72,8 +72,47 @@ it('defines the hybrid workspace surface and navigation tokens', () => {
   expect(css).toContain("html[data-theme='dark'] .pis-project-nav")
 })
 
-it('keeps reduced motion and visible focus contracts on the new primitives', () => {
-  expect(css).toContain('.pis-primary-button:focus-visible')
-  expect(css).toContain('@media (prefers-reduced-motion: reduce)')
-  expect(css).toContain('.pis-project-nav')
+it('defines exact light and dark values for the mentor workspace tokens', () => {
+  const root = css.match(/:root\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+  const dark = css.match(/html\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+  const lightTokens = {
+    '--pis-bg': '#e9e1cf',
+    '--pis-paper': '#fbf8f0',
+    '--pis-paper-deep': '#f3eddf',
+    '--pis-ink': '#22252e',
+    '--pis-muted': '#5a574f',
+    '--pis-line': 'rgba(34, 37, 46, 0.16)',
+    '--pis-line-strong': 'rgba(34, 37, 46, 0.28)',
+    '--pis-blue': '#2c5fa8',
+    '--pis-blue-dark': '#173d78',
+    '--pis-yellow': '#f2c94c',
+  }
+  const darkTokens = {
+    '--pis-bg': '#18232a',
+    '--pis-paper': '#27363e',
+    '--pis-paper-deep': '#202d34',
+    '--pis-ink': '#f5eddd',
+    '--pis-muted': '#c1b9aa',
+    '--pis-line': 'rgba(245, 237, 221, .15)',
+    '--pis-line-strong': 'rgba(245, 237, 221, .3)',
+    '--pis-blue': '#78a8eb',
+    '--pis-blue-dark': '#b9d4ff',
+    '--pis-yellow': '#f4cf62',
+  }
+
+  for (const [token, value] of Object.entries(lightTokens)) expect(root).toContain(`${token}: ${value}`)
+  for (const [token, value] of Object.entries(darkTokens)) expect(dark).toContain(`${token}: ${value}`)
+})
+
+it('keeps exact focus, radius, content-width, and reduced-motion contracts', () => {
+  expect(css).toMatch(/\.pis-primary-button:focus-visible,[\s\S]*?box-shadow:\s*var\(--pis-focus-ring\)/)
+  expect(css).toMatch(/\.pis-surface\s*\{[^}]*border-radius:\s*2px/)
+  expect(css).toMatch(/\.pis-primary-button,[\s\S]*?border-radius:\s*2px/)
+  expect(css).toContain('.pis-project-home { width: min(var(--pis-content-max), 100%);')
+  expect(css.match(/html\[data-theme='dark'\] \.pis-project-nav/g)).toHaveLength(1)
+
+  const reducedMotion = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\n\}/)?.[1] ?? ''
+  expect(reducedMotion).toContain('.pis-primary-button')
+  expect(reducedMotion).toContain('.pis-secondary-button')
+  expect(reducedMotion).toContain('.pis-project-nav button')
 })

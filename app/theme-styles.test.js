@@ -22,7 +22,7 @@ describe('dark theme style contracts', () => {
   })
 
   it('shares the mentor workspace tokens across light and dark global themes', () => {
-    const styles = readFileSync(resolve(appDirectory, 'globals.css'), 'utf8')
+    const styles = readFileSync(resolve(appDirectory, 'pisi', 'pisi.css'), 'utf8')
 
     expect(styles).toContain('--pis-bg: #e9e1cf')
     expect(styles).toContain("html[data-theme='dark']")

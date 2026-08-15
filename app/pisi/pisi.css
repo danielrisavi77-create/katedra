@@ -229,7 +229,7 @@ body:has(.pis-boot) {
 .pis-scan-section li::marker { color: var(--pis-yellow); }
 .pis-free-plan .pis-onboarding-step { max-width: 760px; }
 .pis-project-home-main { min-height: calc(100vh - 76px); padding: clamp(36px, 7vw, 96px) clamp(22px, 6vw, 96px) 110px; background: var(--pis-bg); }
-.pis-project-home { width: min(1120px, 100%); margin: 0 auto; }
+.pis-project-home { width: min(var(--pis-content-max), 100%); margin: 0 auto; }
 .pis-project-home-header { display: flex; justify-content: space-between; align-items: end; gap: 24px; border-bottom: 1px solid var(--pis-line-strong); padding-bottom: 28px; }
 .pis-project-home-header h1 { max-width: 760px; margin: 0; font-family: var(--pis-serif); font-size: clamp(42px, 6vw, 82px); line-height: .96; font-weight: 500; letter-spacing: -.05em; }
 .pis-project-home-header p:not(.pis-kicker) { margin: 16px 0 0; color: var(--pis-muted); }
@@ -271,7 +271,7 @@ html[data-theme='dark'] .pis-catalog-menu button:hover, html[data-theme='dark'] 
 .pis-project-nav button { width: 100%; min-height: var(--pis-control-height); padding: 9px 12px; border: 0; border-left: 2px solid transparent; background: transparent; color: var(--pis-muted); text-align: left; cursor: pointer; font: 700 10px/1.2 var(--pis-sans); }
 .pis-project-nav button:hover,
 .pis-project-nav button[aria-current='page'] { border-left-color: var(--pis-blue); background: var(--pis-hover-surface); color: var(--pis-blue-dark); }
-html[data-theme='dark'] .pis-project-nav { background: var(--pis-paper-deep); color: var(--pis-ink); }
+html[data-theme='dark'] .pis-project-nav { border-right: 1px solid var(--pis-line-strong); }
 
 .pis-primary-button:focus-visible,
 .pis-secondary-button:focus-visible,
