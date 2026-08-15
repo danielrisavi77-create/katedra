@@ -143,5 +143,11 @@ export async function GET(req) {
     if (downloaded.error) return null
     try { return JSON.parse(await downloaded.data.text()) } catch { return null }
   }))
-  return Response.json({ materials: materials.filter(Boolean) })
+  return Response.json({ materials: materials.filter(isActiveMaterial) })
+}
+
+function isActiveMaterial(value) {
+  if (!value || typeof value !== 'object' || typeof value.expiresAt !== 'string') return false
+  const expiresAt = Date.parse(value.expiresAt)
+  return Number.isFinite(expiresAt) && expiresAt > Date.now()
 }

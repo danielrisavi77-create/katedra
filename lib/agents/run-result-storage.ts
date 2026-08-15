@@ -118,7 +118,7 @@ export async function storeAgentStepResult(
 export async function loadAgentRunResults(
   manifests: RunPayloadManifestStore,
   storage: RunPayloadStorage,
-  input: { runId: string; projectId: string },
+  input: { runId: string; projectId: string; now?: number },
 ): Promise<AgentStepResultPayloadV1[]> {
   const entries = await manifests.list(input.runId, input.projectId)
   const results = await Promise.all(entries.filter((entry) => entry.materialId.startsWith(RESULT_PREFIX)).map(async (entry) => {
@@ -126,7 +126,7 @@ export async function loadAgentRunResults(
       const manifest = await parseJson(storage, entry.manifestPath)
       if (manifest.kind !== 'agent-step-result' || manifest.materialId !== entry.materialId || manifest.projectId !== input.projectId || manifest.runId !== input.runId) return null
       const payload = await parseJson(storage, entry.storagePath)
-      return validatePayload(payload, entry)
+      return validatePayload(payload, entry, input.now ?? Date.now())
     } catch {
       return null
     }
@@ -142,15 +142,21 @@ async function parseJson(storage: RunPayloadStorage, path: string): Promise<Reco
   return parsed as Record<string, unknown>
 }
 
-function validatePayload(value: Record<string, unknown>, entry: RunPayloadManifest): AgentStepResultPayloadV1 | null {
+function validatePayload(value: Record<string, unknown>, entry: RunPayloadManifest, now: number): AgentStepResultPayloadV1 | null {
   if (value.schemaVersion !== 1 || value.kind !== 'agent-step-result') return null
   if (value.materialId !== entry.materialId || value.projectId !== entry.projectId || value.runId !== entry.runId) return null
   if (typeof value.stepId !== 'string' || typeof value.agent !== 'string' || typeof value.verifier !== 'string' || typeof value.output !== 'string') return null
   if (!Array.isArray(value.citations) || !value.verification || typeof value.verification !== 'object') return null
   if (typeof value.provider !== 'string' || !value.usage || typeof value.usage !== 'object') return null
   if (value.billingState !== undefined && !['settled', 'released', 'pending_reconciliation'].includes(String(value.billingState))) return null
-  if (typeof value.createdAt !== 'string' || typeof value.expiresAt !== 'string') return null
+  if (typeof value.createdAt !== 'string' || !isActiveTemporaryPayload(value.expiresAt, now)) return null
   return value as unknown as AgentStepResultPayloadV1
+}
+
+function isActiveTemporaryPayload(value: unknown, now: number): boolean {
+  if (typeof value !== 'string') return false
+  const expiresAt = Date.parse(value)
+  return Number.isFinite(expiresAt) && expiresAt > now
 }
 
 function safeSegment(value: string): string {

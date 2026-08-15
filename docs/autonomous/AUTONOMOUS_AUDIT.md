@@ -1,5 +1,44 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15t
+
+### Root cause selected
+
+Priority: P1 (temporary material and agent-result loaders trusted the cleanup
+job to enforce `expiresAt`, so delayed cleanup could leave expired payloads
+usable or visible).
+
+### Fix
+
+- Require a valid future `expiresAt` when loading material context for a run.
+- Require a valid future `expiresAt` before returning temporary agent results.
+- Filter expired material manifests from `GET /api/materials` as a second
+  server-side boundary.
+- Add deterministic expiry regressions for material and result loaders.
+
+### Verification
+
+- TDD regressions: PASS; both expiry tests failed before the checks and passed
+  afterward.
+- Agent/material focused tests: PASS (27 files, 88 tests).
+- Full Katedra suite: PASS (131 test files, 451 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated changes.
+
+### Golden Journey impact
+
+- G3, G7 and G9: expired temporary inputs and results are rejected even when
+  cleanup has not run yet.
+- G0-G2, G4-G6, G8 and G10: no behavior change.
+
+### Remaining issues
+
+- Authenticated commerce, canonical Lekta deployment, live RPC/RLS proof and
+  staging browser journeys remain external blockers listed in `BLOCKERS.md`.
+- Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
 ## Cycle: 2026-08-15s
 
 ### Root cause selected
