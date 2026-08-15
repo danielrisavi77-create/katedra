@@ -1,5 +1,48 @@
 # Autonomous product-completion audit
 
+## Cycle: 2026-08-15aa
+
+### Root cause selected
+
+Priority: P2 server security/operational boundary. The internal agent-worker
+route still imported its privileged Supabase client from the cookie-aware
+server module. This left the background worker on a different admin-client
+contract from the material route and bypassed the canonical service-role
+environment validation.
+
+### Fix
+
+- Import `createAdminClient` from `lib/supabase/admin` in the worker route.
+- Add a source-level regression proving no production route uses the legacy
+  server-module admin export for this path.
+- Preserve timing-safe worker-token validation and the existing fail-closed
+  worker configuration gate.
+
+### Verification
+
+- TDD regression: PASS; the new assertion failed on the legacy import and
+  passed after the route switched to the canonical admin module.
+- Focused worker contract test: PASS (1 file, 4 tests).
+- Full test suite: PASS (133 test files, 456 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (24 routes).
+- `git diff --check`: PASS for the isolated changes.
+- Legacy production import scan: PASS; only negative assertions in tests
+  mention the old import.
+- Local host smoke: PASS (`http://localhost:3000/pisi?tip=d`, HTTP 200).
+
+### Golden Journey impact
+
+- G9 and G10: strengthens fail-closed worker startup and private run
+  processing when the agentic feature is activated.
+- G0-G8: no behavior change.
+
+### Remaining issues
+
+- Canonical Lekta worker/RPC deployment, authenticated commerce and material
+  deletion tombstoning remain `BLOCKED_EXTERNAL` in `BLOCKERS.md`.
+
 ## Cycle: 2026-08-15z
 
 ### Root cause selected

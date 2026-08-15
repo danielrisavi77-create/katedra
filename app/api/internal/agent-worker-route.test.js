@@ -7,6 +7,8 @@ const source = fs.readFileSync(path.join(process.cwd(), 'app/api/internal/agent-
 
 describe('internal agent worker route contract', () => {
   it('is fail-closed, claims through the canonical lease RPC, and executes one step at a time', () => {
+    expect(source).toContain("import { createAdminClient } from '@/lib/supabase/admin'")
+    expect(source).not.toContain("import { createAdminClient } from '@/lib/supabase/server'")
     expect(source).toContain('KATEDRA_AGENT_WORKER_TOKEN')
     expect(source).toContain('runAgentWorkerLoop')
     expect(source).toContain('maxSteps: 1')

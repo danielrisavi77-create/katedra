@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createAnthropicAgentProvider } from '@/lib/agents/anthropic-provider'
 import { createProviderRouter } from '@/lib/agents/provider-router'
 import { createProviderBackedExecutor } from '@/lib/agents/provider-worker'
