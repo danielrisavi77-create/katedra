@@ -6,7 +6,7 @@ podatke.
 
 ## Prošlo lokalno
 
-Na Katedra repozitoriju, commit `e6eb94e`, prošli su:
+Na Katedra repozitoriju, commit `92d236c`, prošli su:
 
 ```text
 npm.cmd run typecheck
@@ -23,7 +23,7 @@ npm.cmd run test:e2e:agent-studio-ui
 Rezultati:
 
 - TypeScript provjera, lint i production build prolaze.
-- Vitest: `195 passed files`, `826 passed tests`, `4 skipped`.
+- Vitest: `195 passed files`, `827 passed tests`, `4 skipped`.
 - Dependency audit: `0 vulnerabilities` prema `npm audit --omit=dev --audit-level=high`.
 - `/pisi` workspace, agent worker contract i light/dark mentor UI smoke testovi
   prolaze lokalno.
@@ -38,6 +38,17 @@ npm run check
 
 To uključuje TypeScript provjeru, Vitest i Vite build. To je dokaz izvornog
 repozitorija, ne dokaz da je isti ugovor deployan u canonical Supabase projektu.
+
+## Udaljeni master gateovi
+
+Commit `92d236c` je objavljen na udaljeni `master` i oba gatea su završila
+uspješno:
+
+- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31966840609)
+- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31966840661)
+
+Ovo potvrđuje CI i javne/browser regresije na GitHubu. Ne zamjenjuje staging
+dokaz za authenticated commerce, canonical Lekta RPC/RLS, providere ili worker.
 
 ## Što je lokalno pokriveno
 
