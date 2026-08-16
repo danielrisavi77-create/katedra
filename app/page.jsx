@@ -9,9 +9,9 @@ import { ThemeToggle } from './theme-toggle'
 // Audit 4), pa je najpošteniji izravan korak "kreni od tog tipa rada", ne
 // lažna "kupi odmah" tipka koja bi svejedno morala prvo tražiti prijavu.
 const PASSES = [
-  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: '~1 seminarski s revizijama' },
-  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: '~1 završni + recenzija' },
-  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'diplomski rad' },
+  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: 'plan, izvori, pisanje i sadržajna revizija' },
+  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: 'istraživačko pitanje, metodologija i mentorov workflow' },
+  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'istraživački dizajn, više revizija i priprema obrane' },
 ]
 
 export default function LandingPage() {
@@ -59,16 +59,32 @@ export default function LandingPage() {
 
         {/* TRUST LINE — namjerno lakši tretman (bez .panel okvira) da se
             vizualno izdvoji kao izjava, ne kao još jedna kartica */}
-        <section className="landing-trust" data-reveal="true" style={{ textAlign: 'center', marginBottom: 40, padding: '22px 16px', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
+         <section className="landing-trust" data-reveal="true" style={{ textAlign: 'center', marginBottom: 40, padding: '22px 16px', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
           <h3 style={{ fontSize: 16.5 }}>AI se prilagođava pravilima tvog projekta, ne obrnuto.</h3>
           <p style={{ fontSize: 13.5, color: 'var(--mut)', marginTop: 6, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
             Katedra prvo provjerava što ti je dopušteno prema objavljenim pravilima tvog
             fakulteta. Tek onda uključuje AI. Kad pravilo nije potvrđeno, Katedra ostaje na
             sigurnijoj strani i vodi te pitanjima umjesto da piše umjesto tebe.
           </p>
-        </section>
+         </section>
 
-        {/* KAKO RADI — čist numerirani niz, bez kartica, da se razlikuje od
+         <section className="landing-proof" data-reveal="true" aria-labelledby="landing-proof-title">
+           <div className="landing-proof-intro">
+             <p className="landing-proof-kicker">PROIZVOD U PRAKSI</p>
+             <h3 id="landing-proof-title">Kako izgleda jedan projekt</h3>
+             <p>Ne dobivaš samo odgovor u chatu. Dobivaš trag rada: što je pronađeno, što je provjereno, što još nedostaje i koji je sljedeći potez.</p>
+             <strong>Ilustrativni FPZG projekt</strong>
+           </div>
+           <ol className="landing-proof-flow" aria-label="Primjer tijeka projekta">
+             <li><span>01</span><b>Istraživanje</b><em>18 izvora pronađeno</em></li>
+             <li><span>02</span><b>Provjera izvora</b><em>16 izvora potvrđeno</em></li>
+             <li><span>03</span><b>Plan rada</b><em>6 poglavlja i istraživačko pitanje</em></li>
+             <li><span>04</span><b>Lekta provjera</b><em>formalna provjera stvarnog DOCX-a</em></li>
+           </ol>
+           <p className="landing-proof-note">Primjer tijeka, ne jamstvo rezultata. Stvarni opseg ovisi o radu, materijalima i pravilima ustanove.</p>
+         </section>
+
+         {/* KAKO RADI — čist numerirani niz, bez kartica, da se razlikuje od
             cijena ispod (te ostaju kartice jer se stvarno uspoređuju) */}
         <section className="landing-steps" data-reveal="true" style={{ marginBottom: 40 }}>
           <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--mut2)', textAlign: 'center', marginBottom: 22 }}>

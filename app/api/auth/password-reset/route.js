@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { privateJson } from '@/lib/observability/private-response.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 import {
   DEFAULT_RETRY_AFTER_SECONDS,
   parseRetryAfter,
@@ -8,6 +9,8 @@ import {
 } from '@/lib/auth/retry-after'
 
 export async function POST(request) {
+  const origin = validateSameOriginRequest(request, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return privateJson({ error: origin.error }, { status: origin.status })
   const parsed = await readJsonBody(request, JSON_BODY_LIMITS.auth)
   if (!parsed.ok) return privateJson({ error: parsed.error }, { status: parsed.status })
   const body = parsed.value

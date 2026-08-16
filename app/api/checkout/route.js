@@ -23,6 +23,7 @@ import { isAdminOverrideUser } from '@/lib/auth/admin-access'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { katedraPassProductFilter } from '../../../lib/katedra-pass-catalog.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 // tokens = obračunski tokeni (input + 5×output) za interni wallet hard cap,
@@ -39,6 +40,8 @@ export async function POST(req) {
 }
 
 async function handlePOST(req) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })

@@ -10,6 +10,7 @@ import { privateJson } from '@/lib/observability/private-response.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 import { isAgentWebResearchAvailable, isAgenticWorkspaceAvailable } from '@/lib/deployment/agentic-availability'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -19,6 +20,8 @@ export async function POST(req) {
 }
 
 async function handlePost(req) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   if (!ENABLED) return Response.json({ error: 'Agenticni run ugovor još nije aktivan u backendu.' }, { status: 503 })
   if (!isAgenticWorkspaceAvailable()) return Response.json({ error: 'Agenticni workflow još nije konfiguriran za siguran rad.' }, { status: 503 })
   const supabase = await createClient()

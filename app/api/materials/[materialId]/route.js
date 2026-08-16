@@ -3,6 +3,7 @@ import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/pro
 import { resolveMaterialStorageNames } from '@/lib/materials/storage-paths.js'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const ENABLED = process.env.KATEDRA_MATERIALS_ENABLED === 'true'
 const DELETION_CONTRACT_ENABLED = process.env.KATEDRA_MATERIAL_DELETE_RPC_CONTRACT === 'v1'
@@ -13,6 +14,8 @@ export async function DELETE(req, { params }) {
 }
 
 async function handleDelete(req, { params }) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   if (!DELETION_CONTRACT_ENABLED) return Response.json({ error: 'Brisanje materijala još nije aktivno na canonical backendu.' }, { status: 503 })
   if (!ENABLED) return Response.json({ error: 'Privremena pohrana materijala još nije aktivna u backendu.' }, { status: 503 })
   const supabase = await createClient()

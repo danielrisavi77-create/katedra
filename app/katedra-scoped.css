@@ -1111,6 +1111,82 @@
     max-width:600px!important;
     line-height:1.65;
   }
+  .katedra-page.landing-page .landing-proof{
+    max-width:900px;
+    margin:0 auto 58px;
+    padding:26px 0 22px;
+    display:grid;
+    grid-template-columns:minmax(220px,.78fr) minmax(0,1.22fr);
+    gap:34px;
+    border-top:1px solid var(--line2);
+    border-bottom:1px solid var(--line2);
+  }
+  .katedra-page.landing-page .landing-proof-kicker{
+    color:var(--acc);
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:1.5px;
+    margin-bottom:10px;
+  }
+  .katedra-page.landing-page .landing-proof-intro h3{
+    font-family:var(--serif);
+    font-size:clamp(22px,3vw,30px);
+    line-height:1.15;
+    letter-spacing:-.5px;
+  }
+  .katedra-page.landing-page .landing-proof-intro p:not(.landing-proof-kicker){
+    color:var(--mut);
+    font-size:13.5px;
+    line-height:1.6;
+    margin-top:12px;
+    max-width:34ch;
+  }
+  .katedra-page.landing-page .landing-proof-intro strong{
+    display:inline-block;
+    margin-top:16px;
+    color:var(--txt);
+    font-size:12px;
+    font-weight:800;
+  }
+  .katedra-page.landing-page .landing-proof-flow{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 22px;
+    list-style:none;
+    margin:0;
+    padding:0;
+  }
+  .katedra-page.landing-page .landing-proof-flow > li{
+    position:relative;
+    padding:2px 0 17px 34px;
+    min-height:70px;
+    border-bottom:1px solid var(--line);
+  }
+  .katedra-page.landing-page .landing-proof-flow > li:nth-child(3),
+  .katedra-page.landing-page .landing-proof-flow > li:nth-child(4){
+    padding-top:17px;
+    border-bottom:0;
+  }
+  .katedra-page.landing-page .landing-proof-flow span{
+    position:absolute;
+    left:0;
+    top:2px;
+    color:var(--acc);
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.8px;
+  }
+  .katedra-page.landing-page .landing-proof-flow b,
+  .katedra-page.landing-page .landing-proof-flow em{display:block}
+  .katedra-page.landing-page .landing-proof-flow b{font-size:13px;font-weight:800}
+  .katedra-page.landing-page .landing-proof-flow em{color:var(--mut);font-size:12px;font-style:normal;line-height:1.45;margin-top:3px}
+  .katedra-page.landing-page .landing-proof-note{
+    grid-column:1/-1;
+    color:var(--mut2);
+    font-size:12px;
+    line-height:1.5;
+    margin-top:2px;
+  }
   .katedra-page.landing-page .landing-steps,
   .katedra-page.landing-page .landing-pricing{
     margin-bottom:58px!important;
@@ -1193,6 +1269,12 @@
   .katedra-page.landing-page[data-motion-ready="true"] .landing-price-grid > a:nth-child(3){transition-delay:.16s}
   @keyframes landing-rule-in{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:.78}}
   @media(max-width:620px){
+    .katedra-page.landing-page .landing-proof{grid-template-columns:1fr;gap:22px;margin-bottom:46px}
+    .katedra-page.landing-page .landing-proof-intro p:not(.landing-proof-kicker){max-width:none}
+    .katedra-page.landing-page .landing-proof-flow{grid-template-columns:1fr}
+    .katedra-page.landing-page .landing-proof-flow > li:nth-child(3),
+    .katedra-page.landing-page .landing-proof-flow > li:nth-child(4){padding-top:14px;border-bottom:1px solid var(--line)}
+    .katedra-page.landing-page .landing-proof-flow > div:last-child{border-bottom:0}
     .katedra-page.landing-page .landing-step-grid{grid-template-columns:1fr!important}
     .katedra-page.landing-page .landing-step-grid > div + div{border-left:0;border-top:1px solid var(--line);padding:18px 4px 4px}
   }

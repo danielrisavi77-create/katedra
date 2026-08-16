@@ -20,6 +20,7 @@ import { isDistributedWithdrawalConfigured, reserveDistributedWithdrawal } from 
 import { reserveWithdrawal } from '@/lib/security/withdrawal-limit'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 // 'onboarding@resend.dev' je Resendov test domain — radi bez verifikacije
 // domene, ali NE smije ići u produkciju. Prije lansiranja postaviti
@@ -32,6 +33,8 @@ export async function POST(req) {
 }
 
 async function handlePOST(req) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })

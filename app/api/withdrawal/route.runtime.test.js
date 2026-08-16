@@ -54,7 +54,7 @@ describe('POST /api/withdrawal runtime guards', () => {
 
     const response = await POST(new Request('http://localhost/api/withdrawal', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: 'http://localhost' },
       body: JSON.stringify({ referenceId: 'withdrawal-admin-client' }),
     }))
 
@@ -65,7 +65,7 @@ describe('POST /api/withdrawal runtime guards', () => {
   it('rejects malformed JSON before reserving a withdrawal request', async () => {
     const response = await POST(new Request('http://localhost/api/withdrawal', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: 'http://localhost' },
       body: '{not-json',
     }))
 
@@ -76,7 +76,7 @@ describe('POST /api/withdrawal runtime guards', () => {
   it('returns 503 and releases the reservation when the live table is absent', async () => {
     const response = await POST(new Request('http://localhost/api/withdrawal', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: 'http://localhost' },
       body: JSON.stringify({ referenceId: 'withdrawal-1' }),
     }))
 
@@ -98,7 +98,7 @@ describe('POST /api/withdrawal runtime guards', () => {
 
     const response = await POST(new Request('http://localhost/api/withdrawal', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', origin: 'http://localhost' },
       body: JSON.stringify({ referenceId: 'withdrawal-retry' }),
     }))
 

@@ -25,6 +25,7 @@ import { stripManuscriptFromStatePayload } from '@/lib/manuscript/privacy'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { privateJson } from '@/lib/observability/private-response.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
@@ -385,6 +386,8 @@ export async function PUT(req) {
 }
 
 async function handlePUT(req) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return privateJson({ error: origin.error }, { status: origin.status })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return privateJson({ error: 'Prijavi se.' }, { status: 401 })

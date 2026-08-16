@@ -77,7 +77,7 @@ const project = { projectId: '11111111-1111-4111-8111-111111111111', guestProjec
 function request(body = { projectId: project.projectId, messages: [{ role: 'user', content: 'Bok' }] }, extraHeaders = {}) {
   return new Request('http://localhost/api/chat', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...extraHeaders },
+    headers: { 'content-type': 'application/json', origin: 'http://localhost', ...extraHeaders },
     body: JSON.stringify(body),
   })
 }

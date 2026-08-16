@@ -27,6 +27,7 @@ import { AI_COST_LIMITS, AI_MODEL_COST_MULTIPLIERS, estimateChatCharge, maxAffor
 import { countChatAttachmentChars, countChatInputChars, validateChatRequest } from '@/lib/chat/validation'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
@@ -84,6 +85,8 @@ export async function POST(req) {
 }
 
 async function handlePOST(req, requestContext = {}) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return json(origin.status, { error: origin.error })
   const requestId = requestContext.traceRequestId || crypto.randomUUID()
   const billingRequestId = requestContext.billingRequestId || crypto.randomUUID()
   // ---------- 1. AUTH ----------

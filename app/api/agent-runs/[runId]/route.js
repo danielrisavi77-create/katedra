@@ -4,6 +4,7 @@ import { createSupabaseRunPayloadManifestStore } from '@/lib/agents/run-context-
 import { loadAgentRunResults } from '@/lib/agents/run-result-storage'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
 
@@ -55,6 +56,8 @@ export async function DELETE(req, { params }) {
 }
 
 async function handleDelete(req, { params }) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   if (!ENABLED) return Response.json({ error: 'Agenticni run ugovor još nije aktivan u backendu.' }, { status: 503 })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

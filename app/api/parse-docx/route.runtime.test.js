@@ -19,7 +19,7 @@ vi.mock('@/lib/ai/rate-limit', () => ({
 import { POST } from './route'
 
 function request() {
-  return new Request('http://localhost/api/parse-docx', { method: 'POST' })
+  return new Request('http://localhost/api/parse-docx', { method: 'POST', headers: { origin: 'http://localhost' } })
 }
 
 afterEach(() => {

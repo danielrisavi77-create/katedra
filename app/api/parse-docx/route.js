@@ -15,6 +15,7 @@ import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveD
 import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { readMultipartForm } from '@/lib/http/multipart.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const MAX_TEXT_CHARS = 250_000
 const EXTRACTION_TIMEOUT_MS = 20_000
@@ -40,6 +41,8 @@ export async function POST(req) {
 }
 
 async function handlePOST(req, requestContext) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   const { traceRequestId, reservationRequestId } = requestContext
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

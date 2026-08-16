@@ -10,6 +10,7 @@ import { createRequestContext, withRequestId } from '@/lib/observability/request
 import { privateJson } from '@/lib/observability/private-response.js'
 import { mapWithConcurrency } from '@/lib/async/map-limited'
 import { readMultipartForm } from '@/lib/http/multipart.js'
+import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
 const ENABLED = process.env.KATEDRA_MATERIALS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -25,6 +26,8 @@ export async function POST(req) {
 }
 
 async function handlePost(req, requestContext) {
+  const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
+  if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
   const { traceRequestId, reservationRequestId } = requestContext
   if (!ENABLED) return Response.json({ error: 'Privremena pohrana materijala još nije aktivna u backendu.' }, { status: 503 })
   const supabase = await createClient()

@@ -4,7 +4,7 @@ import ScrollToTop from './scroll-to-top'
 import { ThemeProvider } from './theme-provider'
 
 export const metadata = {
-  title: 'Katedra — od teme do predaje',
+  title: 'Katedra — od teme do obrane',
   description: 'AI kopilot za seminarski, završni i diplomski rad.',
 }
 

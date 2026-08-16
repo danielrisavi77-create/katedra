@@ -26,7 +26,7 @@ const projectId = '11111111-1111-4111-8111-111111111111'
 function request(body) {
   return new Request('http://localhost/api/checkout', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: 'http://localhost' },
     body: JSON.stringify(body),
   })
 }

@@ -11,7 +11,7 @@ import { POST } from './route'
 function request(body) {
   return new Request('http://localhost:3000/api/auth/password-reset', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: 'http://localhost:3000' },
     body: JSON.stringify(body),
   })
 }
@@ -19,7 +19,7 @@ function request(body) {
 function productionRequest(body) {
   return new Request('https://katedra.example/api/auth/password-reset', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: 'https://katedra.example' },
     body: JSON.stringify(body),
   })
 }

@@ -11,7 +11,7 @@ import { POST } from './route'
 function request(body) {
   return new Request('http://localhost:3000/api/auth/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: 'http://localhost:3000' },
     body: JSON.stringify(body),
   })
 }

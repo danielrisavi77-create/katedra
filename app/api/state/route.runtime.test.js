@@ -17,7 +17,7 @@ import { GET, PUT } from './route'
 function request(body) {
   return new Request('http://localhost/api/state', {
     method: 'PUT',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: 'http://localhost' },
     body: JSON.stringify(body),
   })
 }

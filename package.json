@@ -20,6 +20,7 @@
     "audit:dependencies": "npm audit --omit=dev --audit-level=high",
     "preflight:production": "node scripts/production-preflight.mjs",
     "preflight:agentic": "node scripts/agentic-staging-preflight.mjs",
+    "preflight:release": "node scripts/release-readiness.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
