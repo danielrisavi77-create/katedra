@@ -4469,6 +4469,8 @@ for cited authors or retraction relations.
   `app/katedra-engine.js:2744`. Production build: PASS with 28 routes.
 - Browser verification: `test:e2e:pisi` passed; upload/reload and responsive
   checks remain green.
+- Reachable Git history secret-pattern scan: **0 matches**; only
+  `.env.example` is tracked as an environment file.
 
 ### Remaining issues
 
