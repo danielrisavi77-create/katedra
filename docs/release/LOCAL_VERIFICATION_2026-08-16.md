@@ -6,7 +6,7 @@ podatke.
 
 ## Prošlo lokalno
 
-Na Katedra repozitoriju, commit `b67803a`, prošli su:
+Na Katedra repozitoriju, commit `e85aa79`, prošli su:
 
 ```text
 npm.cmd run typecheck
@@ -23,7 +23,7 @@ npm.cmd run test:e2e:agent-studio-ui
 Rezultati:
 
 - TypeScript provjera, lint i production build prolaze.
-- Vitest: `198 passed files`, `842 passed tests`, `4 skipped`.
+- Vitest: `198 passed files`, `843 passed tests`, `4 skipped`.
 - Dependency audit: `0 vulnerabilities` prema `npm audit --omit=dev --audit-level=high`.
 - `/pisi` workspace, agent worker contract i light/dark mentor UI smoke testovi
   prolaze lokalno.
@@ -43,11 +43,11 @@ da je isti ugovor deployan u canonical Supabase projektu.
 
 ## Udaljeni master gateovi
 
-Commit `b67803a` je objavljen na udaljeni `master` i oba gatea su završila
+Commit `e85aa79` je objavljen na udaljeni `master` i oba gatea su završila
 uspješno:
 
-- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31971139189)
-- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31971139201)
+- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31971810806)
+- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31971810732)
 
 Ovo potvrđuje CI i javne/browser regresije na GitHubu. Ne zamjenjuje staging
 dokaz za authenticated commerce, canonical Lekta RPC/RLS, providere ili worker.
@@ -56,6 +56,7 @@ dokaz za authenticated commerce, canonical Lekta RPC/RLS, providere ili worker.
 
 - agentni rezultat koristi samo prethodne verificirane artefakte iz istog runa i
   projekta;
+- svaki agent dobiva samo artefakte iz svoje eksplicitne upstream matrice;
 - rezultat s `needs_revision`, `blocked` ili `failed` ne ulazi u sljedeći prompt;
 - providerov `verified: true` flag nije dovoljan za source verification;
 - DOI identitet, metadata mismatch i povučeni izvor imaju fail-closed ponašanje;
