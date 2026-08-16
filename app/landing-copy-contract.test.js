@@ -24,6 +24,17 @@ describe('landing product copy contract', () => {
     expect(landingSource).toContain('Primjer tijeka, ne jamstvo rezultata')
   })
 
+  it('explains the product boundary against a generic chat and names Pass scope', () => {
+    expect(landingSource).toContain('Zašto nije samo chat?')
+    expect(landingSource).toContain('landing-comparison')
+    expect(landingSource).toContain('Jedna kupnja, jedan rad')
+    expect(landingSource).toContain('days: 120')
+    expect(landingSource).toContain('days: 240')
+    expect(landingSource).toContain('days: 365')
+    expect(landingSource).toContain('landing-pass-term')
+    expect(landingSource).toContain('zaštitnim limitima korištenja')
+  })
+
   it('uses the canonical brand promise on legal pages too', () => {
     for (const source of legalSources) {
       expect(source).toContain('Od teme do obrane')

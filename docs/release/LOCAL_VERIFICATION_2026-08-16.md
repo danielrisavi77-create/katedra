@@ -23,7 +23,7 @@ npm.cmd run test:e2e:agent-studio-ui
 Rezultati:
 
 - TypeScript provjera, lint i production build prolaze.
-- Vitest: `194 passed files`, `824 passed tests`, `4 skipped`.
+- Vitest: `195 passed files`, `826 passed tests`, `4 skipped`.
 - Dependency audit: `0 vulnerabilities` prema `npm audit --omit=dev --audit-level=high`.
 - `/pisi` workspace, agent worker contract i light/dark mentor UI smoke testovi
   prolaze lokalno.

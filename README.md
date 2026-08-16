@@ -1,6 +1,6 @@
 # Katedra
 
-AI kopilot za seminarske, završne i diplomske radove na hrvatskom: procesni wizard, prompt generator, streaming chat s Claudeom, akademski workflow i integracija s [Lektom](https://lektahr.netlify.app), determinističkim provjeriteljem formalne usklađenosti rada.
+AI kopilot za seminarske, završne i diplomske radove na hrvatskom: lokalno-first manuscript workspace, Completion Scan, kontekstualni streaming chat, agentički workflow i integracija s [Lektom](https://lektahr.netlify.app), determinističkim provjeriteljem formalne usklađenosti rada.
 
 Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0.1 dijele jedan Academic Suite backend. **Postojeći Lekta Supabase projekt (`zrrjttizjyfcxmcpgzml`) je canonical identity/data backend za oba proizvoda.** Katedra nema zaseban Supabase authority niti zasebnu migration history.
 
@@ -8,6 +8,12 @@ Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0
 - Lekta: čita stvarni `.docx`, provjerava verificirana pravila i jedina smije deterministički potvrditi da je nalaz riješen.
 - Lekta Supabase: isti account, isti akademski projekt, postojeći Lekta commerce i Katedra-owned workflow/AI-credit tablice.
 - Raw `.docx` i tekst rada ne ulaze u shared backend.
+
+Lokalni manuskript je canonical sadržaj uređivanja. Agenticni runovi, uploadi i
+plaćeni project-lock tok ostaju fail-closed dok canonical Lekta ugovor, worker,
+RLS i staging money-flow ne budu deployani i dokazani; aktualni status je u
+[`docs/release/LOCAL_VERIFICATION_2026-08-16.md`](docs/release/LOCAL_VERIFICATION_2026-08-16.md)
+i [`docs/autonomous/BLOCKERS.md`](docs/autonomous/BLOCKERS.md).
 
 Za nepregovorljive produktne granice vidi `PRODUCT_CONSTITUTION.md`. Database authority i migracije žive u `danielrisavi77-create/Lekta/supabase/`.
 
@@ -179,7 +185,10 @@ NEXT_PUBLIC_APP_URL
 
 na stvarnu produkcijsku Katedra domenu.
 
-Lekta reverse handoff podržava `VITE_KATEDRA_URL`. Katedrin legacy vanilla engine trenutačno još koristi postojeći `https://lektahr.netlify.app` kao Lekta production URL; prije budućeg domain cutovera taj URL treba izvući u konfiguraciju i testirati, a ne mijenjati ad hoc tijekom releasea.
+Lekta reverse handoff podržava `VITE_KATEDRA_URL`. Katedrin handoff adapter
+trenutačno koristi postojeći `https://lektahr.netlify.app` kao Lekta production
+URL; prije budućeg domain cutovera taj URL treba izvući u konfiguraciju i
+testirati, a ne mijenjati ad hoc tijekom releasea.
 
 ## Razvoj
 
@@ -277,7 +286,10 @@ Katedrin token wallet i Lekta entitlementi imaju različite svrhe:
 - wallet = koliko AI compute troška korisnik može potrošiti u Katedri;
 - entitlement = postojeće Lekta purchase/slot/Pass pravo, sada project-aware.
 
-Puni cross-product Pass UX/routing još nije implementiran; foundation samo uklanja potrebu za drugim commerce backendom.
+Katedrin contextual Pass UX i project-aware server provjere postoje, ali puna
+produkcijska aktivacija i dalje ovisi o canonical Lekta commerce/RPC ugovoru,
+staging checkoutu i authenticated E2E dokazu. Foundation ne predstavlja
+neovisni commerce backend.
 
 ## Shared account i SSO
 

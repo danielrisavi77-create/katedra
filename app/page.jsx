@@ -9,9 +9,9 @@ import { ThemeToggle } from './theme-toggle'
 // Audit 4), pa je najpošteniji izravan korak "kreni od tog tipa rada", ne
 // lažna "kupi odmah" tipka koja bi svejedno morala prvo tražiti prijavu.
 const PASSES = [
-  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: 'plan, izvori, pisanje i sadržajna revizija' },
-  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: 'istraživačko pitanje, metodologija i mentorov workflow' },
-  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'istraživački dizajn, više revizija i priprema obrane' },
+  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: 'plan, izvori, pisanje i sadržajna revizija', days: 120, includes: ['Plan i literatura', 'Pisanje po sekcijama', 'Sadržajna revizija'] },
+  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: 'istraživačko pitanje, metodologija i mentorov workflow', days: 240, includes: ['Istraživačko pitanje i metodologija', 'Literatura i pisanje', 'Mentorov workflow i obrana'] },
+  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'istraživački dizajn, više revizija i priprema obrane', days: 365, includes: ['Istraživački dizajn i literatura', 'Pisanje i više revizija', 'Priprema obrane'] },
 ]
 
 export default function LandingPage() {
@@ -81,7 +81,26 @@ export default function LandingPage() {
              <li><span>03</span><b>Plan rada</b><em>6 poglavlja i istraživačko pitanje</em></li>
              <li><span>04</span><b>Lekta provjera</b><em>formalna provjera stvarnog DOCX-a</em></li>
            </ol>
-           <p className="landing-proof-note">Primjer tijeka, ne jamstvo rezultata. Stvarni opseg ovisi o radu, materijalima i pravilima ustanove.</p>
+          <p className="landing-proof-note">Primjer tijeka, ne jamstvo rezultata. Stvarni opseg ovisi o radu, materijalima i pravilima ustanove.</p>
+         </section>
+
+         <section className="landing-comparison" data-reveal="true" aria-labelledby="landing-comparison-title">
+           <div className="landing-comparison-intro">
+             <p className="landing-proof-kicker">ZAŠTO KATEDRA</p>
+             <h3 id="landing-comparison-title">Zašto nije samo chat?</h3>
+             <p>Obični AI chat može pomoći s pojedinačnim pitanjem. Katedra je projektni prostor koji čuva kontekst, prikazuje što nedostaje i vodi prema provjeri dokumenta.</p>
+           </div>
+           <div className="landing-comparison-scroll">
+             <table>
+               <thead><tr><th scope="col">Trebaš</th><th scope="col">Obični chat</th><th scope="col">Katedra</th></tr></thead>
+               <tbody>
+                 <tr><th scope="row">Kontekst</th><td>Razgovor se lako raspline.</td><td>Jedan projekt, rukopis i aktivna sekcija.</td></tr>
+                 <tr><th scope="row">Izvori</th><td>Odgovor može doći bez provjerljivog traga.</td><td>Source gate i zasebna provjera identiteta izvora.</td></tr>
+                 <tr><th scope="row">Napredak</th><td>Sam pamtiš gdje si stao.</td><td>Faza, otvoreni zadaci i jedan sljedeći korak.</td></tr>
+                 <tr><th scope="row">Predaja</th><td>Nema projektnu provjeru DOCX-a.</td><td>Lekta provjerava stvarni dokument prije predaje.</td></tr>
+               </tbody>
+             </table>
+           </div>
          </section>
 
          {/* KAKO RADI — čist numerirani niz, bez kartica, da se razlikuje od
@@ -122,19 +141,22 @@ export default function LandingPage() {
             Jedna kupnja, jedan rad
           </h3>
           <div className="landing-price-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-            {PASSES.map(p => (
-              <a key={p.tip} href={`/pisi?tip=${p.tip}`} className="panel landing-pass-card" data-reveal="true" style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>{p.price}</div>
-                <div style={{ fontSize: 12, color: 'var(--mut)' }}>{p.desc}</div>
-                <div style={{ fontSize: 12, color: 'var(--acc)', fontWeight: 700, marginTop: 10 }}>Odaberi →</div>
-              </a>
-            ))}
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--mut2)', textAlign: 'center', marginTop: 12 }}>
-            Pass otključava Katedru i Lektu za taj konkretan rad. Plan i program te Lekta
-            provjera ostaju besplatni bez kupnje.
-          </p>
+             {PASSES.map(p => (
+               <a key={p.tip} href={`/pisi?tip=${p.tip}`} className="panel landing-pass-card" data-reveal="true" style={{ textAlign: 'center' }}>
+                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
+                 <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>{p.price}</div>
+                 <div style={{ fontSize: 12, color: 'var(--mut)' }}>{p.desc}</div>
+                 <ul className="landing-pass-includes">{p.includes.map(item => <li key={item}>{item}</li>)}</ul>
+                 <div className="landing-pass-term">Vrijedi {p.days} dana</div>
+                 <div style={{ fontSize: 12, color: 'var(--acc)', fontWeight: 700, marginTop: 10 }}>Odaberi →</div>
+               </a>
+             ))}
+           </div>
+           <p style={{ fontSize: 12, color: 'var(--mut2)', textAlign: 'center', marginTop: 12 }}>
+             Pass otključava Katedru i Lektu za taj konkretan rad. Plan i program te Lekta
+             provjera ostaju besplatni bez kupnje. AI korištenje podliježe zaštitnim limitima korištenja;
+             detaljan opseg vidiš prije potvrde plaćanja.
+           </p>
         </section>
 
         {/* FINALNI CTA */}

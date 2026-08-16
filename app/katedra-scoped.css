@@ -1187,6 +1187,40 @@
     line-height:1.5;
     margin-top:2px;
   }
+  .katedra-page.landing-page .landing-comparison{
+    max-width:900px;
+    margin:0 auto 58px;
+    padding:26px 0 22px;
+    display:grid;
+    grid-template-columns:minmax(220px,.78fr) minmax(0,1.22fr);
+    gap:34px;
+    border-bottom:1px solid var(--line2);
+  }
+  .katedra-page.landing-page .landing-comparison-intro h3{
+    font-family:var(--serif);
+    font-size:clamp(22px,3vw,30px);
+    line-height:1.15;
+    letter-spacing:-.5px;
+  }
+  .katedra-page.landing-page .landing-comparison-intro p:not(.landing-proof-kicker){
+    max-width:34ch;
+    margin-top:12px;
+    color:var(--mut);
+    font-size:13.5px;
+    line-height:1.6;
+  }
+  .katedra-page.landing-page .landing-comparison-scroll{min-width:0;overflow-x:auto}
+  .katedra-page.landing-page .landing-comparison table{width:100%;min-width:510px;border-collapse:collapse;text-align:left;font-size:12px}
+  .katedra-page.landing-page .landing-comparison th,
+  .katedra-page.landing-page .landing-comparison td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top;line-height:1.45}
+  .katedra-page.landing-page .landing-comparison thead th{padding-top:0;border-top:0;color:var(--mut2);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+  .katedra-page.landing-page .landing-comparison tbody th{width:25%;color:var(--txt);font-weight:800}
+  .katedra-page.landing-page .landing-comparison td{color:var(--mut)}
+  .katedra-page.landing-page .landing-comparison td:last-child{color:var(--txt)}
+  .katedra-page.landing-page .landing-pass-includes{margin:13px 0 0;padding:10px 0 0;border-top:1px solid var(--line);list-style:none;color:var(--mut);font-size:11px;line-height:1.55;text-align:left}
+  .katedra-page.landing-page .landing-pass-includes li{position:relative;padding-left:13px}
+  .katedra-page.landing-page .landing-pass-includes li::before{content:'+';position:absolute;left:0;color:var(--acc);font-weight:800}
+  .katedra-page.landing-page .landing-pass-term{margin-top:10px;color:var(--mut2);font-size:10px;letter-spacing:.04em;text-transform:uppercase}
   .katedra-page.landing-page .landing-steps,
   .katedra-page.landing-page .landing-pricing{
     margin-bottom:58px!important;
@@ -1277,6 +1311,8 @@
     .katedra-page.landing-page .landing-proof-flow > div:last-child{border-bottom:0}
     .katedra-page.landing-page .landing-step-grid{grid-template-columns:1fr!important}
     .katedra-page.landing-page .landing-step-grid > div + div{border-left:0;border-top:1px solid var(--line);padding:18px 4px 4px}
+    .katedra-page.landing-page .landing-comparison{grid-template-columns:1fr;gap:22px;margin-bottom:46px}
+    .katedra-page.landing-page .landing-comparison-intro p:not(.landing-proof-kicker){max-width:none}
   }
   @media(max-width:560px){
     .katedra-page.landing-page .landing-hero{margin-top:46px!important;padding:0 2px 2px}

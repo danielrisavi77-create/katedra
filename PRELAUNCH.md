@@ -1,7 +1,22 @@
 # Katedra — što treba prije prve prave naplate
 
 Živi dokument, ne jednokratan izvještaj — ažuriraj kako se stavke rješavaju.
-Stanje na 2026-08-13.
+Povijesni checklist u nastavku započet je 2026-08-13; aktualni lokalni snapshot
+je 2026-08-16.
+
+## Aktualni release snapshot
+
+- Lokalni typecheck, lint, testovi, build, dependency audit i browser smoke
+  testovi prolaze; detalji su u
+  [`docs/release/LOCAL_VERIFICATION_2026-08-16.md`](docs/release/LOCAL_VERIFICATION_2026-08-16.md).
+- Legacy string-rendered `/pisi` engine je uklonjen; aktivni workspace je React
+  komponentni sloj.
+- Stvarni paid/agentic launch i dalje je blokiran canonical Lekta/Supabase
+  migracijama, RPC/RLS/worker deploymentom, staging credentialima i punim
+  authenticated money-flow dokazom; detalji su u
+  [`docs/autonomous/BLOCKERS.md`](docs/autonomous/BLOCKERS.md).
+- Ne označavati lokalne `BLOCKED_EXTERNAL` testove kao uspješan production
+  checkout ili agentic run.
 
 ## 0. Blokira sve ostalo
 
