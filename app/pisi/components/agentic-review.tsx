@@ -30,6 +30,7 @@ export function AgenticReview({ manuscript, draft, automatic = false, onAccept, 
   return <section className="pis-agentic-review" aria-labelledby="pis-agentic-review-title">
     <header className="pis-agentic-dashboard-heading"><div><p className="pis-kicker">{automatic ? 'Autonomni tijek' : 'Tvoja potvrda'}</p><h2 id="pis-agentic-review-title">Pregled rezultata</h2><p>{automatic ? 'Rezultati su prošli automatsku strukturnu i dokaznu provjeru te se primjenjuju u lokalni rukopis uz prethodni snapshot. To nije dokaz potpune istinitosti tvrdnji.' : 'Pregledaj izvore i prijedloge. Automatska provjera potvrđuje strukturu i dokazni trag, ali ne potvrđuje sama istinitost tvrdnje; glavni rukopis se do tada ne mijenja.'}</p></div><span className="pis-agent-run-mode">{verifiedIds.length} spremno</span></header>
     {!automatic && <div className="pis-review-actions"><span>Glavni rukopis se još nije promijenio.</span><button type="button" className="is-primary" disabled={verifiedIds.length === 0} onClick={() => void accept()} aria-label="Prihvati sve spremne za pregled">Prihvati sve spremne za pregled</button></div>}
+    <EvidenceMatrix sections={draft.sections} manuscript={manuscript} />
     <div className="pis-review-list">{draft.sections.map((revision) => {
       const section = manuscript.sections.find((item) => item.id === revision.sectionId)
       if (!section) return <p key={revision.sectionId} className="pis-agent-message" role="alert">Sekcija nije pronađena u glavnom rukopisu.</p>
@@ -65,6 +66,52 @@ export function AgenticReview({ manuscript, draft, automatic = false, onAccept, 
       </article>
     })}</div>
   </section>
+}
+
+function EvidenceMatrix({ sections, manuscript }: { sections: AgenticReviewRevision[]; manuscript: ManuscriptV1 }) {
+  const rows = sections.flatMap((revision) => {
+    const evidence = revision.evidence || []
+    const evidenceById = new Map(evidence.map((item) => [item.id, item]))
+    return (revision.claims || []).map((claim) => {
+      const citedEvidence = claim.citationIds.map((id) => evidenceById.get(id)).filter((item): item is AgenticReviewEvidence => Boolean(item))
+      const supports = (claim.support || []).filter((support) => claim.citationIds.includes(support.citationId))
+      const status = matrixStatus(citedEvidence, supports)
+      return {
+        id: `${revision.sectionId}:${claim.id}`,
+        sectionTitle: manuscript.sections.find((section) => section.id === revision.sectionId)?.title || revision.sectionId,
+        claim,
+        source: citedEvidence.length > 0 ? citedEvidence.map((item) => item.title || item.url || item.doi || item.id).join('; ') : claim.citationIds.join(', ') || 'Nije povezan izvor',
+        locator: supports.map((support) => support.locator).filter(Boolean).join('; ') || 'Nije naveden',
+        status,
+      }
+    })
+  })
+
+  if (!rows.length) return null
+
+  return <details className="pis-evidence-matrix">
+    <summary><span><p className="pis-kicker">Trag dokaza</p><h3>Matrica dokaza</h3></span><b>{rows.length} tvrdnji</b></summary>
+    <p className="pis-evidence-matrix-note">Jedan pregled tvrdnja → izvor → lokator. Ovo je trag za ručnu provjeru, ne automatska potvrda istinitosti tvrdnje.</p>
+    <div className="pis-evidence-matrix-scroll">
+      <table>
+        <thead><tr><th scope="col">Tvrdnja</th><th scope="col">Sekcija</th><th scope="col">Izvor</th><th scope="col">Lokator</th><th scope="col">Status</th></tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.id}>
+          <th scope="row">{row.claim.text}</th>
+          <td>{row.sectionTitle}</td>
+          <td>{row.source}</td>
+          <td>{row.locator}</td>
+          <td><span className={`pis-evidence-matrix-status is-${row.status.tone}`}>{row.status.label}</span></td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </details>
+}
+
+function matrixStatus(evidence: AgenticReviewEvidence[], supports: AgenticReviewSupport[]): { label: string; tone: 'ready' | 'pending' | 'blocked' } {
+  if (!evidence.length) return { label: 'Nema povezanog izvora', tone: 'blocked' }
+  if (!evidence.some((item) => item.verified)) return { label: 'Čeka provjeru izvora', tone: 'pending' }
+  if (!supports.length) return { label: 'Nedostaje odlomak', tone: 'pending' }
+  return { label: 'Identitet provjeren · odlomak priložen', tone: 'ready' }
 }
 
 function isAcceptable(manuscript: ManuscriptV1, revision: AgenticDraftV1['sections'][number]) {

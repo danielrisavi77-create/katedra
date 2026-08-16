@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createManuscript, plainTextDocument } from '../../../lib/manuscript/model'
 import { createAgenticDraft, upsertSectionRevision } from '../../../lib/manuscript/agentic-revisions'
-import { AgenticReview } from './agentic-review'
+import { AgenticReview, type AgenticReviewDraft } from './agentic-review'
 
 afterEach(() => cleanup())
 
@@ -93,9 +93,45 @@ describe('AgenticReview', () => {
     render(<AgenticReview manuscript={manuscript} draft={draft} onAccept={vi.fn()} onEdit={vi.fn()} onReject={vi.fn()} />)
 
     expect(screen.getByText('Tvrdnje i dokazni trag')).toBeTruthy()
-    expect(screen.getByText('Tvrdnja o istraživanju.')).toBeTruthy()
+    expect(screen.getAllByText('Tvrdnja o istraživanju.').length).toBeGreaterThan(0)
     expect(screen.getByText('Relevantan odlomak iz izvora.')).toBeTruthy()
     expect(screen.getByText(/ne potvrđuje sama istinitost/i)).toBeTruthy()
     expect(screen.getByText(/nije automatski dokaz/i)).toBeTruthy()
+  })
+
+  it('shows a claim-to-source evidence matrix with passage locators', async () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'z', now: '2026-08-16T10:00:00.000Z' })
+    const first = manuscript.sections[0]
+    const draft: AgenticReviewDraft = {
+      schemaVersion: 1,
+      projectId: 'project-1',
+      runId: 'run-1',
+      baseManuscriptUpdatedAt: manuscript.updatedAt,
+      contextRevision: 'context-1',
+      createdAt: '2026-08-16T10:01:00.000Z',
+      updatedAt: '2026-08-16T10:01:00.000Z',
+      sections: [{
+        sectionId: first.id,
+        baseRevision: first.updatedAt,
+        proposedContent: plainTextDocument('Novi tekst.'),
+        status: 'verified',
+        updatedAt: '2026-08-16T10:01:00.000Z',
+        evidence: [{ id: 'source-1', title: 'Izvještaj o digitalnoj upravi', url: 'https://example.test/source', verified: true }],
+        claims: [{ id: 'claim-1', text: 'Digitalne usluge mijenjaju odnos građana i institucija.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Građani sve više koriste digitalne kanale.', locator: 'str. 4' }] }],
+      }],
+    }
+
+    render(<AgenticReview manuscript={manuscript} draft={draft} onAccept={vi.fn()} onEdit={vi.fn()} onReject={vi.fn()} />)
+
+    await userEvent.setup().click(screen.getByText('Matrica dokaza'))
+    const matrix = screen.getByRole('heading', { name: 'Matrica dokaza' }).closest('details')
+    expect(matrix).toBeTruthy()
+    const matrixView = within(matrix as HTMLElement)
+    expect(matrixView.getByRole('columnheader', { name: 'Tvrdnja' })).toBeTruthy()
+    expect(matrixView.getByText(first.title)).toBeTruthy()
+    expect(matrixView.getByText('Digitalne usluge mijenjaju odnos građana i institucija.')).toBeTruthy()
+    expect(matrixView.getByText('Izvještaj o digitalnoj upravi')).toBeTruthy()
+    expect(matrixView.getByText('str. 4')).toBeTruthy()
+    expect(matrixView.getByText('Identitet provjeren · odlomak priložen')).toBeTruthy()
   })
 })

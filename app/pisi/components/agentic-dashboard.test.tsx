@@ -89,7 +89,7 @@ describe('AgenticDashboard', () => {
     expect(screen.getAllByRole('link', { name: 'https://example.test/ustav' }).length).toBeGreaterThan(0)
     const evidence = screen.getByLabelText('Izvori za Uvod')
     expect(within(evidence).getByText('Identitet izvora provjeren')).toBeTruthy()
-    expect(screen.getByText('Tvrdnja iz uvoda.')).toBeTruthy()
+    expect(screen.getAllByText('Tvrdnja iz uvoda.').length).toBeGreaterThan(0)
     expect(screen.getByText('Relevantan odlomak.')).toBeTruthy()
   })
 
