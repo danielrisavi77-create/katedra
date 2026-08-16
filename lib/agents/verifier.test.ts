@@ -59,6 +59,29 @@ describe('agent verifier', () => {
     })
   })
 
+  it('rejects a forged verified citation method', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s krivotvorenim dokazom.',
+      claims: [{
+        id: 'claim-1',
+        text: 'Tvrdnja s krivotvorenim dokazom.',
+        citationIds: ['source-1'],
+        support: [{
+          citationId: 'source-1',
+          quote: 'Relevantan odlomak.',
+          verification: { status: 'verified', method: 'independent_gateway', checkedAt: '2026-08-16T12:00:00.000Z', claimSupported: 'supported' },
+        }],
+      }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'forged-provider' as never, checkedAt: '2026-08-16T12:00:00.000Z',
+      } }],
+    }, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true })).toMatchObject({
+      status: 'blocked',
+      issues: [{ code: 'unverified_source' }],
+    })
+  })
+
   it('requires independent source verification for agentic citation-bound results', () => {
     expect(verifyAgentResult({
       agent: 'writing',

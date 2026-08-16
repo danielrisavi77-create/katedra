@@ -119,7 +119,7 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
   }
 
   if (requireIndependentSourceVerification) {
-    const independentFailures = citations.filter((citation) => citation.verified && citation.verification?.status !== 'verified')
+    const independentFailures = citations.filter((citation) => citation.verified && !hasIndependentCitationVerification(citation))
     if (independentFailures.length) {
       return {
         status: 'blocked',
@@ -164,6 +164,17 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
   }
 
   return { status: 'verified', issues, evidence: citations }
+}
+
+function hasIndependentCitationVerification(citation: CitationEvidence): boolean {
+  const verification = citation.verification
+  if (!verification || verification.status !== 'verified') return false
+  if (verification.method !== 'crossref' && verification.method !== 'url_fetch') return false
+  if (typeof verification.checkedAt !== 'string' || !verification.checkedAt.trim()) return false
+  if (verification.retracted === true) return false
+  if (verification.evidenceUrl !== undefined && !isHttpUrl(verification.evidenceUrl)) return false
+  if (verification.method === 'crossref') return typeof citation.doi === 'string' && /^10\.\d{4,9}\/\S+$/i.test(citation.doi.trim())
+  return typeof citation.url === 'string' && isHttpUrl(citation.url)
 }
 
 export function hasVerifiedCitation(citations: CitationEvidence[], citationId: string): boolean {
