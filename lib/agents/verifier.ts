@@ -169,12 +169,16 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
 function hasIndependentCitationVerification(citation: CitationEvidence): boolean {
   const verification = citation.verification
   if (!verification || verification.status !== 'verified') return false
-  if (verification.method !== 'crossref' && verification.method !== 'url_fetch') return false
   if (typeof verification.checkedAt !== 'string' || !verification.checkedAt.trim()) return false
+  if (!Number.isFinite(Date.parse(verification.checkedAt))) return false
   if (verification.retracted === true) return false
-  if (verification.evidenceUrl !== undefined && !isHttpUrl(verification.evidenceUrl)) return false
-  if (verification.method === 'crossref') return typeof citation.doi === 'string' && /^10\.\d{4,9}\/\S+$/i.test(citation.doi.trim())
-  return typeof citation.url === 'string' && isHttpUrl(citation.url)
+  if (!isHttpUrl(verification.evidenceUrl)) return false
+  if (verification.method !== 'crossref') return false
+  return typeof citation.doi === 'string'
+    && /^10\.\d{4,9}\/\S+$/i.test(citation.doi.trim())
+    && verification.titleMatch === true
+    && verification.authorMatch === true
+    && verification.yearMatch === true
 }
 
 export function hasVerifiedCitation(citations: CitationEvidence[], citationId: string): boolean {

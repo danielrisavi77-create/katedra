@@ -23,7 +23,9 @@ verificirani rezultat ranijih koraka.
 Providerov `verified` flag se nikada ne prihvaća kao dokaz. Provider vraća samo
 kandidate, nakon čega server:
 
-- DOI provjerava preko fiksnog Crossref endpointa i uspoređuje naslov/godinu;
+- DOI provjerava preko fiksnog Crossref endpointa i uspoređuje naslov, autore i
+  godinu; strogi verifier dodatno zahtijeva `evidenceUrl`, valjan timestamp i
+  eksplicitno `titleMatch`, `authorMatch` i `yearMatch` odluke;
 - kada su autori navedeni, uspoređuje i imena autora s registarskim zapisom;
 - Crossref relation/update zapisi koji označavaju povlačenje rada blokiraju
   izvor umjesto da ga označe verificiranim;

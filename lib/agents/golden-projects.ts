@@ -22,7 +22,7 @@ const verifiedDoi: CitationEvidence = {
   year: 2024,
   doi: '10.1234/example.2024',
   verified: true,
-  verification: { status: 'verified', method: 'crossref', checkedAt: CHECKED_AT, titleMatch: true, authorMatch: true, yearMatch: true },
+  verification: { status: 'verified', method: 'crossref', checkedAt: CHECKED_AT, evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample.2024', titleMatch: true, authorMatch: true, yearMatch: true },
 }
 
 const verifiedClaim: ClaimEvidence = {

@@ -82,6 +82,34 @@ describe('agent verifier', () => {
     })
   })
 
+  it('rejects incomplete Crossref provenance even when the method is otherwise valid', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s nepotpunim zapisom provjere.',
+      claims: [{ id: 'claim-1', text: 'Tvrdnja s nepotpunim zapisom provjere.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z',
+      } }],
+    })).toMatchObject({
+      status: 'blocked',
+      issues: [{ code: 'unverified_source' }],
+    })
+  })
+
+  it('rejects Crossref provenance that omits metadata match decisions', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s nepotvrđenim metadata podudaranjem.',
+      claims: [{ id: 'claim-1', text: 'Tvrdnja s nepotvrđenim metadata podudaranjem.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample',
+      } }],
+    })).toMatchObject({
+      status: 'blocked',
+      issues: [{ code: 'unverified_source' }],
+    })
+  })
+
   it('requires independent source verification for agentic citation-bound results', () => {
     expect(verifyAgentResult({
       agent: 'writing',
@@ -100,7 +128,7 @@ describe('agent verifier', () => {
       output: 'Tvrdnja s identificiranim izvorom.',
       claims: [{ id: 'claim-1', text: 'Tvrdnja s identificiranim izvorom.', citationIds: ['source-1'] }],
       citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
-        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample', titleMatch: true, authorMatch: true, yearMatch: true,
       } }],
     }, { requireIndependentSourceVerification: true })).toMatchObject({
       status: 'needs_revision',
@@ -119,7 +147,7 @@ describe('agent verifier', () => {
         support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'p. 4' }],
       }],
       citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
-        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample', titleMatch: true, authorMatch: true, yearMatch: true,
       } }],
     }, { requireIndependentSourceVerification: true })).toMatchObject({ status: 'verified' })
   })
@@ -140,7 +168,7 @@ describe('agent verifier', () => {
         }],
       }],
       citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
-        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample', titleMatch: true, authorMatch: true, yearMatch: true,
       } }],
     }, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true })).toMatchObject({
       status: 'needs_revision',
@@ -164,7 +192,7 @@ describe('agent verifier', () => {
         }],
       }],
       citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
-        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample', titleMatch: true, authorMatch: true, yearMatch: true,
       } }],
     }, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true })).toMatchObject({ status: 'verified' })
   })

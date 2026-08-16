@@ -95,7 +95,7 @@ describe('golden academic workflow', () => {
     const verifiedCitations = vi.fn(async (citations: CitationEvidence[]) => citations.map((citation) => ({
       ...citation,
       verified: true,
-      verification: { status: 'verified' as const, method: 'crossref' as const, checkedAt: CHECKED_AT },
+      verification: { status: 'verified' as const, method: 'crossref' as const, checkedAt: CHECKED_AT, evidenceUrl: `https://api.crossref.org/works/${encodeURIComponent(citation.doi || '')}`, titleMatch: true, authorMatch: true, yearMatch: true },
     })))
     const results: AgentStepResultPayloadV1[] = []
     const execute = createProviderBackedExecutor({
