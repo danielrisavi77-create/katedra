@@ -3,7 +3,7 @@
 import { documentText } from '../../../lib/manuscript/model'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 
-export function ReadOnlyManuscriptPreview({ manuscript }: { manuscript: ManuscriptV1 }) {
+export function ReadOnlyManuscriptPreview({ manuscript, automatic = false }: { manuscript: ManuscriptV1; automatic?: boolean }) {
   return (
     <section className="pis-readonly-preview" aria-label="Read-only pregled">
       <header className="pis-readonly-preview-heading">
@@ -19,7 +19,7 @@ export function ReadOnlyManuscriptPreview({ manuscript }: { manuscript: Manuscri
           </section>
         ))}
       </article>
-      <p className="pis-readonly-note">Ovaj pregled prikazuje checkpoint rukopisa. Agenti ne mogu prepisati tvoj glavni lokalni rukopis bez tvog prihvaćanja.</p>
+      <p className="pis-readonly-note">{automatic ? 'Autonomni način primjenjuje samo rezultate koji su prošli provjeru i prije toga stvara lokalni snapshot.' : 'Ovaj pregled prikazuje checkpoint rukopisa. Agenti ne mogu prepisati tvoj glavni lokalni rukopis bez tvog prihvaćanja.'}</p>
     </section>
   )
 }

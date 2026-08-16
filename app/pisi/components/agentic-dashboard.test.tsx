@@ -142,7 +142,6 @@ describe('AgenticDashboard', () => {
   })
 
   it('shows verified worker output in review before it can enter the manuscript', async () => {
-    const user = userEvent.setup()
     const onAcceptDraft = vi.fn().mockResolvedValue(true)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
@@ -153,8 +152,8 @@ describe('AgenticDashboard', () => {
 
     expect(await screen.findByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
     expect(screen.getByDisplayValue('Verificirani novi uvod.')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Prihvati sve spremne za pregled' }))
-    expect(onAcceptDraft).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onAcceptDraft).toHaveBeenCalledTimes(1))
+    expect(await screen.findByText('Autonomni rezultat je automatski spremljen u lokalni rukopis.')).toBeTruthy()
     await waitFor(() => {
       const proposal = screen.getByRole('heading', { level: 3, name: 'Uvod' }).closest('[data-status]')
       expect(proposal?.getAttribute('data-status')).toBe('accepted')
@@ -162,8 +161,23 @@ describe('AgenticDashboard', () => {
     expect(screen.queryByRole('button', { name: 'Prihvati Uvod' })).toBeNull()
   })
 
+  it('automatically applies current verified sections for autonomous runs', async () => {
+    const onAcceptDraft = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      run: { run_id: 'run-auto', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      steps: [{ step_id: 'step-auto', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-auto:1', projectId: 'project-1', runId: 'run-auto', stepId: 'step-auto', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Automatski dodan uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-16T10:01:00.000Z', expiresAt: '2026-08-19T10:01:00.000Z' }],
+    }) }))
+
+    render(<AgenticDashboard runId="run-auto" projectId="project-1" manuscript={manuscript} onAcceptDraft={onAcceptDraft} />)
+
+    await waitFor(() => expect(onAcceptDraft).toHaveBeenCalledTimes(1))
+    expect(onAcceptDraft).toHaveBeenCalledWith(expect.objectContaining({ runId: 'run-auto' }), ['intro'])
+    expect(await screen.findByText('Autonomni rezultat je automatski spremljen u lokalni rukopis.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Prihvati Uvod' })).toBeNull()
+  })
+
   it('does not mark a proposal accepted when the workspace rejects the merge', async () => {
-    const user = userEvent.setup()
     const onAcceptDraft = vi.fn().mockResolvedValue(false)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
@@ -172,11 +186,11 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onAcceptDraft={onAcceptDraft} />)
 
-    await user.click(await screen.findByRole('button', { name: 'Prihvati sve spremne za pregled' }))
-    expect(onAcceptDraft).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onAcceptDraft).toHaveBeenCalledTimes(1))
     const proposal = screen.getByRole('heading', { level: 3, name: 'Uvod' }).closest('[data-status]')
     expect(proposal?.getAttribute('data-status')).toBe('verified')
-    expect(screen.getByRole('button', { name: 'Prihvati Uvod' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Prihvati Uvod' })).toBeNull()
+    expect(screen.getByText(/Autonomni rezultat nije automatski primijenjen/)).toBeTruthy()
     expect(screen.queryByText('Prihvaćeno')).toBeNull()
   })
 
@@ -249,7 +263,7 @@ describe('AgenticDashboard', () => {
   it('invalidates verification when a verified proposal is edited', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
-      run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
+      run: { run_id: 'run-1', project_id: 'project-1', mode: 'guided', status: 'completed' },
       steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
       results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
     }) }))
@@ -269,8 +283,8 @@ describe('AgenticDashboard', () => {
     const resultA = { schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }
     const resultB = { ...resultA, materialId: 'agent-result:step-2:1', stepId: 'step-2', sectionId: 'analysis', output: 'Novi plan analize.', createdAt: '2026-08-14T10:02:00.000Z' }
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ run: { ...runningBody.run, status: 'completed' }, steps: [], results: [resultA] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ run: { ...runningBody.run, status: 'completed' }, steps: [], results: [resultA, resultB] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run: { ...runningBody.run, mode: 'guided', status: 'completed' }, steps: [], results: [resultA] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ run: { ...runningBody.run, mode: 'guided', status: 'completed' }, steps: [], results: [resultA, resultB] }) })
     vi.stubGlobal('fetch', fetchMock)
     const view = render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
@@ -287,7 +301,7 @@ describe('AgenticDashboard', () => {
   it('restores a local proposal edit after the dashboard is remounted', async () => {
     const user = userEvent.setup()
     const result = { schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Verificirani novi uvod.', citations: [], verification: { status: 'verified', issues: [], evidence: [] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ run: { ...runningBody.run, status: 'completed' }, steps: [], results: [result] }) })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ run: { ...runningBody.run, mode: 'guided', status: 'completed' }, steps: [], results: [result] }) })
     vi.stubGlobal('fetch', fetchMock)
     const first = render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
     const editor = await screen.findByRole('textbox', { name: 'Prijedlog za Uvod' })

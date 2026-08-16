@@ -13,7 +13,7 @@ export type AgenticReviewClaim = { id: string; text: string; citationIds: string
 export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[]; claims?: AgenticReviewClaim[] }
 export type AgenticReviewDraft = Omit<AgenticDraftV1, 'sections'> & { sections: AgenticReviewRevision[] }
 
-export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticReviewDraft; onAccept: (sectionIds?: string[]) => Promise<boolean>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
+export function AgenticReview({ manuscript, draft, automatic = false, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticReviewDraft; automatic?: boolean; onAccept: (sectionIds?: string[]) => Promise<boolean>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
   const [acceptedSectionIds, setAcceptedSectionIds] = useState<Set<string>>(() => new Set())
   const verifiedIds = draft.sections.filter((revision) => !acceptedSectionIds.has(revision.sectionId) && isAcceptable(manuscript, revision)).map((revision) => revision.sectionId)
   const textareas = useRef<Record<string, HTMLTextAreaElement | null>>({})
@@ -28,14 +28,14 @@ export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }:
   }
 
   return <section className="pis-agentic-review" aria-labelledby="pis-agentic-review-title">
-    <header className="pis-agentic-dashboard-heading"><div><p className="pis-kicker">Tvoja potvrda</p><h2 id="pis-agentic-review-title">Pregled rezultata</h2><p>Pregledaj izvore i prijedloge. Automatska provjera potvrđuje strukturu i dokazni trag, ali ne potvrđuje sama istinitost tvrdnje; glavni rukopis se do tada ne mijenja.</p></div><span className="pis-agent-run-mode">{verifiedIds.length} spremno</span></header>
-    <div className="pis-review-actions"><span>Glavni rukopis se još nije promijenio.</span><button type="button" className="is-primary" disabled={verifiedIds.length === 0} onClick={() => void accept()} aria-label="Prihvati sve spremne za pregled">Prihvati sve spremne za pregled</button></div>
+    <header className="pis-agentic-dashboard-heading"><div><p className="pis-kicker">{automatic ? 'Autonomni tijek' : 'Tvoja potvrda'}</p><h2 id="pis-agentic-review-title">Pregled rezultata</h2><p>{automatic ? 'Rezultati su prošli automatsku strukturnu i dokaznu provjeru te se primjenjuju u lokalni rukopis uz prethodni snapshot. To nije dokaz potpune istinitosti tvrdnji.' : 'Pregledaj izvore i prijedloge. Automatska provjera potvrđuje strukturu i dokazni trag, ali ne potvrđuje sama istinitost tvrdnje; glavni rukopis se do tada ne mijenja.'}</p></div><span className="pis-agent-run-mode">{verifiedIds.length} spremno</span></header>
+    {!automatic && <div className="pis-review-actions"><span>Glavni rukopis se još nije promijenio.</span><button type="button" className="is-primary" disabled={verifiedIds.length === 0} onClick={() => void accept()} aria-label="Prihvati sve spremne za pregled">Prihvati sve spremne za pregled</button></div>}
     <div className="pis-review-list">{draft.sections.map((revision) => {
       const section = manuscript.sections.find((item) => item.id === revision.sectionId)
       if (!section) return <p key={revision.sectionId} className="pis-agent-message" role="alert">Sekcija nije pronađena u glavnom rukopisu.</p>
       const locallyAccepted = acceptedSectionIds.has(revision.sectionId) || revision.status === 'accepted'
       const acceptable = !locallyAccepted && isAcceptable(manuscript, revision)
-      const canReview = !locallyAccepted && !['accepted', 'rejected'].includes(revision.status)
+      const canReview = !automatic && !locallyAccepted && !['accepted', 'rejected'].includes(revision.status)
       const evidence = revision.evidence || []
       return <article key={revision.sectionId} className="pis-review-item" data-status={revision.status}>
         <header><div><p className="pis-kicker">{locallyAccepted ? 'Prihvaćeno' : reviewStatus(revision.status)}</p><h3>{section.title}</h3></div><span>{locallyAccepted ? 'Prihvaćeno' : acceptable ? 'Spremno za pregled' : 'Pregledaj rezultat'}</span></header>

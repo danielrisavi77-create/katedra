@@ -24,6 +24,7 @@ export interface RunStudioEvent {
   attempt?: 1 | 2 | 3
   sources?: RunStudioSource[]
   details?: string[]
+  automatic?: boolean
 }
 
 export interface RunStudioStatus {
@@ -72,6 +73,7 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
   const results = input.results || []
   const resultByStep = new Map(results.map((result, index) => [stringValue(result.stepId || result.step_id) || `result-${index}`, result]))
   const runStatus = stringValue(input.run?.status) || 'pending'
+  const automatic = stringValue(input.run?.mode) === 'autonomous'
 
   events.push({
     id: 'run-started',
@@ -80,6 +82,7 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
     status: runStatus === 'paused' ? 'waiting' : 'complete',
     title: runStatus === 'paused' ? 'Tijek je pauziran' : 'Tijek izrade je pokrenut',
     summary: modeSummary(stringValue(input.run?.mode)),
+    automatic,
   })
 
   let waitingAdded = false
@@ -124,7 +127,8 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
         kind: 'step_verified',
         status: 'complete',
         title: 'Automatska provjera je završila korak',
-        summary: 'Korak je prošao strukturnu provjeru; pregledaj sadržaj prije prihvaćanja.',
+        summary: automatic ? 'Korak je prošao strukturnu provjeru; verificirani rezultat ide u automatsko spremanje.' : 'Korak je prošao strukturnu provjeru; pregledaj sadržaj prije prihvaćanja.',
+        automatic,
       })
       continue
     }
@@ -181,12 +185,13 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
       actor: 'katedra',
       kind: 'result_ready',
       status: verificationStatus === 'blocked' ? 'warning' : 'complete',
-      title: 'Rezultat čeka tvoju odluku',
-      summary: sources.length ? `Pronađeno je ${sources.length} izvora uz ovaj rezultat.` : 'Pregledaj prijedlog prije nego ga uneseš u rukopis.',
+      title: automatic ? 'Rezultat se automatski sprema' : 'Rezultat čeka tvoju odluku',
+      summary: automatic ? 'Rezultat je prošao provjeru i primjenjuje se u lokalni rukopis uz prethodni snapshot.' : sources.length ? `Pronađeno je ${sources.length} izvora uz ovaj rezultat.` : 'Pregledaj prijedlog prije nego ga uneseš u rukopis.',
       occurredAt: stringValue(result.createdAt || result.created_at) || undefined,
       sectionId,
       sources,
       details: verificationIssues(result.verification),
+      automatic,
     })
     for (const source of sources.filter((item) => item.verified)) {
       events.push({
@@ -218,7 +223,7 @@ export function currentRunStudioStatus(events: RunStudioEvent[]): RunStudioStatu
   const waiting = events.find((event) => event.kind === 'step_waiting')
   if (waiting) return { state: 'waiting', label: waiting.title, summary: waiting.summary, nextAction: 'Tijek će nastaviti kada prethodna provjera završi.', sectionId: waiting.sectionId, attempt: waiting.attempt }
   const result = events.find((event) => event.kind === 'result_ready')
-  if (result) return { state: 'complete', label: 'Rezultat je spreman za pregled', summary: result.summary, nextAction: 'Pregledaj prijedlog i odluči što ulazi u rukopis.', sectionId: result.sectionId }
+  if (result) return result.automatic ? { state: 'complete', label: 'Rezultat se automatski sprema', summary: result.summary, nextAction: 'Provjeri lokalni snapshot nakon završetka tijeka.', sectionId: result.sectionId } : { state: 'complete', label: 'Rezultat je spreman za pregled', summary: result.summary, nextAction: 'Pregledaj prijedlog i odluči što ulazi u rukopis.', sectionId: result.sectionId }
   if (events.some((event) => event.kind === 'step_verified')) return { state: 'complete', label: 'Tijek je završen', summary: 'Svi koraci u ovom tijeku prošli su strukturnu provjeru.', nextAction: 'Pregledaj rukopis ili započni novu verziju.' }
   return { state: 'waiting', label: 'Tijek je pripremljen', summary: 'Čekaju se prvi događaji izrade.', nextAction: 'Pokreni tijek ili pokušaj ponovno učitati stanje.' }
 }
@@ -269,7 +274,7 @@ function normalizeAttempt(value: unknown): 1 | 2 | 3 {
 }
 
 function modeSummary(mode: string): string {
-  return ({ guided: 'Radiš uz potvrdu ključnih koraka.', accelerated: 'Katedra ubrzava proces, a ti potvrđuješ važne rezultate.', autonomous: 'Katedra radi kroz odobreni opseg i zaustavlja se na provjeri ili problemu.' } as Record<string, string>)[mode] || 'Proces se izvršava kroz provjerene kontrolne točke.'
+  return ({ guided: 'Radiš uz potvrdu ključnih koraka.', accelerated: 'Katedra ubrzava proces, a ti potvrđuješ važne rezultate.', autonomous: 'Katedra automatski primjenjuje samo verificirane rezultate unutar odobrenog opsega.' } as Record<string, string>)[mode] || 'Proces se izvršava kroz provjerene kontrolne točke.'
 }
 
 function humanize(value: string): string {

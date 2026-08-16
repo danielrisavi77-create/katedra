@@ -24,6 +24,9 @@ type LocalDraftOverride = {
   updatedAt: string
 }
 
+type AutonomousMergeState = 'idle' | 'merging' | 'merged' | 'failed'
+type AutonomousMergeStatus = { state: AutonomousMergeState; scope: string }
+
 const DRAFT_STORAGE_PREFIX = 'katedra_agent_draft_v1:'
 
 export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft, onOpenSection, onOpenAssistant }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean>; onOpenSection?: (sectionId: string) => void; onOpenAssistant?: (sectionId?: string) => void }) {
@@ -33,12 +36,15 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
   const [loading, setLoading] = useState(true)
   const [retryable, setRetryable] = useState(false)
   const [runResults, setRunResults] = useState<Record<string, unknown>[]>([])
+  const [autonomousMerge, setAutonomousMerge] = useState<AutonomousMergeStatus>({ state: 'idle', scope: '' })
   const resultSignature = useRef('')
   const localOverridesRef = useRef<Record<string, LocalDraftOverride>>({})
+  const autonomousMergeKeyRef = useRef('')
 
   useEffect(() => {
     localOverridesRef.current = readDraftOverrides(projectId, runId)
     resultSignature.current = ''
+    autonomousMergeKeyRef.current = ''
   }, [projectId, runId])
 
   const refresh = useCallback(async () => {
@@ -159,7 +165,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     } : current)
   }
 
-  const acceptDraft = async (sectionIds?: string[]) => {
+  const acceptDraft = useCallback(async (sectionIds?: string[]) => {
     if (!draft || !onAcceptDraft) {
       setMessage('Verificirani rezultat nije moguće prihvatiti bez spremanja u glavni rukopis.')
       return false
@@ -187,7 +193,29 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     }
     persistDraftOverrides(projectId, runId, localOverridesRef.current)
     return true
-  }
+  }, [draft, manuscript, onAcceptDraft, projectId, runId])
+
+  useEffect(() => {
+    if (run?.mode !== 'autonomous' || run.status !== 'completed' || !draft || !onAcceptDraft) return
+    const sectionIds = draft.sections
+      .filter((revision) => revision.status === 'verified' && manuscript.sections.some((section) => section.id === revision.sectionId && section.updatedAt === revision.baseRevision))
+      .map((revision) => revision.sectionId)
+    if (!sectionIds.length) return
+
+    const mergeKey = `${run.runId}:${sectionIds.join(',')}:${draft.updatedAt}`
+    if (autonomousMergeKeyRef.current === mergeKey) return
+    autonomousMergeKeyRef.current = mergeKey
+    const mergeScope = `${projectId}:${run.runId}`
+    setAutonomousMerge({ state: 'merging', scope: mergeScope })
+    let cancelled = false
+    void acceptDraft(sectionIds).then((merged) => {
+      if (cancelled) return
+      setAutonomousMerge({ state: merged ? 'merged' : 'failed', scope: mergeScope })
+    })
+    return () => { cancelled = true }
+  }, [acceptDraft, draft, manuscript.sections, onAcceptDraft, projectId, run])
+
+  const visibleAutonomousMergeState = autonomousMerge.scope === `${projectId}:${run?.runId || ''}` ? autonomousMerge.state : 'idle'
 
   return <section className="pis-agentic-dashboard" aria-live="polite" aria-busy={loading}>
     <header className="pis-agentic-dashboard-heading">
@@ -208,11 +236,14 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
         <AgenticTimeline steps={run?.steps || []} />
       </div>
       <aside className="pis-agentic-studio-context" aria-label="Kontekst procesa">
-        <div className="pis-agentic-current-step"><p className="pis-kicker">Sljedeća radnja</p><strong>{run ? studioStatus.nextAction : 'Pokreni tijek za prikaz procesa.'}</strong>{studioStatus.attempt && <span>Pokušaj {studioStatus.attempt}/3</span>}{onOpenAssistant && <button type="button" className="pis-agentic-ask-button" onClick={() => onOpenAssistant(studioStatus.sectionId || activeStep?.sectionId)}>Pitaj Katedru o ovom koraku</button>}</div>
-        <ReadOnlyManuscriptPreview manuscript={manuscript} />
+        <div className="pis-agentic-current-step"><p className="pis-kicker">Sljedeća radnja</p><strong>{visibleAutonomousMergeState === 'merging' ? 'Spremam verificirani rezultat u lokalni rukopis.' : visibleAutonomousMergeState === 'merged' ? 'Autonomni tijek je završen i rukopis je spremljen.' : run ? studioStatus.nextAction : 'Pokreni tijek za prikaz procesa.'}</strong>{studioStatus.attempt && <span>Pokušaj {studioStatus.attempt}/3</span>}{onOpenAssistant && <button type="button" className="pis-agentic-ask-button" onClick={() => onOpenAssistant(studioStatus.sectionId || activeStep?.sectionId)}>Pitaj Katedru o ovom koraku</button>}</div>
+        <ReadOnlyManuscriptPreview manuscript={manuscript} automatic={run?.mode === 'autonomous'} />
       </aside>
     </div>
-    {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
+    {visibleAutonomousMergeState === 'merging' && <p className="pis-agentic-auto-status" role="status">Autonomni rezultat se automatski sprema u lokalni rukopis.</p>}
+    {visibleAutonomousMergeState === 'merged' && <p className="pis-agentic-auto-status is-complete" role="status">Autonomni rezultat je automatski spremljen u lokalni rukopis.</p>}
+    {visibleAutonomousMergeState === 'failed' && <p className="pis-agentic-blocked" role="alert">Autonomni rezultat nije automatski primijenjen jer se rukopis promijenio. Tvoj izvorni tekst je ostao siguran.</p>}
+    {draft && draft.sections.length > 0 && <AgenticReview automatic={run?.mode === 'autonomous'} manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
     {message && <><p className="pis-agent-message" role="alert">{message}</p>{retryable && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
   </section>
 }

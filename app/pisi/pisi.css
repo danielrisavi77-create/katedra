@@ -657,6 +657,8 @@ html[data-theme='dark'] .pis-agent-studio-open-writing { color: var(--pis-yellow
 .pis-agentic-dashboard-actions button:focus-visible { outline: 2px solid var(--pis-yellow); outline-offset: 3px; }
 .pis-agentic-blocked { margin: 0; padding: 13px 14px; border-left: 3px solid var(--pis-red); background: color-mix(in srgb, var(--pis-red), transparent 90%); color: var(--pis-muted); font-size: 11px; line-height: 1.5; }
 .pis-agentic-blocked strong { display: inline-block; margin-right: 7px; color: var(--pis-red); }
+.pis-agentic-auto-status { margin: 0; padding: 12px 14px; border-left: 3px solid var(--pis-yellow); background: color-mix(in srgb, var(--pis-yellow), transparent 86%); color: var(--pis-muted); font-size: 11px; line-height: 1.5; }
+.pis-agentic-auto-status.is-complete { border-left-color: var(--pis-success); background: color-mix(in srgb, var(--pis-success), transparent 90%); }
 .pis-agentic-dashboard-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 28px; align-items: start; }
 .pis-agentic-timeline, .pis-readonly-preview { min-width: 0; }
 .pis-agentic-studio-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(290px, .75fr); gap: 30px; align-items: start; }
