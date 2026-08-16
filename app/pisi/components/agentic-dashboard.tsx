@@ -263,6 +263,7 @@ function normalizeEvidence(result: Record<string, unknown>, verification: Record
     const item = value as Record<string, unknown>
     const id = typeof item.id === 'string' ? item.id : ''
     const title = typeof item.title === 'string' ? item.title : undefined
+    const authors = typeof item.authors === 'string' ? item.authors.slice(0, 500) : undefined
     const candidateUrl = typeof item.url === 'string' ? item.url : ''
     const url = isSafeManuscriptHref(candidateUrl) ? candidateUrl : undefined
     const doi = typeof item.doi === 'string' ? item.doi : undefined
@@ -273,7 +274,7 @@ function normalizeEvidence(result: Record<string, unknown>, verification: Record
     const status = verification?.retracted === true
       ? 'Povučen izvor'
       : typeof item.status === 'string' ? item.status : undefined
-    return [{ id: key, title, url, doi, verified: item.verified === true, status }]
+    return [{ id: key, title, authors, url, doi, verified: item.verified === true, status }]
   })
 }
 

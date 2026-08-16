@@ -751,6 +751,14 @@ html[data-theme='dark'] .pis-agent-studio-open-writing { color: var(--pis-yellow
 .pis-review-diff-version.is-proposed { border-left-color: var(--pis-yellow); }
 .pis-review-diff-version > span { color: var(--pis-muted); font: 700 9px/1.2 Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; }
 .pis-review-diff-version p { margin: 8px 0 0; color: var(--pis-ink); font: 12px/1.55 Georgia, 'Times New Roman', serif; white-space: pre-wrap; }
+.pis-review-evidence { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--pis-line); }
+.pis-review-evidence > strong { color: var(--pis-ink); font: 700 10px/1.2 Arial, sans-serif; letter-spacing: .05em; text-transform: uppercase; }
+.pis-review-evidence > ul { display: grid; gap: 7px; margin: 8px 0 0; padding: 0; list-style: none; }
+.pis-review-evidence > ul > li { display: grid; gap: 2px; padding-left: 10px; border-left: 2px solid var(--pis-line-strong); color: var(--pis-muted); font-size: 10px; line-height: 1.35; }
+.pis-review-evidence > ul > li > span { color: var(--pis-ink); font-weight: 700; }
+.pis-review-evidence > ul > li > a { overflow-wrap: anywhere; color: var(--pis-blue-dark); font-size: 9px; }
+.pis-review-evidence > ul > li > em { color: var(--pis-muted); font: 700 8px/1.2 Arial, sans-serif; letter-spacing: .05em; text-transform: uppercase; }
+.pis-review-evidence > p { margin: 8px 0 0; color: var(--pis-muted); font-size: 10px; }
 .pis-review-verification { margin: 10px 0 0; color: var(--pis-muted); font-size: 10px; line-height: 1.5; }
 .pis-review-verification strong { color: var(--pis-ink); font-weight: 700; }
 .pis-review-claims { margin-top: 14px; padding: 14px; border: 1px solid var(--pis-line-strong); background: var(--pis-paper-deep); }
@@ -771,6 +779,7 @@ html[data-theme='dark'] .pis-agent-studio-open-writing { color: var(--pis-yellow
 .pis-review-item-actions button:disabled { border-color: var(--pis-line); background: var(--pis-line); color: var(--pis-faint); cursor: not-allowed; }
 html[data-theme='dark'] .pis-review-actions button:not(:disabled),
 html[data-theme='dark'] .pis-review-item-actions button:not(:disabled) { color: var(--pis-yellow); }
+html[data-theme='dark'] .pis-review-evidence > ul > li > a { color: var(--pis-yellow); }
 html[data-theme='dark'] .pis-agent-run-mode,
 html[data-theme='dark'] .pis-readonly-preview-heading > span { color: var(--pis-yellow); }
 html[data-theme='dark'] .pis-agentic-dashboard-actions button { color: var(--pis-yellow); }

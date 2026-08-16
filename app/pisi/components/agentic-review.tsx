@@ -7,7 +7,7 @@ import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 
-export type AgenticReviewEvidence = { id: string; title?: string; url?: string; doi?: string; verified?: boolean; status?: string }
+export type AgenticReviewEvidence = { id: string; title?: string; authors?: string; url?: string; doi?: string; verified?: boolean; status?: string }
 export type AgenticReviewSupport = { citationId: string; quote: string; locator?: string }
 export type AgenticReviewClaim = { id: string; text: string; citationIds: string[]; support?: AgenticReviewSupport[] }
 export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[]; claims?: AgenticReviewClaim[] }
@@ -49,7 +49,7 @@ export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }:
         <textarea ref={(element) => { textareas.current[section.id] = element }} aria-label={`Prijedlog za ${section.title}`} value={documentText(revision.proposedContent)} onChange={(event) => onEdit(section.id, plainTextDocument(event.target.value))} readOnly={!canReview} />
         <div className="pis-review-evidence" aria-label={`Izvori za ${section.title}`}>
           <strong>Izvori i dokazi</strong>
-          {evidence.length > 0 ? <ul>{evidence.map((item) => <li key={item.id}><span>{item.title || item.url || item.doi || 'Neimenovani izvor'}</span>{item.url && isSafeManuscriptHref(item.url) && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}{item.doi && <small>DOI: {item.doi}</small>}<em>{item.verified ? 'Provjereno' : item.status || 'Potrebna provjera'}</em></li>)}</ul> : <p>Nema priloženih izvora za ovaj rezultat.</p>}
+          {evidence.length > 0 ? <ul>{evidence.map((item) => <li key={item.id}><span>{item.title || item.url || item.doi || 'Neimenovani izvor'}</span>{item.authors && <small>{item.authors}</small>}{item.url && isSafeManuscriptHref(item.url) && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}{item.doi && <small>DOI: {item.doi}</small>}<em>{item.verified ? 'Provjereno' : item.status || 'Potrebna provjera'}</em></li>)}</ul> : <p>Nema priloženih izvora za ovaj rezultat.</p>}
         </div>
         {revision.claims && revision.claims.length > 0 && <div className="pis-review-claims" aria-label={`Tvrdnje i dokazni trag za ${section.title}`}>
           <div className="pis-review-claims-heading"><strong>Tvrdnje i dokazni trag</strong><span>{revision.claims.length} tvrdnji</span></div>
