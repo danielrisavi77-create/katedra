@@ -152,4 +152,16 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
     await expect(response.json()).resolves.toEqual({ status: 'initializing', stepsProcessed: 0 })
     expect(mocks.runAgentWorkerLoop).not.toHaveBeenCalled()
   })
+
+  it('does not construct an AI execution for a paused run', async () => {
+    mocks.createAdminClient.mockReturnValue(database({ ...run, status: 'paused' }))
+    const { POST } = await loadRoute()
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ status: 'paused', stepsProcessed: 0 })
+    expect(mocks.createAnthropicAgentProvider).not.toHaveBeenCalled()
+    expect(mocks.runAgentWorkerLoop).not.toHaveBeenCalled()
+  })
 })
