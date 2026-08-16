@@ -28,6 +28,16 @@ Worker rezultat nije canonical rukopis niti nova tablica u Katedri. Worker ga sp
   je dopuštena samo tijekom inicijalizacije ili pauzirane/blokirane intervencije.
 - Temporary payload ima default TTL 72 sata i apsolutni TTL 7 dana.
 
+Neovisni verifier prolaza vraća strukturirani rezultat s `claims`, `provider`,
+`model`, `usage` kada ga gateway može dokazati i ishodom
+`verified`/`needs_review`/`blocked`. Katedra za taj poziv stvara zaseban
+`requestId` s nastavkom `:passage` i u operativni ledger zapisuje samo
+identitet zahtjeva, providera, model, pokušaj, trajanje, tokene, broj citata i
+ishod. Rukopis, prompt, odgovor providera i citati ne ulaze u log. Ako gateway
+ne vrati usage, događaj dobiva `verifier_usage_missing`; takav zapis nije dokaz
+da je verifier billing poravnat i ne smije sam uključiti agenticni production
+feature flag.
+
 ## Required functions
 
 Implementirati atomic `lock_paid_project`, `create_agent_run`, `claim_agent_step`, `complete_agent_step`, `attach_agent_payloads_to_run`, `replace_agent_payloads_for_run` i idempotent cleanup funkciju u Lekta migration historyju. Katedra ih može uključiti tek nakon staging provjere i postavljanja `KATEDRA_PROJECT_LOCKS_ENABLED=true` i `KATEDRA_AGENT_RUNS_ENABLED=true`.

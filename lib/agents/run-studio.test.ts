@@ -112,8 +112,8 @@ describe('Run Studio event projection', () => {
     })
 
     expect(eventsByKind(events, 'step_verified')[0]).toMatchObject({
-      title: 'Automatska provjera je završila korak',
-      summary: 'Korak je prošao strukturnu provjeru; pregledaj sadržaj prije prihvaćanja.',
+      title: 'Provjera je završila korak',
+      summary: 'Rezultat ima provjereni trag strukture i izvora; pregledaj sadržaj prije prihvaćanja.',
     })
   })
   it('keeps a paused run visibly paused even when it has no active step', () => {

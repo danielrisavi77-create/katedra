@@ -27,4 +27,12 @@ describe('AgenticProcessPreview', () => {
     expect(screen.getByText(/Samo tvoji materijali/)).toBeTruthy()
     expect(screen.getByText(/Svaki rezultat prolazi zasebnu provjeru/)).toBeTruthy()
   })
+
+  it('keeps internal agent names behind expandable technical details', () => {
+    render(<AgenticProcessPreview mode="guided" sourcePolicy="uploaded_only" />)
+
+    expect(screen.queryByText('Intake agent')).toBeNull()
+    expect(screen.queryByText('Sources agent')).toBeNull()
+    expect(screen.getAllByText('Tehnički detalji')).toHaveLength(5)
+  })
 })

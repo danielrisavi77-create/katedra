@@ -1,4 +1,4 @@
-import type { ClaimEvidence, ClaimSupport, CitationEvidence, ClaimSupportAssessment, ClaimSupportVerificationStatus } from './contracts'
+import type { ClaimEvidence, ClaimSupport, CitationEvidence, ClaimSupportAssessment, ClaimSupportVerificationStatus, UsageRecord } from './contracts'
 
 const DEFAULT_TIMEOUT_MS = 20_000
 const MAX_RESPONSE_BYTES = 1_500_000
@@ -15,7 +15,15 @@ export interface PassageVerifierInput {
 }
 
 export interface PassageVerifier {
-  verify(input: PassageVerifierInput): Promise<ClaimEvidence[]>
+  verify(input: PassageVerifierInput): Promise<PassageVerificationResult>
+}
+
+export interface PassageVerificationResult {
+  claims: ClaimEvidence[]
+  provider: string
+  model: string
+  usage?: UsageRecord
+  outcome: 'verified' | 'needs_review' | 'blocked'
 }
 
 interface PassageDecision {
@@ -38,6 +46,7 @@ export function createGatewayPassageVerifier({
   endpoint,
   apiKey,
   model,
+  provider = 'independent-verifier-gateway',
   fetchImpl = fetch,
   now = () => new Date().toISOString(),
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -45,6 +54,7 @@ export function createGatewayPassageVerifier({
   endpoint: string
   apiKey: string
   model: string
+  provider?: string
   fetchImpl?: FetchImplementation
   now?: () => string
   timeoutMs?: number
@@ -69,11 +79,12 @@ export function createGatewayPassageVerifier({
           projectId: input.projectId,
           runId: input.runId,
         })
-        const decisions = readDecisions(response)
-        if (!decisions) return markNeedsReview(originalClaims, checkedAt)
-        return annotateClaims(originalClaims, decisions, checkedAt)
+        const gateway = readGatewayPayload(response)
+        if (!gateway) return createResult(markNeedsReview(originalClaims, checkedAt), provider, model, undefined)
+        const claims = annotateClaims(originalClaims, gateway.decisions, checkedAt)
+        return createResult(claims, provider, model, gateway.usage)
       } catch {
-        return markNeedsReview(originalClaims, checkedAt)
+        return createResult(markNeedsReview(originalClaims, checkedAt), provider, model, undefined)
       }
     },
   }
@@ -144,7 +155,7 @@ function publicClaim(claim: ClaimEvidence): Record<string, unknown> {
   }
 }
 
-function readDecisions(value: unknown): PassageDecision[] | null {
+function readGatewayPayload(value: unknown): { decisions: PassageDecision[]; usage?: UsageRecord } | null {
   let candidate = value
   if (isRecord(candidate) && typeof candidate.output === 'string') {
     try {
@@ -154,23 +165,36 @@ function readDecisions(value: unknown): PassageDecision[] | null {
     }
   }
   if (!isRecord(candidate) || !Array.isArray(candidate.decisions)) return null
-  return candidate.decisions.flatMap((item) => {
+  const decisions = candidate.decisions.flatMap((item) => {
     if (!isRecord(item)) return []
     const status = item.status
     const claimSupported = item.claimSupported
     if (typeof item.claimId !== 'string' || typeof item.citationId !== 'string' || typeof item.quote !== 'string') return []
     if (status !== 'verified' && status !== 'needs_review' && status !== 'blocked') return []
-    return [{
+    const decision: PassageDecision = {
       claimId: item.claimId.trim().slice(0, 200),
       citationId: item.citationId.trim().slice(0, 200),
       quote: item.quote.trim().slice(0, 2_000),
       ...(typeof item.locator === 'string' && item.locator.trim() ? { locator: item.locator.trim().slice(0, 200) } : {}),
-      status,
-      ...(claimSupported === 'supported' || claimSupported === 'unclear' || claimSupported === 'contradicted' ? { claimSupported } : {}),
+      status: status as ClaimSupportVerificationStatus,
+      ...(claimSupported === 'supported' || claimSupported === 'unclear' || claimSupported === 'contradicted' ? { claimSupported: claimSupported as ClaimSupportAssessment } : {}),
       ...(typeof item.confidence === 'number' && Number.isFinite(item.confidence) ? { confidence: clamp(item.confidence) } : {}),
       ...(typeof item.evidenceUrl === 'string' && isHttpUrl(item.evidenceUrl) ? { evidenceUrl: item.evidenceUrl.trim() } : {}),
-    }]
+    }
+    return [decision]
   })
+  const usage = isUsage(candidate.usage) ? candidate.usage : undefined
+  return { decisions, ...(usage ? { usage } : {}) }
+}
+
+function createResult(claims: ClaimEvidence[], provider: string, model: string, usage: UsageRecord | undefined): PassageVerificationResult {
+  const supports = claims.flatMap((claim) => claim.support || [])
+  const outcome = supports.some((support) => support.verification?.status === 'blocked')
+    ? 'blocked'
+    : supports.length > 0 && supports.every((support) => support.verification?.status === 'verified')
+      ? 'verified'
+      : 'needs_review'
+  return { claims, provider, model, outcome, ...(usage ? { usage } : {}) }
 }
 
 function annotateClaims(claims: ClaimEvidence[], decisions: PassageDecision[], checkedAt: string): ClaimEvidence[] {
@@ -235,4 +259,12 @@ function isHttpUrl(value: string): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isUsage(value: unknown): value is UsageRecord {
+  if (!isRecord(value)) return false
+  return Number.isInteger(value.inputTokens)
+    && Number.isInteger(value.outputTokens)
+    && Number(value.inputTokens) >= 0
+    && Number(value.outputTokens) >= 0
 }

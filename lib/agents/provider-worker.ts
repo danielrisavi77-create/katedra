@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { documentText } from '../manuscript/model'
 import type { ManuscriptV1 } from '../manuscript/types'
 import type { AgentInput, AgentProvider, AgentResultV1, ClaimEvidence, CitationEvidence } from './contracts'
+import type { PassageVerificationResult } from './passage-verification'
 import type { ProviderRouter } from './provider-router'
 import { executeBilledAgentProvider, type BillingDatabase } from './billed-provider-execution'
 import type { AgentStepRecord } from './run-state'
@@ -25,7 +26,7 @@ export function createProviderBackedExecutor(input: {
   loadMaterials?: () => Promise<RunMaterialContext[]>
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
-  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[] }) => Promise<ClaimEvidence[]>
+  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[] }) => Promise<ClaimEvidence[] | PassageVerificationResult>
   sourcePolicy?: SourcePolicy
   billing: { db: BillingDatabase; userId: string; model?: string; modelFor?: (provider: AgentProvider, step: AgentStepRecord) => string; requestIdFor?: (step: AgentStepRecord) => string }
   router: Pick<ProviderRouter, 'providerFor'>
@@ -67,9 +68,10 @@ export function createProviderBackedExecutor(input: {
         : []
       const candidateCitations = mergeCitations([...inheritedCitations, ...result.citations, ...inheritedArtifacts])
       const citations = input.verifyCitations ? await input.verifyCitations(candidateCitations) : candidateCitations
-      const claims = result.claims && input.verifyPassages
-        ? await input.verifyPassages({ projectId: input.projectId, runId: input.runId, claims: result.claims, citations })
-        : result.claims
+      const passageVerification = result.claims && input.verifyPassages
+        ? await verifyPassagesWithTelemetry(input, step, requestId, result.claims, citations)
+        : undefined
+      const claims = passageVerification?.claims || result.claims
       logAgentEvent({
         eventName: 'agent_provider_completed',
         requestId,
@@ -110,6 +112,71 @@ export function createProviderBackedExecutor(input: {
       throw error
     }
   }
+}
+
+async function verifyPassagesWithTelemetry(
+  input: {
+    projectId: string
+    runId: string
+    verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[] }) => Promise<ClaimEvidence[] | PassageVerificationResult>
+    billing: { userId: string }
+  },
+  step: AgentStepRecord,
+  requestId: string,
+  claims: ClaimEvidence[],
+  citations: CitationEvidence[],
+): Promise<PassageVerificationResult> {
+  const startedAt = Date.now()
+  const verifierRequestId = `${requestId}:passage`
+  try {
+    const raw = await input.verifyPassages?.({ projectId: input.projectId, runId: input.runId, claims, citations })
+    const result = Array.isArray(raw)
+      ? { claims: raw, provider: 'configured-passage-verifier', model: 'unknown', outcome: summarizePassageOutcome(raw) as PassageVerificationResult['outcome'] }
+      : raw
+    if (!result) throw new Error('Passage verifier nije vratio rezultat.')
+    logAgentEvent({
+      eventName: 'agent_passage_verifier_completed',
+      requestId: verifierRequestId,
+      billingRequestId: verifierRequestId,
+      userId: input.billing.userId,
+      projectId: input.projectId,
+      runId: input.runId,
+      agent: step.agent,
+      provider: result.provider,
+      model: result.model,
+      attempt: step.attempt,
+      latencyMs: Date.now() - startedAt,
+      inputTokens: result.usage?.inputTokens,
+      outputTokens: result.usage?.outputTokens,
+      citationCount: citations.length,
+      outcome: result.outcome,
+      ...(result.usage ? {} : { reason: 'verifier_usage_missing' }),
+    })
+    return result
+  } catch (error) {
+    logAgentEvent({
+      eventName: 'agent_passage_verifier_failed',
+      requestId: verifierRequestId,
+      billingRequestId: verifierRequestId,
+      userId: input.billing.userId,
+      projectId: input.projectId,
+      runId: input.runId,
+      agent: step.agent,
+      attempt: step.attempt,
+      latencyMs: Date.now() - startedAt,
+      citationCount: citations.length,
+      outcome: 'failed',
+      reason: error instanceof Error ? error.name : 'unknown',
+    })
+    throw error
+  }
+}
+
+function summarizePassageOutcome(claims: ClaimEvidence[]): PassageVerificationResult['outcome'] {
+  const supports = claims.flatMap((claim) => claim.support || [])
+  if (supports.some((support) => support.verification?.status === 'blocked')) return 'blocked'
+  if (supports.length > 0 && supports.every((support) => support.verification?.status === 'verified')) return 'verified'
+  return 'needs_review'
 }
 
 function normalizeBillingRequestId(value: string): string {

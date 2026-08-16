@@ -78,7 +78,7 @@ export function AgenticTimeline({ steps }: { steps: AgenticTimelineStep[] }) {
           const issue = step.lastVerification?.issues?.find((item) => item.message)?.message
           return <li key={step.id} data-status={step.status} data-state={summary.state}>
             <span className="pis-timeline-marker" aria-hidden="true">{step.status === 'verified' ? '✓' : step.status === 'blocked' ? '!' : step.status === 'running' || step.status === 'retrying' ? '→' : '·'}</span>
-            <div className="pis-timeline-step-copy"><b>{summary.phaseLabel}</b><small>{summary.agentLabel} · {summary.verifierLabel} · Pokušaj {summary.attempt}/3{usageLabel(step.usage) ? ` · ${usageLabel(step.usage)}` : ''}</small><p className="pis-timeline-next">{summary.nextAction}</p>{issue && <p>{issue}</p>}</div>
+            <div className="pis-timeline-step-copy"><b>{summary.phaseLabel}</b><small>Pokušaj {summary.attempt}/3{usageLabel(step.usage) ? ` · ${usageLabel(step.usage)}` : ''}</small><p className="pis-timeline-next">{summary.nextAction}</p><details className="pis-agentic-timeline-details"><summary>Tehnički detalji</summary><p className="pis-agentic-timeline-technical">{summary.agentLabel} · {summary.verifierLabel}{step.provider ? ` · ${step.provider}` : ''}</p></details>{issue && <p>{issue}</p>}</div>
             <em>{statusLabel(step.status)}</em>
           </li>
         })}
@@ -118,7 +118,7 @@ function humanize(value: string): string {
 }
 
 function statusLabel(status: string) {
-  return ({ pending: 'Čeka svoj red', running: 'Radi', retrying: 'Popravak', verified: 'Strukturno provjereno', blocked: 'Blokirano', failed: 'Greška', paused: 'Pauzirano' } as Record<string, string>)[status] || 'Nije poznato'
+  return ({ pending: 'Čeka svoj red', running: 'Radi', retrying: 'Popravak', verified: 'Spremno za pregled', completed: 'Završeno', blocked: 'Blokirano', failed: 'Greška', paused: 'Pauzirano' } as Record<string, string>)[status] || 'Nije poznato'
 }
 
 function usageLabel(usage: AgenticTimelineStep['usage']) {

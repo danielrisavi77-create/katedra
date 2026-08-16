@@ -28,6 +28,9 @@ describe('gateway passage verification', () => {
       expect(JSON.stringify(request)).not.toContain('manuscript')
       expect(JSON.stringify(request)).not.toContain('output')
       return new Response(JSON.stringify({
+        provider: 'independent-verifier',
+        model: 'verifier-model',
+        usage: { inputTokens: 120, outputTokens: 34 },
         decisions: [
           { claimId: 'claim-1', citationId: 'source-1', quote: 'Exact quote.', locator: 'p. 4', status: 'verified', claimSupported: 'supported', confidence: 0.92, evidenceUrl: 'https://source.example/p/4' },
           { claimId: 'claim-1', citationId: 'source-1', quote: 'Injected quote.', locator: 'p. 9', status: 'verified', claimSupported: 'supported' },
@@ -38,26 +41,33 @@ describe('gateway passage verification', () => {
       endpoint: 'https://verifier.example.test/run',
       apiKey: 'secret',
       model: 'verifier-model',
+      provider: 'independent-verifier',
       fetchImpl,
       now: () => '2026-08-16T12:00:00.000Z',
     })
 
-    await expect(verifier.verify({ projectId: 'project-1', runId: 'run-1', claims, citations })).resolves.toEqual([{
-      ...claims[0],
-      support: [{
-        citationId: 'source-1',
-        quote: 'Exact quote.',
-        locator: 'p. 4',
-        verification: {
-          status: 'verified',
-          method: 'independent_gateway',
-          checkedAt: '2026-08-16T12:00:00.000Z',
-          claimSupported: 'supported',
-          confidence: 0.92,
-          evidenceUrl: 'https://source.example/p/4',
-        },
+    await expect(verifier.verify({ projectId: 'project-1', runId: 'run-1', claims, citations })).resolves.toEqual({
+      provider: 'independent-verifier',
+      model: 'verifier-model',
+      usage: { inputTokens: 120, outputTokens: 34 },
+      outcome: 'verified',
+      claims: [{
+        ...claims[0],
+        support: [{
+          citationId: 'source-1',
+          quote: 'Exact quote.',
+          locator: 'p. 4',
+          verification: {
+            status: 'verified',
+            method: 'independent_gateway',
+            checkedAt: '2026-08-16T12:00:00.000Z',
+            claimSupported: 'supported',
+            confidence: 0.92,
+            evidenceUrl: 'https://source.example/p/4',
+          },
+        }],
       }],
-    }])
+    })
   })
 
   it('fails closed when the gateway is unavailable or returns an unusable decision', async () => {
@@ -65,12 +75,14 @@ describe('gateway passage verification', () => {
       endpoint: 'https://verifier.example.test/run',
       apiKey: 'secret',
       model: 'verifier-model',
+      provider: 'independent-verifier',
       fetchImpl: vi.fn(async () => new Response('nope', { status: 503 })),
       now: () => '2026-08-16T12:00:00.000Z',
     })
 
     const result = await verifier.verify({ projectId: 'project-1', runId: 'run-1', claims, citations })
-    expect(result[0].support?.[0].verification).toMatchObject({
+    expect(result.outcome).toBe('needs_review')
+    expect(result.claims[0].support?.[0].verification).toMatchObject({
       status: 'needs_review',
       method: 'independent_gateway',
       checkedAt: '2026-08-16T12:00:00.000Z',

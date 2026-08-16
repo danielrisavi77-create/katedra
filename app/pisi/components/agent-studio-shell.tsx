@@ -37,7 +37,7 @@ export function AgentStudioShell({ manuscript, passActive, phase, children, onOp
             <span className="pis-agent-studio-avatar" aria-hidden="true">K</span>
             <div>
               <b>Katedra</b>
-              <p>Ovdje ćeš vidjeti svaki korak, aktivnog agenta i njegovu provjeru. Rezultat ulazi u rukopis tek kada je potvrđen.</p>
+              <p>Ovdje vidiš kako rad nastaje, što je provjereno i gdje je potrebna tvoja odluka. Rezultat ulazi u rukopis tek kada je potvrđen.</p>
             </div>
           </div>
           {children}

@@ -638,6 +638,11 @@ html[data-theme='dark'] .pis-agent-studio-open-writing { color: var(--pis-yellow
 .pis-agentic-process-step-body p { max-width: 690px; margin: 0; color: var(--pis-muted); font-size: 11px; line-height: 1.5; }
 .pis-agentic-process-roles { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--pis-blue-dark); font: 700 9px/1.2 Arial, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
 .pis-agentic-process-roles span:nth-child(2) { color: var(--pis-faint); }
+.pis-agentic-process-details { margin-top: 2px; }
+.pis-agentic-process-details summary { width: fit-content; color: var(--pis-muted); cursor: pointer; font: 700 9px/1.2 Arial, sans-serif; letter-spacing: .06em; list-style-position: outside; text-transform: uppercase; }
+.pis-agentic-process-details summary::marker { color: var(--pis-yellow); }
+.pis-agentic-process-details[open] summary { color: var(--pis-blue-dark); }
+.pis-agentic-process-details .pis-agentic-process-roles { margin-top: 8px; }
 .pis-agentic-process-preview-footer { display: flex; gap: 8px 18px; flex-wrap: wrap; padding-top: 5px; color: var(--pis-muted); font-size: 10px; line-height: 1.45; }
 .pis-agentic-process-preview-footer b { color: var(--pis-ink); font-weight: 700; }
 .pis-agentic-process-preview-footer > span:last-child { flex: 1 1 100%; padding-left: 12px; border-left: 2px solid var(--pis-yellow); }
@@ -707,6 +712,11 @@ html[data-theme='dark'] .pis-agent-studio-open-writing { color: var(--pis-yellow
 .pis-timeline-step-copy small { color: var(--pis-muted); font-size: 10px; line-height: 1.4; }
 .pis-timeline-step-copy .pis-timeline-next { margin: 3px 0 0; color: var(--pis-blue-dark); font-size: 10px; line-height: 1.4; }
 .pis-timeline-step-copy p { margin: 3px 0 0; color: var(--pis-red); font-size: 10px; line-height: 1.4; }
+.pis-agentic-timeline-details { margin-top: 3px; }
+.pis-agentic-timeline-details summary { width: fit-content; color: var(--pis-muted); cursor: pointer; font: 700 9px/1.3 Arial, sans-serif; letter-spacing: .05em; list-style-position: outside; text-transform: uppercase; }
+.pis-agentic-timeline-details summary::marker { color: var(--pis-yellow); }
+.pis-agentic-timeline-details[open] summary { color: var(--pis-blue-dark); }
+.pis-agentic-timeline-technical { margin: 5px 0 0 !important; color: var(--pis-muted) !important; font-size: 9px !important; }
 .pis-agentic-timeline-list em { color: var(--pis-muted); font: 9px/1.2 Arial, sans-serif; text-transform: uppercase; }
 .pis-readonly-preview { padding: 18px; border: 1px solid var(--pis-line-strong); background: var(--pis-paper-deep); }
 .pis-readonly-preview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--pis-line); }

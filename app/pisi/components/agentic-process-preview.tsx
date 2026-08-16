@@ -7,36 +7,36 @@ const processSteps = [
     number: '01',
     title: 'Priprema i analiza materijala',
     detail: 'Katedra čita ono što si dodao i izdvaja temu, zahtjeve, ograničenja i otvorena pitanja.',
-    actor: 'Intake agent',
-    verifier: 'Kontekst verifier',
+    actor: 'Agent za analizu materijala',
+    verifier: 'Neovisna provjera konteksta',
   },
   {
     number: '02',
     title: 'Istraživanje i provjera izvora',
     detail: 'Izvori se razdvajaju od prijedloga, a činjenice bez provjerljivog dokaza ne prolaze dalje.',
-    actor: 'Sources agent',
-    verifier: 'Source verifier',
+    actor: 'Agent za literaturu',
+    verifier: 'Neovisna provjera izvora',
   },
   {
     number: '03',
     title: 'Struktura i plan poglavlja',
     detail: 'Nastaje mapa rada: redoslijed poglavlja, argumenti, ciljevi i sljedeći konkretan korak.',
-    actor: 'Structure agent',
-    verifier: 'Plan verifier',
+    actor: 'Agent za strukturu',
+    verifier: 'Neovisna provjera plana',
   },
   {
     number: '04',
     title: 'Pisanje poglavlja',
     detail: 'Tekst se gradi po sekcijama. U vođenom načinu svaki veći prijedlog čeka tvoju odluku.',
-    actor: 'Writing agent',
-    verifier: 'Citation verifier',
+    actor: 'Agent za pisanje',
+    verifier: 'Neovisna provjera citata',
   },
   {
     number: '05',
     title: 'Pregled i Quality Gate',
     detail: 'Završni pregled traži rupe u argumentu, izvore, nedosljednosti i mjesta koja trebaš provjeriti.',
-    actor: 'Review agent',
-    verifier: 'Quality verifier',
+    actor: 'Agent za pregled',
+    verifier: 'Neovisni quality gate',
   },
 ] as const
 
@@ -59,7 +59,10 @@ export function AgenticProcessPreview({ mode, sourcePolicy }: { mode: AgentRunMo
             <div className="pis-agentic-process-step-body">
               <div className="pis-agentic-process-step-title"><strong>{step.title}</strong><span>Planirano</span></div>
               <p>{step.detail}</p>
-              <div className="pis-agentic-process-roles"><span>{step.actor}</span><span aria-hidden="true">→</span><span>{step.verifier}</span></div>
+              <details className="pis-agentic-process-details">
+                <summary>Tehnički detalji</summary>
+                <div className="pis-agentic-process-roles"><span>{step.actor}</span><span aria-hidden="true">→</span><span>{step.verifier}</span></div>
+              </details>
             </div>
           </li>
         ))}

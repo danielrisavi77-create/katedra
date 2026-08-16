@@ -54,7 +54,7 @@ describe('AgenticDashboard', () => {
     expect(screen.getByText('Literatura')).toBeTruthy()
     expect(screen.getAllByText(/Pokušaj 2\/3/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/verifikator/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Strukturno provjereno').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Spremno za pregled').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Autonomni tijek|Agentički workspace|Agent dashboard|Generator|Autopilot/i)).toBeNull()
   })
 

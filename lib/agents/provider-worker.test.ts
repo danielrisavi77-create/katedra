@@ -300,6 +300,69 @@ describe('provider-backed worker context', () => {
     expect(verifyPassages).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', runId: 'run-1' }))
   })
 
+  it('records verifier provider, usage and outcome without logging manuscript content', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      const provider: AgentProvider = {
+        id: 'fake',
+        capabilities: ['text'],
+        async *run() {
+          yield {
+            type: 'completed',
+            value: {
+              output: JSON.stringify({
+                output: 'Nacrt s dokazom.',
+                citations: [{ id: 'source-1', doi: '10.1000/example', verified: false }],
+                claims: [{ id: 'claim-1', text: 'Tajna tvrdnja.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Tajni citat.' }] }],
+              }),
+              usage: { inputTokens: 10, outputTokens: 4 },
+            },
+          }
+        },
+      }
+      const execute = createProviderBackedExecutor({
+        projectId: 'project-1',
+        runId: 'run-1',
+        loadContext: async () => manuscript,
+        verifyPassages: async ({ claims }) => ({
+          claims: claims.map((claim) => ({
+            ...claim,
+            support: claim.support?.map((support) => ({
+              ...support,
+              verification: { status: 'verified' as const, method: 'independent_gateway' as const, checkedAt: '2026-08-16T12:00:00.000Z', claimSupported: 'supported' as const },
+            })),
+          })),
+          provider: 'independent-verifier',
+          model: 'verifier-model',
+          usage: { inputTokens: 80, outputTokens: 20 },
+          outcome: 'verified' as const,
+        }),
+        router: { providerFor: () => provider },
+        billing: billingDependencies(),
+      })
+
+      await execute({ id: 'step-verified', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+
+      const passageLog = info.mock.calls
+        .map(([line]) => typeof line === 'string' ? line : '')
+        .map((line) => {
+          try { return JSON.parse(line) as Record<string, unknown> } catch { return null }
+        })
+        .find((event) => event?.eventName === 'agent_passage_verifier_completed')
+      expect(passageLog).toMatchObject({
+        requestId: 'run-1:step-verified:1:passage',
+        provider: 'independent-verifier',
+        model: 'verifier-model',
+        inputTokens: 80,
+        outputTokens: 20,
+        outcome: 'verified',
+      })
+      expect(JSON.stringify(passageLog)).not.toContain('Tajna')
+    } finally {
+      info.mockRestore()
+    }
+  })
+
   it('keeps scan images as provider-native attachments instead of embedding base64 in text context', async () => {
     const provider: AgentProvider = {
       id: 'vision',

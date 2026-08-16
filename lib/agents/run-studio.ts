@@ -126,8 +126,8 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
         actor: 'verifier',
         kind: 'step_verified',
         status: 'complete',
-        title: 'Automatska provjera je završila korak',
-        summary: automatic ? 'Korak je prošao strukturnu provjeru; verificirani rezultat ide u automatsko spremanje.' : 'Korak je prošao strukturnu provjeru; pregledaj sadržaj prije prihvaćanja.',
+        title: 'Provjera je završila korak',
+        summary: automatic ? 'Rezultat ima provjereni trag strukture i izvora te ide u automatsko spremanje.' : 'Rezultat ima provjereni trag strukture i izvora; pregledaj sadržaj prije prihvaćanja.',
         automatic,
       })
       continue
@@ -224,7 +224,7 @@ export function currentRunStudioStatus(events: RunStudioEvent[]): RunStudioStatu
   if (waiting) return { state: 'waiting', label: waiting.title, summary: waiting.summary, nextAction: 'Tijek će nastaviti kada prethodna provjera završi.', sectionId: waiting.sectionId, attempt: waiting.attempt }
   const result = events.find((event) => event.kind === 'result_ready')
   if (result) return result.automatic ? { state: 'complete', label: 'Rezultat se automatski sprema', summary: result.summary, nextAction: 'Provjeri lokalni snapshot nakon završetka tijeka.', sectionId: result.sectionId } : { state: 'complete', label: 'Rezultat je spreman za pregled', summary: result.summary, nextAction: 'Pregledaj prijedlog i odluči što ulazi u rukopis.', sectionId: result.sectionId }
-  if (events.some((event) => event.kind === 'step_verified')) return { state: 'complete', label: 'Tijek je završen', summary: 'Svi koraci u ovom tijeku prošli su strukturnu provjeru.', nextAction: 'Pregledaj rukopis ili započni novu verziju.' }
+  if (events.some((event) => event.kind === 'step_verified')) return { state: 'complete', label: 'Tijek je završen', summary: 'Svi koraci u ovom tijeku imaju provjereni trag strukture i izvora.', nextAction: 'Pregledaj rukopis ili započni novu verziju.' }
   return { state: 'waiting', label: 'Tijek je pripremljen', summary: 'Čekaju se prvi događaji izrade.', nextAction: 'Pokreni tijek ili pokušaj ponovno učitati stanje.' }
 }
 
