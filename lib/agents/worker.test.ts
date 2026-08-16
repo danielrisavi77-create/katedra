@@ -41,6 +41,20 @@ describe('agent worker lease contract', () => {
     expect(rpc).toHaveBeenCalledTimes(1)
   })
 
+  it('does not attempt a second completion after the backend reports a stale lease', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 1, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'Agent step lease has expired' } })
+
+    await expect(processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockResolvedValue({ output: 'Tekst', citations: [], provider: 'test', usage: { inputTokens: 1, outputTokens: 1 } }),
+      verify: vi.fn().mockReturnValue({ status: 'verified', issues: [], evidence: [] }),
+    })).resolves.toMatchObject({ status: 'failed', stepId: 'step-1' })
+
+    expect(rpc).toHaveBeenCalledTimes(2)
+    expect(rpc.mock.calls.filter(([name]) => name === 'complete_agent_step')).toHaveLength(1)
+  })
+
   it('requeues a rejected attempt and blocks the third rejection', async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
