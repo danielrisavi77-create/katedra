@@ -1,6 +1,6 @@
 # Lokalna verifikacija Katedre — 2026-08-17
 
-Ovaj zapis pripada commit-u `dfe7772` na Katedra `master` grani. Opisuje
+Ovaj zapis pripada commit-u `10c0494` na Katedra `master` grani. Opisuje
 lokalne i GitHub provjere, ali ne predstavlja dokaz da su canonical Lekta
 schema, RPC-i, RLS politike ili staging provideri aktivni.
 
@@ -23,6 +23,8 @@ Rezultati:
 - Production build prolazi s `28` ruta.
 - Provider telemetrija sadrži isti model koji se šalje u billing lifecycle.
 - Strogi citation verifier odbija nepotpun Crossref provenance envelope.
+- `verifier` i `evidence-graph` koriste isti strogi provenance helper i odbijaju
+  različite zaključke o istom neprovjerenom izvoru.
 
 Prethodno su dodatno potvrđeni dependency audit (`0 vulnerabilities`) i
 Gitleaks staged scan bez novih nalaza. Povijesni publishable Supabase ključ
@@ -31,10 +33,10 @@ a `.env.example` više ne sadrži stvarnu vrijednost.
 
 ## Udaljeni master gateovi
 
-Za `dfe7772` oba GitHub workflowa su završila uspješno:
+Za `10c0494` oba GitHub workflowa su završila uspješno:
 
-- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31976027186)
-- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31976027199)
+- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31976458333)
+- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31976458332)
 
 Ovi rezultati potvrđuju CI i browser regresije. Ne zamjenjuju authenticated
 staging dokaz za checkout, webhook, entitlement, worker, providere ili Lekta.
@@ -73,4 +75,3 @@ npm.cmd run preflight:production
 npm.cmd run preflight:agentic
 npm.cmd run preflight:release
 ```
-
