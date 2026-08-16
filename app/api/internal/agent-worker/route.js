@@ -124,6 +124,7 @@ async function handlePost(req) {
     { execute, verify: verifyAgentResult, storeResult },
     { maxSteps: 1 },
   )
+  if (result.error) return privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 })
   return privateJson({ runId, ...result })
 }
 

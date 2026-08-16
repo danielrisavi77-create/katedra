@@ -129,6 +129,19 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
     await expect(response.json()).resolves.toMatchObject({ runId: 'run-1', status: 'retrying', stepsProcessed: 1 })
   })
 
+  it('returns 503 when the loop reports a backend completion error', async () => {
+    mocks.runAgentWorkerLoop.mockResolvedValue({ status: 'failed', stepsProcessed: 1, error: 'completion rpc unavailable' })
+    const { POST } = await loadRoute()
+
+    const response = await POST(request())
+    const body = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('x-request-id')).toBe('worker-request-1')
+    expect(body).toEqual({ error: 'Agent worker trenutno nije mogao obraditi korak.' })
+    expect(JSON.stringify(body)).not.toContain('completion rpc')
+  })
+
   it('does not execute an initializing run before its context is activated', async () => {
     mocks.createAdminClient.mockReturnValue(database({ ...run, status: 'initializing' }))
     const { POST } = await loadRoute()
