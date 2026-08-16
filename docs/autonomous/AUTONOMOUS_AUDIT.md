@@ -4359,3 +4359,46 @@ agent contracts were disabled.
 - PDF/image content is not sent to the text chat without a configured vision
   or extraction adapter; the UI now labels that limitation instead of implying
   analysis.
+
+## Cycle: 2026-08-16k — mutation origin and release evidence hardening
+
+### Root causes selected
+
+Priority: P1 security/release integrity. The new mutation origin helper was
+fail-open when a request omitted `Origin`, and the initial release evidence
+format could be satisfied by an unanchored local JSON file.
+
+### Fix
+
+- State-changing authenticated routes now reject missing or cross-site browser
+  provenance in production before parsing or mutating a request. Non-browser
+  compatibility is explicit and disabled in production.
+- Added `preflight:release`, which combines production and agentic configuration
+  checks with fresh evidence for the canonical Lekta contract, authenticated
+  staging E2E and dependency audit.
+- Release evidence is now bound to the current 40-character commit SHA and
+  HTTPS deployment/workflow/report references, with a 30-day freshness limit.
+- Landing now has a clearly illustrative product-proof flow, semantic ordered
+  steps, more concrete Pass descriptions and the canonical “od teme do obrane”
+  document title.
+
+### Verification
+
+- Focused origin/release/landing regressions: **13 passed**; route runtime
+  regressions: **65 passed**.
+- Katedra: **188 test files passed, 4 skipped; 786 tests passed, 4 skipped**.
+- Typecheck: PASS. Lint: PASS with one pre-existing warning in
+  `app/katedra-engine.js:2744`. Production build: PASS with 28 routes.
+- Production-only and full `npm audit`: **0 vulnerabilities**.
+- Browser verification on `http://localhost:3000`: `/` and `/pisi` returned
+  `200`, proof flow rendered in both themes, desktop/mobile had no horizontal
+  overflow, and a cross-origin `/api/state` mutation returned `403`.
+- Commit `be14a54` was pushed and verified on GitHub `master`.
+
+### Remaining issues
+
+- `npm.cmd run preflight:release` correctly remains blocked without protected
+  staging secrets, canonical Lekta deployment evidence and authenticated
+  workflow proof. No agentic or paid production activation was implied.
+- The existing legacy lint warning and unrelated working-tree artifacts remain
+  outside this cycle.
