@@ -29,6 +29,24 @@ kandidate, nakon čega server:
 - agenticni source/writing/citation/review verifikatori zahtijevaju
   `verification.status === 'verified'` za svaki korišteni izvor.
 
+## Claim evidence graph
+
+Identitet izvora i potpora konkretnoj tvrdnji nisu ista stvar. Za strogi
+agenticni tok svaka tvrdnja mora imati:
+
+- barem jedan izvor čiji je identitet neovisno provjeren;
+- `support` zapis s kratkim doslovnim odlomkom i opcionalnim lokatorom
+  (stranica, poglavlje ili odjeljak);
+- vezu između `support.citationId` i jednog od `claim.citationIds`.
+
+Server iz toga gradi ograničeni evidence graph sa statusima `blocked`,
+`needs_passage` i `ready_for_review`. `ready_for_review` namjerno ne znači da
+je semantička istinitost tvrdnje dokazana: odlomak je dokazni trag za ljudsku
+ili zasebnu semantičku provjeru. Bez odlomka strogi verifikator vraća
+`needs_revision`, a ne dopušta da se rezultat tiho prihvati kao završni nacrt.
+Citati i odlomci imaju ograničenja veličine i broja kako se dokazni graf ne bi
+pretvorio u kanal za nekontrolirani payload.
+
 ## Capability routing
 
 - tekstualni koraci koriste Anthropic adapter;

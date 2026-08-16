@@ -48,6 +48,36 @@ describe('agent verifier', () => {
     })
   })
 
+  it('requires a source passage before an independently verified citation-bound result can pass', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s identificiranim izvorom.',
+      claims: [{ id: 'claim-1', text: 'Tvrdnja s identificiranim izvorom.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+      } }],
+    }, { requireIndependentSourceVerification: true })).toMatchObject({
+      status: 'needs_revision',
+      issues: [{ code: 'missing_passage_evidence' }],
+    })
+  })
+
+  it('passes the strict source gate when a claim has a reviewable source passage', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s vezanim odlomkom.',
+      claims: [{
+        id: 'claim-1',
+        text: 'Tvrdnja s vezanim odlomkom.',
+        citationIds: ['source-1'],
+        support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'p. 4' }],
+      }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+      } }],
+    }, { requireIndependentSourceVerification: true })).toMatchObject({ status: 'verified' })
+  })
+
   it('blocks citation-required results when claim-to-source evidence is missing', () => {
     expect(verifyAgentResult({
       agent: 'writing',

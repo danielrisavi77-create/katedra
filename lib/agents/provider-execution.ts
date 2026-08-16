@@ -1,9 +1,10 @@
-import type { AgentInput, AgentProvider, AgentResultV1, CitationEvidence, ClaimEvidence, UsageRecord } from './contracts'
+import type { AgentInput, AgentProvider, AgentResultV1, CitationEvidence, ClaimEvidence, ClaimSupport, UsageRecord } from './contracts'
 
 const STRUCTURED_EVIDENCE_INSTRUCTION = [
   'Vrati završni rezultat isključivo kao JSON objekt bez markdown omota.',
-  'Oblik: {"output":"tekst rezultata","claims":[{"id":"claim-1","text":"činjenična tvrdnja","citationIds":["source-id"]}]}',
+  'Oblik: {"output":"tekst rezultata","claims":[{"id":"claim-1","text":"činjenična tvrdnja","citationIds":["source-id"],"support":[{"citationId":"source-id","quote":"kratak doslovni odlomak","locator":"str. 4"}]}]}',
   'Svaka činjenična tvrdnja mora navesti barem jedan ID verificiranog izvora iz konteksta.',
+  'Za svaku tvrdnju priloži kratak doslovni odlomak iz izvora u support; passage je pomoć za ljudsku provjeru, ne dokaz sam po sebi.',
   'Ako rezultat nema činjenične tvrdnje, vrati claims kao prazno polje [].',
   'Ne izmišljaj source ID-jeve i ne koristi izvore koji nisu poslani u kontekstu.',
 ].join(' ')
@@ -87,7 +88,7 @@ function parseStructuredAgentOutput(value: string): { output: string; citations:
         : []
     if (!Array.isArray(candidate.claims)) return { output: candidate.output, citations }
     if (!candidate.claims.every(isClaimEvidence)) return { output: candidate.output, citations }
-    return { output: candidate.output, citations, claims: candidate.claims }
+    return { output: candidate.output, citations, claims: candidate.claims.map(normalizeClaimEvidence) }
   } catch {
     return { output: value, citations: [] }
   }
@@ -124,7 +125,36 @@ function isClaimEvidence(value: unknown): value is ClaimEvidence {
     && typeof claim.text === 'string'
     && claim.text.trim().length > 0
     && Array.isArray(claim.citationIds)
+    && claim.citationIds.length <= 50
     && claim.citationIds.every((citationId) => typeof citationId === 'string' && citationId.trim().length > 0)
+    && (claim.support === undefined || (Array.isArray(claim.support) && claim.support.length <= 20 && claim.support.every(isClaimSupport)))
+}
+
+function isClaimSupport(value: unknown): value is ClaimSupport {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const support = value as Record<string, unknown>
+  return typeof support.citationId === 'string'
+    && support.citationId.trim().length > 0
+    && typeof support.quote === 'string'
+    && support.quote.trim().length > 0
+    && support.quote.length <= 2_000
+    && (support.locator === undefined || (typeof support.locator === 'string' && support.locator.length <= 200))
+}
+
+function normalizeClaimEvidence(claim: ClaimEvidence): ClaimEvidence {
+  const support = Array.isArray(claim.support)
+    ? claim.support.slice(0, 20).map((item) => ({
+      citationId: item.citationId.trim().slice(0, 200),
+      quote: item.quote.trim().slice(0, 2_000),
+      ...(item.locator?.trim() ? { locator: item.locator.trim().slice(0, 200) } : {}),
+    }))
+    : undefined
+  return {
+    id: claim.id.trim().slice(0, 200),
+    text: claim.text.trim().slice(0, 10_000),
+    citationIds: claim.citationIds.slice(0, 50).map((citationId) => citationId.trim().slice(0, 200)),
+    ...(support?.length ? { support } : {}),
+  }
 }
 
 function isUsage(value: unknown): value is UsageRecord {

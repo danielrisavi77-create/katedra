@@ -34,10 +34,10 @@ describe('provider execution bridge', () => {
         expect(payload.system).toEqual(expect.stringContaining('claims'))
         yield {
           type: 'completed',
-          value: {
+        value: {
             output: JSON.stringify({
               output: 'Argument iz izvora.',
-              claims: [{ id: 'claim-1', text: 'Argument iz izvora.', citationIds: ['source-1'] }],
+              claims: [{ id: 'claim-1', text: 'Argument iz izvora.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'p. 2' }] }],
             }),
             usage: { inputTokens: 5, outputTokens: 8 },
           },
@@ -47,7 +47,7 @@ describe('provider execution bridge', () => {
 
     await expect(executeAgentProvider(testProvider, { ...input, payload: { system: 'Postojeća uputa.' } })).resolves.toMatchObject({
       output: 'Argument iz izvora.',
-      claims: [{ id: 'claim-1', citationIds: ['source-1'] }],
+      claims: [{ id: 'claim-1', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'p. 2' }] }],
     })
   })
 

@@ -63,10 +63,17 @@ export interface CitationVerification {
   evidenceUrl?: string
 }
 
+export interface ClaimSupport {
+  citationId: string
+  quote: string
+  locator?: string
+}
+
 export interface ClaimEvidence {
   id: string
   text: string
   citationIds: string[]
+  support?: ClaimSupport[]
 }
 
 export interface UsageRecord {
@@ -88,7 +95,7 @@ export interface AgentResultV1 {
 }
 
 export interface VerificationIssue {
-  code: 'missing_source' | 'missing_claim_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending'
+  code: 'missing_source' | 'missing_claim_evidence' | 'missing_passage_evidence' | 'unsupported_passage_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending'
   message: string
   citationId?: string
 }

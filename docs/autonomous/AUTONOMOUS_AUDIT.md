@@ -4402,3 +4402,41 @@ format could be satisfied by an unanchored local JSON file.
   workflow proof. No agentic or paid production activation was implied.
 - The existing legacy lint warning and unrelated working-tree artifacts remain
   outside this cycle.
+
+## Cycle: 2026-08-16l — claim evidence graph and release configuration
+
+### Root causes selected
+
+Priority: agentic source integrity. Independent DOI/URL identity checks alone
+do not show which passage supports a generated claim, and the release example
+did not expose the commit variable required by the fail-closed preflight.
+
+### Fix
+
+- Added a bounded claim-to-source evidence graph with explicit
+  `blocked`, `needs_passage` and `ready_for_review` states.
+- Strict agentic citation-bound verification now requires an independently
+  verified source plus a reviewable quoted passage; it does not label passage
+  presence as semantic entailment.
+- Provider structured output now accepts and bounds `support` passages, while
+  result storage validates the same limits before a temporary payload can be
+  reloaded into a later step.
+- Added the missing `KATEDRA_RELEASE_COMMIT_SHA` entry to `.env.example`.
+
+### Verification
+
+- Focused evidence/verifier/provider/storage regressions: **34 passed**.
+- Katedra: **189 test files passed, 4 skipped; 791 tests passed, 4 skipped**.
+- Typecheck: PASS. Lint: PASS with one pre-existing warning in
+  `app/katedra-engine.js:2744`. Production build: PASS with 28 routes.
+- Browser verification: `test:e2e:pisi` passed with upload, reload persistence
+  and responsive viewport checks.
+- Commit `652231d` was pushed and verified on GitHub `master`.
+
+### Remaining issues
+
+- Passage attachment is an auditable review aid, not a semantic entailment or
+  retraction check; a real provider/verifier and staging evidence are still
+  required before enabling autonomous paid runs.
+- Canonical Lekta/Supabase deployment, authenticated money-flow/agentic E2E,
+  provider credentials and production release evidence remain external gates.

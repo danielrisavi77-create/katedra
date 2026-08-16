@@ -1,4 +1,5 @@
 import type { AgentId, AgentResultV1, CitationEvidence, VerificationIssue, VerificationResultV1 } from './contracts'
+import { buildEvidenceGraph } from './evidence-graph'
 
 export type AgentVerifier = (result: Pick<AgentResultV1, 'agent' | 'output' | 'citations' | 'claims'>, options?: VerifyAgentResultOptions) => VerificationResultV1
 
@@ -125,6 +126,34 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
           message: 'Izvor nema neovisnu provjeru identiteta i ne smije u završni nacrt.',
           citationId: citation.id,
         })),
+        evidence: citations,
+      }
+    }
+
+    const graph = buildEvidenceGraph(result, options)
+    if (graph.status === 'needs_passage') {
+      return {
+        status: 'needs_revision',
+        issues: graph.claims
+          .filter((claim) => claim.status === 'needs_passage')
+          .map((claim) => ({
+            code: 'missing_passage_evidence' as const,
+            message: 'Tvrdnja ima verificiran identitet izvora, ali nema vezani odlomak za ručnu provjeru.',
+            citationId: claim.citationIds[0],
+          })),
+        evidence: citations,
+      }
+    }
+    if (graph.status === 'blocked') {
+      return {
+        status: 'blocked',
+        issues: graph.claims
+          .filter((claim) => claim.status === 'blocked')
+          .map((claim) => ({
+            code: 'unsupported_passage_evidence' as const,
+            message: 'Dokazni odlomak nije vezan uz citat koji podržava ovu tvrdnju.',
+            citationId: claim.citationIds[0],
+          })),
         evidence: citations,
       }
     }

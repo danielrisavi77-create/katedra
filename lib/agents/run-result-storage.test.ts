@@ -8,7 +8,7 @@ const step: AgentStepRecord = {
   id: 'run-1:writing:section-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 4, attempt: 1, status: 'running',
 }
 const result: Omit<AgentResultV1, 'agent'> = {
-  output: 'Novi odlomak rada.', citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }], claims: [{ id: 'claim-1', text: 'Novi odlomak rada.', citationIds: ['source-1'] }], provider: 'test-provider', usage: { inputTokens: 10, outputTokens: 20 }, baseRevision: '2026-08-14T10:00:00.000Z', sectionId: 'section-1',
+  output: 'Novi odlomak rada.', citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }], claims: [{ id: 'claim-1', text: 'Novi odlomak rada.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'p. 2' }] }], provider: 'test-provider', usage: { inputTokens: 10, outputTokens: 20 }, baseRevision: '2026-08-14T10:00:00.000Z', sectionId: 'section-1',
 }
 const verification: VerificationResultV1 = { status: 'verified', issues: [], evidence: [] }
 

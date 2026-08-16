@@ -283,7 +283,20 @@ function isClaimEvidence(value: unknown): value is ClaimEvidence {
     && typeof claim.text === 'string'
     && claim.text.trim().length > 0
     && Array.isArray(claim.citationIds)
+    && claim.citationIds.length <= 50
     && claim.citationIds.every((citationId) => typeof citationId === 'string' && citationId.trim().length > 0)
+    && (claim.support === undefined || (Array.isArray(claim.support) && claim.support.length <= 20 && claim.support.every(isClaimSupport)))
+}
+
+function isClaimSupport(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const support = value as Record<string, unknown>
+  return typeof support.citationId === 'string'
+    && support.citationId.trim().length > 0
+    && typeof support.quote === 'string'
+    && support.quote.trim().length > 0
+    && support.quote.length <= 2_000
+    && (support.locator === undefined || (typeof support.locator === 'string' && support.locator.length <= 200))
 }
 
 function isActiveTemporaryPayload(value: unknown, now: number): boolean {
