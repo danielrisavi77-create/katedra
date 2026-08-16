@@ -58,6 +58,19 @@ describe('AgenticDashboard', () => {
     expect(screen.queryByText(/Autonomni tijek|Agentički workspace|Agent dashboard|Generator|Autopilot/i)).toBeNull()
   })
 
+  it('shows a collapsed metadata-only AI ledger beside the run', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => runningBody }))
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+
+    const ledger = await screen.findByRole('group', { name: 'AI zapis' }) as HTMLDetailsElement
+    expect(ledger.open).toBe(false)
+    expect(screen.getByText('3 poziva')).toBeTruthy()
+    await userEvent.setup().click(screen.getByText('AI zapis'))
+    expect(within(ledger).getByRole('columnheader', { name: 'Agent' })).toBeTruthy()
+    expect(within(ledger).getByRole('columnheader', { name: 'Naplata' })).toBeTruthy()
+    expect(within(ledger).getAllByText('Nije poznato')).toHaveLength(3)
+  })
+
   it('keeps the review label while it shows an existing run checkpoint', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => runningBody }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} requestedPhase="review" />)

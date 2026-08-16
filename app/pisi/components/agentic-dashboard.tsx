@@ -12,6 +12,8 @@ import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from '.
 import { AgenticReview, type AgenticReviewClaim, type AgenticReviewDraft, type AgenticReviewEvidence } from './agentic-review'
 import { AgenticEventFeed } from './agentic-event-feed'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
+import { AiUsageLedger } from './ai-usage-ledger'
+import { buildAiUsageLedger } from '../../../lib/agents/usage-ledger'
 
 type RunStatus = 'pending' | 'running' | 'paused' | 'completed' | 'blocked' | 'failed' | 'cancelled'
 type AgenticRun = { runId: string; status: RunStatus; mode?: string; steps: AgenticTimelineStep[] }
@@ -122,6 +124,15 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     sections: manuscript.sections.map((section) => ({ id: section.id, title: section.title })),
   }), [manuscript.sections, run, runResults])
   const studioStatus = useMemo(() => currentRunStudioStatus(studioEvents), [studioEvents])
+  const usageLedger = useMemo(() => buildAiUsageLedger({
+    projectId,
+    runId,
+    mode: run?.mode,
+    steps: (run?.steps || []).map((step) => ({ ...step })),
+    results: runResults,
+    appliedSectionIds: draft?.sections.filter((revision) => revision.status === 'accepted').map((revision) => revision.sectionId),
+    rejectedSectionIds: draft?.sections.filter((revision) => revision.status === 'rejected').map((revision) => revision.sectionId),
+  }), [projectId, runId, run, runResults, draft])
   const blocked = run?.status === 'blocked'
   const editDraft = (sectionId: string, content: TiptapNode) => {
     setDraft((current) => current ? {
@@ -244,6 +255,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     {visibleAutonomousMergeState === 'merged' && <p className="pis-agentic-auto-status is-complete" role="status">Autonomni rezultat je automatski spremljen u lokalni rukopis.</p>}
     {visibleAutonomousMergeState === 'failed' && <p className="pis-agentic-blocked" role="alert">Autonomni rezultat nije automatski primijenjen jer se rukopis promijenio. Tvoj izvorni tekst je ostao siguran.</p>}
     {draft && draft.sections.length > 0 && <AgenticReview automatic={run?.mode === 'autonomous'} manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
+    {run && <AiUsageLedger ledger={usageLedger} />}
     {message && <><p className="pis-agent-message" role="alert">{message}</p>{retryable && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
   </section>
 }

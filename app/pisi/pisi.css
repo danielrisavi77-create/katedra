@@ -758,6 +758,35 @@ html[data-theme='dark'] .pis-agent-studio-open-writing { color: var(--pis-yellow
 .pis-evidence-matrix-status.is-ready { color: var(--pis-success); }
 .pis-evidence-matrix-status.is-pending { color: var(--pis-yellow); }
 .pis-evidence-matrix-status.is-blocked { color: var(--pis-red); }
+.pis-ai-usage-ledger { margin-top: 28px; border-block: 1px solid var(--pis-line-strong); }
+.pis-ai-usage-ledger > summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 0; cursor: pointer; list-style: none; }
+.pis-ai-usage-ledger > summary::-webkit-details-marker { display: none; }
+.pis-ai-usage-ledger > summary::after { content: '＋'; color: var(--pis-blue-dark); font: 700 16px/1 Arial, sans-serif; }
+.pis-ai-usage-ledger[open] > summary::after { content: '−'; }
+.pis-ai-usage-ledger > summary > span:first-child { display: grid; gap: 4px; }
+.pis-ai-usage-ledger > summary strong { color: var(--pis-ink); font: 700 18px/1.1 Georgia, 'Times New Roman', serif; }
+.pis-ai-usage-summary { display: grid; gap: 3px; margin-left: auto; color: var(--pis-muted); text-align: right; }
+.pis-ai-usage-summary b { color: var(--pis-ink); font: 700 10px/1.2 Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; }
+.pis-ai-usage-summary small { font: 10px/1.3 Arial, sans-serif; }
+.pis-ai-usage-ledger-body { display: grid; gap: 15px; padding: 0 0 18px; }
+.pis-ai-usage-ledger-intro { display: flex; align-items: center; justify-content: space-between; gap: 18px; color: var(--pis-muted); font-size: 10px; line-height: 1.5; }
+.pis-ai-usage-ledger-intro p { max-width: 680px; margin: 0; }
+.pis-ai-usage-ledger-intro button { flex: 0 0 auto; padding: 9px 11px; border: 1px solid var(--pis-blue-dark); background: transparent; color: var(--pis-blue-dark); cursor: pointer; font: 700 9px/1.2 Arial, sans-serif; }
+.pis-ai-usage-ledger-intro button:focus-visible { outline: 2px solid var(--pis-yellow); outline-offset: 3px; }
+.pis-ai-usage-warning { color: var(--pis-yellow); }
+.pis-ai-usage-table-scroll { overflow-x: auto; border: 1px solid var(--pis-line); background: var(--pis-paper-deep); }
+.pis-ai-usage-ledger table { width: 100%; min-width: 840px; border-collapse: collapse; table-layout: fixed; }
+.pis-ai-usage-ledger th, .pis-ai-usage-ledger td { padding: 10px; border-bottom: 1px solid var(--pis-line); color: var(--pis-muted); font-size: 10px; line-height: 1.35; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.pis-ai-usage-ledger thead th { color: var(--pis-ink); background: var(--pis-paper); font: 700 9px/1.2 Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; }
+.pis-ai-usage-ledger tbody tr:last-child th, .pis-ai-usage-ledger tbody tr:last-child td { border-bottom: 0; }
+.pis-ai-usage-ledger tbody th { width: 21%; color: var(--pis-ink); font: 12px/1.35 Georgia, 'Times New Roman', serif; font-weight: 400; }
+.pis-ai-usage-ledger tbody th span, .pis-ai-usage-ledger tbody td span { display: block; }
+.pis-ai-usage-ledger tbody small { display: block; margin-top: 3px; color: var(--pis-muted); font: 9px/1.25 Arial, sans-serif; }
+.pis-ai-usage-status { font: 700 9px/1.25 Arial, sans-serif; }
+.pis-ai-usage-status.is-settled, .pis-ai-usage-status.is-accepted { color: var(--pis-success); }
+.pis-ai-usage-status.is-released, .pis-ai-usage-status.is-not_applicable { color: var(--pis-muted); }
+.pis-ai-usage-status.is-pending_reconciliation, .pis-ai-usage-status.is-pending { color: var(--pis-yellow); }
+.pis-ai-usage-status.is-unknown, .pis-ai-usage-status.is-rejected { color: var(--pis-red); }
 .pis-review-list { display: grid; gap: 22px; }
 .pis-review-item { padding: 18px 0; border-bottom: 1px solid var(--pis-line-strong); }
 .pis-review-item > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
@@ -1040,6 +1069,9 @@ html[data-theme='dark'] .pis-pass-warning strong { color: var(--pis-yellow); }
   .pis-intervention-actions button { width: 100%; }
   .pis-review-actions { align-items: stretch; flex-direction: column; }
   .pis-review-actions button { width: 100%; }
+  .pis-ai-usage-summary { text-align: left; }
+  .pis-ai-usage-ledger-intro { align-items: stretch; flex-direction: column; }
+  .pis-ai-usage-ledger-intro button { align-self: flex-start; }
   .pis-help-steps li { grid-template-columns: 1fr; gap: 7px; }
   .pis-pass-dialog,
   .legal-modal { padding: 36px 24px 28px; }
