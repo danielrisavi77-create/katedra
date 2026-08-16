@@ -27,6 +27,7 @@ describe('internal agent worker route contract', () => {
     expect(source).toContain('createProviderBackedExecutor')
     expect(source).toContain('KATEDRA_AGENT_RUNS_ENABLED')
     expect(source).toContain('ANTHROPIC_API_KEY')
+    expect(source).toContain('executeBilledPassageVerification')
   })
 
   it('fails closed when the model or canonical billing/rate-limit contracts are not configured', () => {

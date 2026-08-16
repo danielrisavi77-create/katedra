@@ -22,6 +22,13 @@ export interface BillingDatabase {
   rpc: (functionName: string, params: Record<string, unknown>) => Promise<{ data?: unknown; error?: { message?: string } | null }>
 }
 
+export interface BilledOperationResult<T> {
+  value: T
+  usage: UsageRecord
+  billingState: 'settled'
+  charged: number
+}
+
 export async function executeBilledAgentProvider(
   db: BillingDatabase,
   input: {
@@ -35,20 +42,55 @@ export async function executeBilledAgentProvider(
     maxOutputTokens?: number
   },
 ): Promise<Omit<AgentResultV1, 'agent'>> {
+  const billed = await executeBilledOperation(db, {
+    provider: input.provider.id,
+    model: input.model,
+    agent: input.agent,
+    runId: input.agentInput.runId,
+    attempt: input.agentInput.attempt,
+    payload: input.agentInput.payload,
+    userId: input.userId,
+    projectId: input.projectId,
+    requestId: input.requestId,
+    maxOutputTokens: input.maxOutputTokens,
+    execute: async () => {
+      const result = await executeAgentProvider(input.provider, input.agentInput)
+      return { value: result, usage: result.usage }
+    },
+  })
+  return { ...billed.value, usage: billed.usage, billingState: billed.billingState }
+}
+
+export async function executeBilledOperation<T>(
+  db: BillingDatabase,
+  input: {
+    provider: string
+    model: string
+    agent?: string
+    runId?: string
+    attempt?: number
+    payload?: unknown
+    userId: string
+    projectId: string
+    requestId: string
+    maxOutputTokens?: number
+    execute: () => Promise<{ value: T; usage?: UsageRecord }>
+  },
+): Promise<BilledOperationResult<T>> {
   const startedAt = Date.now()
   const eventContext = {
     requestId: input.requestId,
     userId: input.userId,
     projectId: input.projectId,
-    runId: input.agentInput.runId,
+    runId: input.runId,
     agent: input.agent,
-    provider: input.provider.id,
+    provider: input.provider,
     model: input.model,
-    attempt: input.agentInput.attempt,
+    attempt: input.attempt,
   }
   const maxOutputTokens = input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS
   const estimatedCharge = estimateChatCharge({
-    inputChars: JSON.stringify(input.agentInput.payload || '').length,
+    inputChars: JSON.stringify(input.payload || '').length,
     model: input.model,
     maxOutputTokens,
     outputWeight: OUTPUT_WEIGHT,
@@ -67,7 +109,7 @@ export async function executeBilledAgentProvider(
   try {
     let result
     try {
-      result = await executeAgentProvider(input.provider, input.agentInput)
+      result = await input.execute()
     } catch (error) {
       logAiEvent({ ...eventContext, eventName: 'agent_provider_failed', errorCode: safeErrorCode(error), outcome: 'failed', latencyMs: Date.now() - startedAt }, 'error')
       throw error
@@ -150,7 +192,7 @@ export async function executeBilledAgentProvider(
       throw new AgentBillingReconciliationError(`Agent billing outcome: ${outcome.state}.`, 'pending_reconciliation')
     }
     logAiEvent({ ...eventContext, eventName: 'agent_billing_settled', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: outcome.state, outcome: 'settled', latencyMs: Date.now() - startedAt })
-    return { ...result, usage, billingState: outcome.state }
+    return { value: result.value, usage, billingState: outcome.state, charged }
   } finally {
     await releaseReservationWithRetry({ release: reservationRelease }, input)
   }

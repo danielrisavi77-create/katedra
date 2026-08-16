@@ -26,7 +26,7 @@ export function createProviderBackedExecutor(input: {
   loadMaterials?: () => Promise<RunMaterialContext[]>
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
-  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[] }) => Promise<ClaimEvidence[] | PassageVerificationResult>
+  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3 }) => Promise<ClaimEvidence[] | PassageVerificationResult>
   sourcePolicy?: SourcePolicy
   billing: { db: BillingDatabase; userId: string; model?: string; modelFor?: (provider: AgentProvider, step: AgentStepRecord) => string; requestIdFor?: (step: AgentStepRecord) => string }
   router: Pick<ProviderRouter, 'providerFor'>
@@ -118,7 +118,7 @@ async function verifyPassagesWithTelemetry(
   input: {
     projectId: string
     runId: string
-    verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[] }) => Promise<ClaimEvidence[] | PassageVerificationResult>
+    verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3 }) => Promise<ClaimEvidence[] | PassageVerificationResult>
     billing: { userId: string }
   },
   step: AgentStepRecord,
@@ -129,7 +129,15 @@ async function verifyPassagesWithTelemetry(
   const startedAt = Date.now()
   const verifierRequestId = `${requestId}:passage`
   try {
-    const raw = await input.verifyPassages?.({ projectId: input.projectId, runId: input.runId, claims, citations })
+    const raw = await input.verifyPassages?.({
+      projectId: input.projectId,
+      runId: input.runId,
+      claims,
+      citations,
+      requestId: verifierRequestId,
+      agent: `${step.agent}_verifier`,
+      attempt: step.attempt,
+    })
     const result = Array.isArray(raw)
       ? { claims: raw, provider: 'configured-passage-verifier', model: 'unknown', outcome: summarizePassageOutcome(raw) as PassageVerificationResult['outcome'] }
       : raw
@@ -148,6 +156,8 @@ async function verifyPassagesWithTelemetry(
       latencyMs: Date.now() - startedAt,
       inputTokens: result.usage?.inputTokens,
       outputTokens: result.usage?.outputTokens,
+      charged: result.charged,
+      billingState: result.billingState,
       citationCount: citations.length,
       outcome: result.outcome,
       ...(result.usage ? {} : { reason: 'verifier_usage_missing' }),

@@ -12,7 +12,7 @@ import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { verifyAgentResult } from '@/lib/agents/verifier'
 import { createIndependentCitationVerifier } from '@/lib/agents/source-verification'
-import { createGatewayPassageVerifier } from '@/lib/agents/passage-verification'
+import { createGatewayPassageVerifier, executeBilledPassageVerification } from '@/lib/agents/passage-verification'
 import { loadAgentRunResults, storeAgentStepResult } from '@/lib/agents/run-result-storage'
 import { isAgentVerifierProviderAvailable } from '@/lib/deployment/agentic-availability'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
@@ -148,7 +148,19 @@ async function handlePost(req) {
     loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     verifyCitations: citationVerifier.verify,
     verifyPassages: passageVerifier
-      ? ({ projectId, runId: currentRunId, claims, citations }) => passageVerifier.verify({ projectId, runId: currentRunId, claims, citations })
+      ? ({ projectId, runId: currentRunId, claims, citations, requestId: passageRequestId, agent, attempt }) => executeBilledPassageVerification(db, {
+        verifier: passageVerifier,
+        provider: 'configured-verifier-gateway',
+        model: process.env.KATEDRA_VERIFIER_PROVIDER_MODEL,
+        userId: run.user_id,
+        projectId,
+        runId: currentRunId,
+        requestId: passageRequestId,
+        agent,
+        attempt,
+        claims,
+        citations,
+      })
       : undefined,
     router,
     billing: { db, userId: run.user_id, model: workerConfig.model },

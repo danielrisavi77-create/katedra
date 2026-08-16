@@ -297,7 +297,7 @@ describe('provider-backed worker context', () => {
     await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
       claims: [{ support: [{ verification: { status: 'verified', claimSupported: 'supported' } }] }],
     })
-    expect(verifyPassages).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', runId: 'run-1' }))
+    expect(verifyPassages).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', runId: 'run-1', requestId: 'run-1:step-1:1:passage', agent: 'writing_verifier', attempt: 1 }))
   })
 
   it('records verifier provider, usage and outcome without logging manuscript content', async () => {
@@ -335,6 +335,8 @@ describe('provider-backed worker context', () => {
           provider: 'independent-verifier',
           model: 'verifier-model',
           usage: { inputTokens: 80, outputTokens: 20 },
+          billingState: 'settled' as const,
+          charged: 180,
           outcome: 'verified' as const,
         }),
         router: { providerFor: () => provider },
@@ -355,6 +357,8 @@ describe('provider-backed worker context', () => {
         model: 'verifier-model',
         inputTokens: 80,
         outputTokens: 20,
+        charged: 180,
+        billingState: 'settled',
         outcome: 'verified',
       })
       expect(JSON.stringify(passageLog)).not.toContain('Tajna')

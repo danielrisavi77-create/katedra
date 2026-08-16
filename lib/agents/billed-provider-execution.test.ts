@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentProvider } from './contracts'
-import { AgentBillingReconciliationError, executeBilledAgentProvider } from './billed-provider-execution'
+import { AgentBillingReconciliationError, executeBilledAgentProvider, executeBilledOperation } from './billed-provider-execution'
 
 function providerWithEvents(events: Array<{ type: 'completed' | 'error'; value?: unknown; message?: string }>): AgentProvider {
   return {
@@ -14,6 +14,36 @@ function providerWithEvents(events: Array<{ type: 'completed' | 'error'; value?:
 }
 
 describe('billed provider execution', () => {
+  it('uses the same billing lifecycle for a non-chat verifier operation', async () => {
+    const rpc = vi.fn(async (name: string) => {
+      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
+      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
+      if (name === 'katedra_release_request') return { data: { status: 'released' }, error: null }
+      return { data: null, error: null }
+    })
+
+    const result = await executeBilledOperation({ rpc }, {
+      provider: 'independent-verifier',
+      model: 'verifier-model',
+      agent: 'writing_verifier',
+      runId: 'run-1',
+      attempt: 1,
+      payload: { task: 'verify_claim_passages' },
+      userId: 'user-1',
+      projectId: 'project-1',
+      requestId: 'run-1:step-1:1:passage',
+      execute: async () => ({ value: { outcome: 'verified' }, usage: { inputTokens: 12, outputTokens: 8 } }),
+    })
+
+    expect(result).toMatchObject({ value: { outcome: 'verified' }, usage: { inputTokens: 12, outputTokens: 8 }, billingState: 'settled' })
+    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({
+      p_request_id: 'run-1:step-1:1:passage',
+      p_project_id: 'project-1',
+      p_in: 12,
+      p_out: 8,
+    }))
+  })
+
   it('reserves, settles exactly once, and releases the distributed reservation', async () => {
     const rpc = vi.fn(async (name: string) => {
       if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }

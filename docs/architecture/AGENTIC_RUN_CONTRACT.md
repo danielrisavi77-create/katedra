@@ -35,8 +35,10 @@ Neovisni verifier prolaza vraća strukturirani rezultat s `claims`, `provider`,
 identitet zahtjeva, providera, model, pokušaj, trajanje, tokene, broj citata i
 ishod. Rukopis, prompt, odgovor providera i citati ne ulaze u log. Ako gateway
 ne vrati usage, događaj dobiva `verifier_usage_missing`; takav zapis nije dokaz
-da je verifier billing poravnat i ne smije sam uključiti agenticni production
-feature flag.
+da je verifier billing poravnat. Passage poziv zato koristi isti atomic
+reservation/consume/release lifecycle kao agent, a nedostajući usage ili
+nepoznat consume ishod prelazi u `pending_reconciliation` i ne može dovršiti
+korak kao verificiran.
 
 ## Required functions
 

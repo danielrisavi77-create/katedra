@@ -1,4 +1,5 @@
 import type { ClaimEvidence, ClaimSupport, CitationEvidence, ClaimSupportAssessment, ClaimSupportVerificationStatus, UsageRecord } from './contracts'
+import { executeBilledOperation, type BillingDatabase } from './billed-provider-execution'
 
 const DEFAULT_TIMEOUT_MS = 20_000
 const MAX_RESPONSE_BYTES = 1_500_000
@@ -23,6 +24,8 @@ export interface PassageVerificationResult {
   provider: string
   model: string
   usage?: UsageRecord
+  billingState?: 'settled' | 'released' | 'pending_reconciliation'
+  charged?: number
   outcome: 'verified' | 'needs_review' | 'blocked'
 }
 
@@ -87,6 +90,54 @@ export function createGatewayPassageVerifier({
         return createResult(markNeedsReview(originalClaims, checkedAt), provider, model, undefined)
       }
     },
+  }
+}
+
+export async function executeBilledPassageVerification(
+  db: BillingDatabase,
+  input: {
+    verifier: PassageVerifier
+    provider: string
+    model: string
+    userId: string
+    projectId: string
+    runId: string
+    requestId: string
+    agent: string
+    attempt: number
+    claims: ClaimEvidence[]
+    citations: CitationEvidence[]
+  },
+): Promise<PassageVerificationResult> {
+  const billed = await executeBilledOperation(db, {
+    provider: input.provider,
+    model: input.model,
+    userId: input.userId,
+    projectId: input.projectId,
+    runId: input.runId,
+    requestId: input.requestId,
+    agent: input.agent,
+    attempt: input.attempt,
+    payload: {
+      task: 'verify_claim_passages',
+      claims: input.claims,
+      citations: input.citations,
+    },
+    execute: async () => {
+      const result = await input.verifier.verify({
+        projectId: input.projectId,
+        runId: input.runId,
+        claims: input.claims,
+        citations: input.citations,
+      })
+      return { value: result, usage: result.usage }
+    },
+  })
+  return {
+    ...billed.value,
+    usage: billed.usage,
+    billingState: billed.billingState,
+    charged: billed.charged,
   }
 }
 
