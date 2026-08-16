@@ -52,6 +52,7 @@ export function createProviderBackedExecutor(input: {
         userId: input.billing.userId,
         projectId: input.projectId,
         requestId,
+        agent: step.agent,
         model: input.billing.modelFor?.(provider, step) || provider.model || input.billing.model || provider.id,
       })
       const inheritedCitations = citationBoundAgent(step.agent)

@@ -3,6 +3,7 @@ import { AI_MODEL_COST_MULTIPLIERS, estimateChatCharge } from '../ai/cost-policy
 import { releaseRateLimitReservation, reserveDistributedRequest } from '../ai/rate-limit.js'
 import type { AgentInput, AgentProvider, AgentResultV1, UsageRecord } from './contracts'
 import { executeAgentProvider } from './provider-execution'
+import { logAiEvent } from '../observability/ai-events'
 
 const OUTPUT_WEIGHT = 5
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096
@@ -29,10 +30,22 @@ export async function executeBilledAgentProvider(
     userId: string
     projectId: string
     requestId: string
+    agent?: string
     model: string
     maxOutputTokens?: number
   },
 ): Promise<Omit<AgentResultV1, 'agent'>> {
+  const startedAt = Date.now()
+  const eventContext = {
+    requestId: input.requestId,
+    userId: input.userId,
+    projectId: input.projectId,
+    runId: input.agentInput.runId,
+    agent: input.agent,
+    provider: input.provider.id,
+    model: input.model,
+    attempt: input.agentInput.attempt,
+  }
   const maxOutputTokens = input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS
   const estimatedCharge = estimateChatCharge({
     inputChars: JSON.stringify(input.agentInput.payload || '').length,
@@ -47,11 +60,18 @@ export async function executeBilledAgentProvider(
   })
   const reservationRelease = reservation.release
   if (!reservation.allowed || typeof reservationRelease !== 'function') {
+    logAiEvent({ ...eventContext, eventName: 'agent_billing_reservation_denied', reason: reservation.reason, outcome: 'released', latencyMs: Date.now() - startedAt }, 'error')
     throw new AgentBillingReconciliationError(`Agent billing reservation denied: ${reservation.reason}`, 'released')
   }
 
   try {
-    const result = await executeAgentProvider(input.provider, input.agentInput)
+    let result
+    try {
+      result = await executeAgentProvider(input.provider, input.agentInput)
+    } catch (error) {
+      logAiEvent({ ...eventContext, eventName: 'agent_provider_failed', errorCode: error instanceof Error ? error.name : 'unknown_provider_error', outcome: 'failed', latencyMs: Date.now() - startedAt }, 'error')
+      throw error
+    }
     const usage = normalizeUsage(result.usage)
     if (!usage || (usage.inputTokens <= 0 && usage.outputTokens <= 0)) {
       const pending = await markPendingBilling(db, {
@@ -63,7 +83,8 @@ export async function executeBilledAgentProvider(
         outputTokens: 0,
         estimatedCharge,
       })
-      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      if (!pending.ok) throw pendingMarkerFailure(input)
+      logAiEvent({ ...eventContext, eventName: 'agent_billing_usage_unavailable', estimatedCharge, inputTokens: 0, outputTokens: 0, billingState: 'pending_reconciliation', outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError('Agent billing usage unavailable.', 'pending_reconciliation')
     }
 
@@ -89,7 +110,8 @@ export async function executeBilledAgentProvider(
         outputTokens: usage.outputTokens,
         charged,
       })
-      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      if (!pending.ok) throw pendingMarkerFailure(input)
+      logAiEvent({ ...eventContext, eventName: 'agent_billing_pending_reconciliation', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'pending_reconciliation', errorCode: 'consume_rpc_error', outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError('Agent billing finalization unavailable.', 'pending_reconciliation')
     }
     if (settled.error) {
@@ -102,7 +124,8 @@ export async function executeBilledAgentProvider(
         outputTokens: usage.outputTokens,
         charged,
       })
-      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      if (!pending.ok) throw pendingMarkerFailure(input)
+      logAiEvent({ ...eventContext, eventName: 'agent_billing_pending_reconciliation', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'pending_reconciliation', errorCode: 'consume_rpc_rejected', outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError('Agent billing finalization failed.', 'pending_reconciliation')
     }
 
@@ -122,9 +145,11 @@ export async function executeBilledAgentProvider(
         outputTokens: usage.outputTokens,
         charged,
       })
-      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      if (!pending.ok) throw pendingMarkerFailure(input)
+      logAiEvent({ ...eventContext, eventName: 'agent_billing_pending_reconciliation', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'pending_reconciliation', reason: outcome.reason, outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError(`Agent billing outcome: ${outcome.state}.`, 'pending_reconciliation')
     }
+    logAiEvent({ ...eventContext, eventName: 'agent_billing_settled', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: outcome.state, outcome: 'settled', latencyMs: Date.now() - startedAt })
     return { ...result, usage, billingState: outcome.state }
   } finally {
     await releaseReservationWithRetry({ release: reservationRelease }, input)
@@ -136,14 +161,15 @@ async function releaseReservationWithRetry(
   input: { requestId: string; userId: string; projectId: string },
 ) {
   await releaseRateLimitReservation(reservation, (error, attempt) => {
-    console.error(JSON.stringify({
+    logAiEvent({
       eventName: 'agent_rate_limit_release_failed',
       attempt,
       requestId: input.requestId,
       userId: input.userId,
       projectId: input.projectId,
-      error: error instanceof Error ? error.message : String(error),
-    }))
+      errorCode: error instanceof Error ? error.name : 'unknown_release_error',
+      outcome: 'pending_reconciliation',
+    }, 'error')
   })
 }
 
@@ -161,14 +187,15 @@ async function markPendingBilling(db: BillingDatabase, input: Parameters<typeof 
   }
 }
 
-function pendingMarkerFailure(input: { requestId: string; userId: string; projectId: string }, error: string) {
-  console.error(JSON.stringify({
+function pendingMarkerFailure(input: { requestId: string; userId: string; projectId: string }) {
+  logAiEvent({
     eventName: 'agent_billing_pending_marker_failed',
     requestId: input.requestId,
     userId: input.userId,
     projectId: input.projectId,
-    error,
-  }))
+    errorCode: 'pending_marker_rejected',
+    outcome: 'pending_reconciliation',
+  }, 'error')
   return new AgentBillingReconciliationError('Agent billing reconciliation marker unavailable.', 'pending_reconciliation')
 }
 

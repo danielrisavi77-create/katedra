@@ -4477,3 +4477,43 @@ for cited authors or retraction relations.
 - Claim passages still require a real retrieval/entailment verifier and do not
   by themselves establish truth. Authenticated staging, canonical Lekta/RLS,
   provider credentials and production release evidence remain required.
+
+## Cycle: 2026-08-16n — redacted AI operational telemetry
+
+### Root causes selected
+
+Priority: operational visibility for agent/provider/billing failures without
+turning logs into a second copy of prompts, manuscript text or provider output.
+The previous agent logger had a local allowlist, but billing events used a
+separate logging path and did not expose a single auditable event contract.
+
+### Fix
+
+- Added one `safeAiEvent`/`logAiEvent` contract with bounded, allowlisted
+  request, project, run, provider, model, usage, charge, billing-state and
+  error-code fields.
+- Unified agent and billing telemetry through that contract; arbitrary prompt,
+  manuscript, provider-response and error-object fields are discarded.
+- Added explicit events for reservation denial, provider failure, missing
+  usage, settled billing, pending reconciliation and rate-limit release
+  failures.
+- Billing events now expose safe reconciliation outcomes without logging raw
+  RPC or provider error messages.
+- Agent identity is supplied from the canonical run step, never inferred from
+  arbitrary provider payload content.
+
+### Verification
+
+- Focused telemetry/billing/provider regressions: **18 passed**.
+- Katedra: **190 test files passed, 4 skipped; 796 tests passed, 4 skipped**.
+- Typecheck: PASS. Lint: PASS with one pre-existing warning in
+  `app/katedra-engine.js:2744`. Production build: PASS with 28 routes.
+- Browser verification: `test:e2e:pisi` passed with upload, reload persistence
+  and responsive viewport checks.
+
+### Remaining issues
+
+- Production log shipping, retention, alert thresholds and redaction testing
+  in the hosted environment still need staging/production evidence.
+- Authenticated money-flow, canonical Lekta/RLS deployment and provider
+  credentials remain external release gates.
