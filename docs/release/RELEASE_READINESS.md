@@ -1,5 +1,10 @@
 # Release readiness
 
+Za zadnji lokalni snapshot provjera vidi
+[`LOCAL_VERIFICATION_2026-08-16.md`](./LOCAL_VERIFICATION_2026-08-16.md). Taj zapis
+razdvaja lokalne quality gateove od staging dokaza i ne zamjenjuje canonical
+Lekta/Supabase provjeru.
+
 `npm.cmd run preflight:release` je puni release gate za istodobnu aktivaciju plaćenog i agentičkog prometa. Za paid-only deploy koristi `npm.cmd run preflight:production`; agenticni feature flagovi tada moraju ostati ugašeni.
 
 Provjerava tri odvojena sloja:
