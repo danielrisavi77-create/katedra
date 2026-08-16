@@ -144,4 +144,32 @@ describe('agent worker lease contract', () => {
       }),
     }))
   })
+
+  it('preserves a settled billing outcome when result persistence fails', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
+
+    const result = await processClaimedAgentStep({
+      db: { rpc },
+      workerId: 'worker-1',
+      runId: 'run-1',
+      storeResult: vi.fn().mockRejectedValue(new Error('storage unavailable')),
+    }, {
+      execute: vi.fn().mockResolvedValue({
+        output: 'Tekst',
+        citations: [],
+        provider: 'test',
+        usage: { inputTokens: 2, outputTokens: 3 },
+        billingState: 'settled',
+      }),
+      verify: vi.fn().mockReturnValue({ status: 'verified', issues: [], evidence: [] }),
+    })
+
+    expect(result).toMatchObject({ status: 'failed', stepId: 'step-1' })
+    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
+      p_status: 'failed',
+      p_verification: expect.objectContaining({ billingState: 'settled' }),
+    }))
+  })
 })

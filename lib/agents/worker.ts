@@ -63,7 +63,7 @@ export async function processClaimedAgentStep(
       const stored = await dependencies.storeResult({ step, result, verification })
       completionVerification = { ...verification, resultPayloadId: stored.manifestId }
     } catch (error) {
-      const billingState = verification.billingState
+      const billingState = verification.billingState || result.billingState
       completionVerification = {
         status: 'failed',
         issues: [...verification.issues, { code: 'invalid_output', message: error instanceof Error ? error.message : 'Rezultat agenta nije moguće spremiti.' }],
