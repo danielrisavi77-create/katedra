@@ -4563,3 +4563,34 @@ of end-to-end academic failure scenarios.
   before enabling paid agent runs.
 - Golden fixtures are contract-level deterministic evidence; they do not prove
   real web retrieval, OCR quality or provider semantic entailment.
+
+## Cycle: 2026-08-16p — explicit independent verifier routing
+
+### Root cause selected
+
+The worker had a configured research gateway, but the remaining citation and
+review steps defaulted to the same primary provider. That made the product
+unable to honestly claim independent provider coverage for verification.
+
+### Fix
+
+- Added a separately approved, HTTPS-only verifier gateway configuration.
+- Routed only `citation` and `review` steps to that gateway when all verifier
+  credentials and `KATEDRA_VERIFIER_POLICY_APPROVED=true` are present.
+- Kept the default path fail-closed and unchanged when the verifier gateway is
+  absent, incomplete or not approved.
+- Added runtime and availability tests plus an explicit release blocker for
+  second-provider contract and staging proof.
+
+### Verification
+
+- Focused availability and worker routing regressions: **12 passed**.
+- Related agent/deployment tests: **188 passed**.
+- Typecheck: PASS.
+
+### Remaining issues
+
+- The verifier gateway is not enabled by default and has no staging
+  credentials in this environment.
+- A real second-provider run must still prove bounded output, usage accounting,
+  failure semantics and the three-attempt quality gate before activation.

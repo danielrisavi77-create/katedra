@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { isAgenticWorkspaceAvailable, isAgentWebResearchAvailable } from './agentic-availability'
+import {
+  isAgenticWorkspaceAvailable,
+  isAgentVerifierProviderAvailable,
+  isAgentWebResearchAvailable,
+} from './agentic-availability'
 
 const completeEnvironment = {
   KATEDRA_AGENT_RUNS_ENABLED: 'true',
@@ -50,5 +54,22 @@ describe('agentic workspace availability', () => {
     expect(isAgentWebResearchAvailable(configured)).toBe(true)
     expect(isAgentWebResearchAvailable({ ...configured, KATEDRA_RESEARCH_PROVIDER_URL: 'http://localhost:4000' })).toBe(false)
     expect(isAgentWebResearchAvailable({ ...configured, KATEDRA_RESEARCH_POLICY_APPROVED: 'false' })).toBe(false)
+  })
+
+  it('keeps the independent verifier provider fail-closed until separately approved', () => {
+    expect(isAgentVerifierProviderAvailable(completeEnvironment)).toBe(false)
+
+    const configured = {
+      ...completeEnvironment,
+      KATEDRA_VERIFIER_POLICY_APPROVED: 'true',
+      KATEDRA_VERIFIER_PROVIDER_URL: 'https://verifier.example.test/run',
+      KATEDRA_VERIFIER_PROVIDER_KEY: 'gateway-secret',
+      KATEDRA_VERIFIER_PROVIDER_MODEL: 'verifier-model',
+    }
+
+    expect(isAgentVerifierProviderAvailable(configured)).toBe(true)
+    expect(isAgentVerifierProviderAvailable({ ...configured, KATEDRA_VERIFIER_PROVIDER_URL: 'http://localhost:4000' })).toBe(false)
+    expect(isAgentVerifierProviderAvailable({ ...configured, KATEDRA_VERIFIER_POLICY_APPROVED: 'false' })).toBe(false)
+    expect(isAgentVerifierProviderAvailable({ ...configured, KATEDRA_VERIFIER_PROVIDER_KEY: 'REPLACE_IN_DEPLOYMENT_SECRET_STORE' })).toBe(false)
   })
 })

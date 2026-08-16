@@ -113,6 +113,15 @@ options must not be treated as production-ready. The gateway contract also
 needs a real provider implementation, source evidence/DOI verification and
 staging credentials.
 
+An independent verifier gateway is also optional and fail-closed. It requires
+`KATEDRA_VERIFIER_PROVIDER_URL`, `KATEDRA_VERIFIER_PROVIDER_KEY`,
+`KATEDRA_VERIFIER_PROVIDER_MODEL` and
+`KATEDRA_VERIFIER_POLICY_APPROVED=true`; when configured, only citation and
+review agent steps are routed to it. This routing is not enabled by default
+and still needs a staging proof that the second provider returns the same
+bounded contract, usage data and failure semantics.
+
 Required owner action: configure and test the provider router with the approved
 web and vision adapters, then add a staging run proving research, OCR, citation
-evidence and the three-attempt quality gate before enabling those capabilities.
+evidence, independent citation/review routing and the three-attempt quality
+gate before enabling those capabilities.

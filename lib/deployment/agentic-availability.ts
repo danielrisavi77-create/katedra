@@ -42,11 +42,38 @@ export function isAgenticWorkspaceAvailable(env: RuntimeEnvironment = process.en
  * gateway key or routing details.
  */
 export function isAgentWebResearchAvailable(env: RuntimeEnvironment = process.env): boolean {
+  return isApprovedGatewayAvailable(env, {
+    approvalKey: 'KATEDRA_RESEARCH_POLICY_APPROVED',
+    urlKey: 'KATEDRA_RESEARCH_PROVIDER_URL',
+    keyKey: 'KATEDRA_RESEARCH_PROVIDER_KEY',
+    modelKey: 'KATEDRA_RESEARCH_PROVIDER_MODEL',
+  })
+}
+
+/**
+ * An independent verifier adapter is optional, but it must never become
+ * available merely because the primary text provider is configured. Keeping
+ * this separate makes provider diversity an explicit release decision rather
+ * than an accidental routing side effect.
+ */
+export function isAgentVerifierProviderAvailable(env: RuntimeEnvironment = process.env): boolean {
+  return isApprovedGatewayAvailable(env, {
+    approvalKey: 'KATEDRA_VERIFIER_POLICY_APPROVED',
+    urlKey: 'KATEDRA_VERIFIER_PROVIDER_URL',
+    keyKey: 'KATEDRA_VERIFIER_PROVIDER_KEY',
+    modelKey: 'KATEDRA_VERIFIER_PROVIDER_MODEL',
+  })
+}
+
+function isApprovedGatewayAvailable(
+  env: RuntimeEnvironment,
+  config: { approvalKey: string, urlKey: string, keyKey: string, modelKey: string },
+): boolean {
   if (!isAgenticWorkspaceAvailable(env)) return false
-  if (env.KATEDRA_RESEARCH_POLICY_APPROVED !== 'true') return false
-  if (!isConfigured(env.KATEDRA_RESEARCH_PROVIDER_KEY) || !isConfigured(env.KATEDRA_RESEARCH_PROVIDER_MODEL)) return false
+  if (env[config.approvalKey] !== 'true') return false
+  if (!isConfigured(env[config.keyKey]) || !isConfigured(env[config.modelKey])) return false
   try {
-    return new URL(String(env.KATEDRA_RESEARCH_PROVIDER_URL)).protocol === 'https:'
+    return new URL(String(env[config.urlKey])).protocol === 'https:'
   } catch {
     return false
   }

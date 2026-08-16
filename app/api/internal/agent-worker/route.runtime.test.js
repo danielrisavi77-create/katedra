@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   createAdminClient: vi.fn(),
   createAnthropicAgentProvider: vi.fn(),
+  createGatewayAgentProvider: vi.fn(),
   createProviderRouter: vi.fn(),
   createProviderBackedExecutor: vi.fn(),
   runAgentWorkerLoop: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
 vi.mock('@/lib/agents/anthropic-provider', () => ({ createAnthropicAgentProvider: mocks.createAnthropicAgentProvider }))
+vi.mock('@/lib/agents/provider-gateway', () => ({ createGatewayAgentProvider: mocks.createGatewayAgentProvider }))
 vi.mock('@/lib/agents/provider-router', () => ({ createProviderRouter: mocks.createProviderRouter }))
 vi.mock('@/lib/agents/provider-worker', () => ({ createProviderBackedExecutor: mocks.createProviderBackedExecutor }))
 vi.mock('@/lib/agents/worker-loop', () => ({ runAgentWorkerLoop: mocks.runAgentWorkerLoop }))
@@ -67,13 +69,18 @@ async function loadRoute() {
 beforeEach(() => {
   vi.stubEnv('KATEDRA_AGENT_RUNS_ENABLED', 'true')
   vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+  vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
   vi.stubEnv('KATEDRA_AGENT_WORKER_TOKEN', 'worker-secret')
+  vi.stubEnv('KATEDRA_AGENT_WORKER_CRON_SECRET', 'cron-secret')
+  vi.stubEnv('KATEDRA_WORKER_APP_URL', 'https://worker.example.test')
+  vi.stubEnv('KATEDRA_MATERIAL_DELETE_RPC_CONTRACT', 'v1')
   vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
   vi.stubEnv('KATEDRA_RATE_LIMIT_STORE', 'supabase')
   vi.stubEnv('KATEDRA_AGENT_MODEL', 'claude-sonnet-5')
   vi.stubEnv('ANTHROPIC_API_KEY', 'provider-secret')
   mocks.createAdminClient.mockReturnValue(database())
   mocks.createAnthropicAgentProvider.mockReturnValue({ id: 'anthropic', capabilities: ['text'] })
+  mocks.createGatewayAgentProvider.mockReturnValue({ id: 'gateway', capabilities: ['text'] })
   mocks.createProviderRouter.mockReturnValue({ providerFor: vi.fn() })
   mocks.createProviderBackedExecutor.mockReturnValue(vi.fn())
   mocks.runAgentWorkerLoop.mockResolvedValue({ status: 'retrying', stepsProcessed: 1, lastStepId: 'step-1' })
@@ -104,6 +111,31 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
       expect.objectContaining({ execute: expect.any(Function), verify: expect.any(Function), storeResult: expect.any(Function) }),
       { maxSteps: 1 },
     )
+  })
+
+  it('routes citation and review steps to a separately approved verifier gateway', async () => {
+    vi.stubEnv('KATEDRA_VERIFIER_POLICY_APPROVED', 'true')
+    vi.stubEnv('KATEDRA_VERIFIER_PROVIDER_URL', 'https://verifier.example.test/run')
+    vi.stubEnv('KATEDRA_VERIFIER_PROVIDER_KEY', 'verifier-secret')
+    vi.stubEnv('KATEDRA_VERIFIER_PROVIDER_MODEL', 'verifier-model')
+    const { POST } = await loadRoute()
+
+    await POST(request())
+
+    expect(mocks.createGatewayAgentProvider).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'configured-verifier-gateway',
+      endpoint: 'https://verifier.example.test/run',
+      apiKey: 'verifier-secret',
+      model: 'verifier-model',
+      capabilities: ['text'],
+      timeoutMs: 150_000,
+    }))
+    expect(mocks.createProviderRouter).toHaveBeenCalledWith(expect.objectContaining({
+      assignments: expect.objectContaining({
+        citation: 'gateway',
+        review: 'gateway',
+      }),
+    }))
   })
 
   it('returns a sanitized 503 when the worker loop cannot complete the RPC contract', async () => {

@@ -57,6 +57,9 @@ pretvorio u kanal za nekontrolirani payload.
   `KATEDRA_ANTHROPIC_VISION_ENABLED=true`;
 - web research koristi samo server-side gateway s HTTPS URL-om, ključem,
   modelom i eksplicitno odobrenom policy zastavicom;
+- citation i review koraci mogu koristiti zaseban verifikacijski gateway samo
+  kada su njegov HTTPS endpoint, ključ, model i odvojena policy zastavica
+  konfigurirani; bez toga se tok ne predstavlja kao multi-provider;
 - bez konfiguracije provider router baca capability error, a worker ostaje
   fail-closed.
 

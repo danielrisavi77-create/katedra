@@ -13,6 +13,7 @@ import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { verifyAgentResult } from '@/lib/agents/verifier'
 import { createIndependentCitationVerifier } from '@/lib/agents/source-verification'
 import { loadAgentRunResults, storeAgentStepResult } from '@/lib/agents/run-result-storage'
+import { isAgentVerifierProviderAvailable } from '@/lib/deployment/agentic-availability'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
@@ -100,6 +101,19 @@ async function handlePost(req) {
     })
     providers.push(researchProvider)
     assignments.sources = researchProvider.id
+  }
+  if (isAgentVerifierProviderAvailable(process.env)) {
+    const verifierProvider = createGatewayAgentProvider({
+      id: 'configured-verifier-gateway',
+      endpoint: process.env.KATEDRA_VERIFIER_PROVIDER_URL,
+      apiKey: process.env.KATEDRA_VERIFIER_PROVIDER_KEY,
+      model: process.env.KATEDRA_VERIFIER_PROVIDER_MODEL,
+      capabilities: ['text'],
+      timeoutMs: 150_000,
+    })
+    providers.push(verifierProvider)
+    assignments.citation = verifierProvider.id
+    assignments.review = verifierProvider.id
   }
   const router = createProviderRouter({
     providers,
