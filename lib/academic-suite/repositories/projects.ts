@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { logOperationalEvent } from '../../observability/operational-events'
+
 export type ProjectLookup = {
   projectId: string
   guestProjectId: string
@@ -30,9 +32,7 @@ async function findByResult(db: ProjectDb, userId: string, column: 'project_id' 
       .eq(column, value)
       .maybeSingle()
   } catch (error) {
-    console.error(JSON.stringify({
-      eventName: 'owned_project_lookup_failed', userId, lookupColumn: column, error: error?.message,
-    }))
+    logOperationalEvent({ eventName: 'owned_project_lookup_failed', userId, reason: column, error }, 'error')
     return { ok: false, error: error instanceof Error ? error.message : 'Owned project lookup failed.' }
   }
   const { data, error } = result
@@ -49,7 +49,7 @@ export async function resolveOwnedProjectResult(
 
   const byCanonical = await findByResult(db, userId, 'project_id', projectId)
   if (byCanonical.ok === false) {
-    console.error(JSON.stringify({ eventName: 'owned_project_lookup_failed', userId, lookupColumn: 'project_id', error: byCanonical.error }))
+    logOperationalEvent({ eventName: 'owned_project_lookup_failed', userId, reason: 'project_id', error: byCanonical.error }, 'error')
     return byCanonical
   }
   if (byCanonical.value) {
@@ -59,7 +59,7 @@ export async function resolveOwnedProjectResult(
   if (!allowGuestAlias) return { ok: true, value: null }
   const byGuest = await findByResult(db, userId, 'guest_project_id', projectId)
   if (byGuest.ok === false) {
-    console.error(JSON.stringify({ eventName: 'owned_project_lookup_failed', userId, lookupColumn: 'guest_project_id', error: byGuest.error }))
+    logOperationalEvent({ eventName: 'owned_project_lookup_failed', userId, reason: 'guest_project_id', error: byGuest.error }, 'error')
     return byGuest
   }
   return projectLookupFromRow(byGuest.value)

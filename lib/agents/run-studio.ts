@@ -123,8 +123,8 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
         actor: 'verifier',
         kind: 'step_verified',
         status: 'complete',
-        title: `${verifierLabel} je potvrdio rezultat`,
-        summary: `Korak je prošao provjeru i može prijeći u sljedeći korak.`,
+        title: 'Automatska provjera je završila korak',
+        summary: 'Korak je prošao strukturnu provjeru; pregledaj sadržaj prije prihvaćanja.',
       })
       continue
     }
@@ -194,8 +194,8 @@ export function buildRunStudioEvents(input: { run?: RunInput; steps?: StepInput[
         actor: 'verifier',
         kind: 'source_verified',
         status: 'complete',
-        title: `Izvor je provjeren: ${source.title}`,
-        summary: 'Izvor je dostupan kao dokaz uz prijedlog.',
+        title: `Identitet izvora provjeren: ${source.title}`,
+        summary: 'Bibliografski identitet izvora je neovisno provjeren.',
         occurredAt: stringValue(result.createdAt || result.created_at) || undefined,
         sectionId,
         sources: [source],
@@ -219,7 +219,7 @@ export function currentRunStudioStatus(events: RunStudioEvent[]): RunStudioStatu
   if (waiting) return { state: 'waiting', label: waiting.title, summary: waiting.summary, nextAction: 'Tijek će nastaviti kada prethodna provjera završi.', sectionId: waiting.sectionId, attempt: waiting.attempt }
   const result = events.find((event) => event.kind === 'result_ready')
   if (result) return { state: 'complete', label: 'Rezultat je spreman za pregled', summary: result.summary, nextAction: 'Pregledaj prijedlog i odluči što ulazi u rukopis.', sectionId: result.sectionId }
-  if (events.some((event) => event.kind === 'step_verified')) return { state: 'complete', label: 'Tijek je završen', summary: 'Svi koraci u ovom tijeku prošli su verifikaciju.', nextAction: 'Pregledaj rukopis ili započni novu verziju.' }
+  if (events.some((event) => event.kind === 'step_verified')) return { state: 'complete', label: 'Tijek je završen', summary: 'Svi koraci u ovom tijeku prošli su strukturnu provjeru.', nextAction: 'Pregledaj rukopis ili započni novu verziju.' }
   return { state: 'waiting', label: 'Tijek je pripremljen', summary: 'Čekaju se prvi događaji izrade.', nextAction: 'Pokreni tijek ili pokušaj ponovno učitati stanje.' }
 }
 

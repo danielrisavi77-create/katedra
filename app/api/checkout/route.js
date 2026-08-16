@@ -25,6 +25,7 @@ import { katedraPassProductFilter } from '../../../lib/katedra-pass-catalog.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
+import { logOperationalEvent } from '../../../lib/observability/operational-events'
 
 // tokens = obračunski tokeni (input + 5×output) za interni wallet hard cap,
 // NEPROMIJENJENI od prije repricinga — VIZIJA.md: "cijena mora signalizirati
@@ -71,7 +72,7 @@ async function handlePOST(req) {
   // continues with the canonical UUID only.
   const ownedProjectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
   if ('error' in ownedProjectResult) {
-    console.error(JSON.stringify({ eventName: 'checkout_project_lookup_failed', userId: user.id, projectId, error: ownedProjectResult.error }))
+    logOperationalEvent({ eventName: 'checkout_project_lookup_failed', userId: user.id, projectId, error: ownedProjectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const ownedProject = ownedProjectResult.value
@@ -141,7 +142,7 @@ async function handlePOST(req) {
     })
     return Response.json({ url: session.url })
   } catch (error) {
-    console.error('[checkout] Stripe greška:', error?.message)
+    logOperationalEvent({ eventName: 'checkout_stripe_session_failed', userId: user.id, projectId: project.project_id, error }, 'error')
     return Response.json({ error: 'Plaćanje trenutno nije dostupno.' }, { status: 500 })
   }
 }

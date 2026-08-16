@@ -11,6 +11,7 @@ import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 import { isAgentWebResearchAvailable, isAgenticWorkspaceAvailable } from '@/lib/deployment/agentic-availability'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -32,7 +33,7 @@ async function handlePost(req) {
   if (!projectId) return Response.json({ error: 'Nedostaje projekt.' }, { status: 400 })
   const projectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'agent_run_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    logOperationalEvent({ eventName: 'agent_run_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const project = projectResult.value
@@ -99,7 +100,7 @@ async function handlePost(req) {
     projectId: project.projectId,
   })
   if (!recovered.ok) {
-    console.error('canonical cleanup_stale_initializing_agent_run failed', { userId: user.id, projectId: project.projectId, error: recovered.error })
+    logOperationalEvent({ eventName: 'cleanup_stale_agent_run_failed', userId: user.id, projectId: project.projectId, error: recovered.error }, 'error')
     return Response.json({ error: 'Prethodni agent run trenutno nije moguće sigurno zatvoriti.' }, { status: 503 })
   }
 
@@ -111,7 +112,7 @@ async function handlePost(req) {
     sectionIds: sectionSelection.value,
   })
   if (!created.ok) {
-    console.error('canonical create_agent_run failed', { userId: user.id, projectId: project.projectId, error: created.error })
+    logOperationalEvent({ eventName: 'create_agent_run_failed', userId: user.id, projectId: project.projectId, error: created.error }, 'error')
     return Response.json({ error: 'Pokretanje agenta trenutno nije dostupno.' }, { status: 503 })
   }
 
@@ -176,7 +177,7 @@ async function handleGet(req) {
   if (!projectId) return Response.json({ error: 'Nedostaje projekt.' }, { status: 400 })
   const projectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'agent_run_list_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    logOperationalEvent({ eventName: 'agent_run_list_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const project = projectResult.value
@@ -194,11 +195,6 @@ async function handleGet(req) {
 async function cancelFailedSetupRun(db, input, reason) {
   const cancelled = await cancelAgentRun(db, input)
   if (!cancelled.ok) {
-    console.error('canonical cancel_agent_run failed after setup error', {
-      userId: input.userId,
-      runId: input.runId,
-      reason,
-      error: cancelled.error,
-    })
+    logOperationalEvent({ eventName: 'cancel_agent_run_failed_after_setup', userId: input.userId, runId: input.runId, reason, error: cancelled.error }, 'error')
   }
 }

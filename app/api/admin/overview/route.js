@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminAccess } from '@/lib/auth/admin-access'
 import { privateJson } from '@/lib/observability/private-response.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 
 export async function GET() {
   const supabase = await createClient()
@@ -15,11 +16,11 @@ export async function GET() {
   try {
     db = createAdminClient()
   } catch (error) {
-    console.error(JSON.stringify({
+    logOperationalEvent({
       eventName: 'admin_overview_admin_client_unavailable',
       userId: user.id,
-      error: error instanceof Error ? error.message : 'unknown admin client error',
-    }))
+      error,
+    }, 'error')
     return privateJson({ error: 'Admin pregled trenutno nije dostupan.' }, { status: 503 })
   }
   const [projects, agentRuns, usage] = await Promise.all([

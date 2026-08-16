@@ -13,6 +13,7 @@ import { DOCX_LIMITS, validateDocxBuffer } from '@/lib/docx/validation'
 import { reserveDocxUpload } from '@/lib/docx/rate-limit'
 import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveDistributedRequest } from '@/lib/ai/rate-limit'
 import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { readMultipartForm } from '@/lib/http/multipart.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
@@ -64,7 +65,7 @@ async function handlePOST(req, requestContext) {
       })
       : reserveDocxUpload(user.id)
   } catch (error) {
-    console.error(JSON.stringify({ eventName: 'docx_rate_limit_reservation_failed', userId: user.id, requestId: traceRequestId, error: error?.message }))
+    logOperationalEvent({ eventName: 'docx_rate_limit_reservation_failed', userId: user.id, requestId: traceRequestId, error }, 'error')
     return json(503, { error: 'Ograničavanje DOCX zahtjeva trenutno nije dostupno.' })
   }
   if (!reservation.allowed && reservation.reason === 'unavailable') {
@@ -105,14 +106,14 @@ async function handlePOST(req, requestContext) {
       truncated,
     })
   } catch (error) {
-    console.error('[parse-docx] greška:', error?.message)
+    logOperationalEvent({ eventName: 'docx_extraction_failed', requestId: traceRequestId, userId: user.id, error }, 'error')
     if (error?.code === 'DOCX_EXTRACTION_TIMEOUT') {
       return json(408, { error: 'Obrada DOCX-a traje predugo — pokušaj s manjom datotekom.' })
     }
     return json(422, { error: 'Nisam uspio pročitati ovu datoteku — provjeri da je stvarno .docx.' })
   } finally {
     await releaseRateLimitReservation(reservation, (error, attempt) => {
-      console.error(JSON.stringify({ eventName: 'docx_rate_limit_release_failed', attempt, userId: user.id, requestId: traceRequestId, error: error?.message }))
+      logOperationalEvent({ eventName: 'docx_rate_limit_release_failed', attempt, userId: user.id, requestId: traceRequestId, error }, 'error')
     })
   }
 }

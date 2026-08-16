@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Database } from '../database.types'
 import { katedraPassProductFilter } from '../../katedra-pass-catalog.js'
+import { logOperationalEvent } from '../../observability/operational-events'
 
 export type TypedAdminClient = SupabaseClient<Database>
 
@@ -35,11 +36,11 @@ export async function lookupActiveProjectPass(
       .maybeSingle()
   } catch (error) {
     const message = errorMessage(error, 'Project Pass lookup failed.')
-    console.error(JSON.stringify({ eventName: 'project_pass_lookup_failed', userId, projectId, error: message }))
+    logOperationalEvent({ eventName: 'project_pass_lookup_failed', userId, projectId, error }, 'error')
     return { ok: false, error: message }
   }
   if (result.error) {
-    console.error(JSON.stringify({ eventName: 'project_pass_lookup_failed', userId, projectId, error: result.error.message }))
+    logOperationalEvent({ eventName: 'project_pass_lookup_failed', userId, projectId, error: result.error }, 'error')
     return { ok: false, error: result.error.message || 'Project Pass lookup failed.' }
   }
   return { ok: true, active: Boolean(result.data) }
@@ -75,7 +76,7 @@ export async function lookupActiveProjectPassForProduct(
       .maybeSingle()
 
     if (exact.error) {
-      console.error(JSON.stringify({ eventName: 'project_pass_product_lookup_failed', userId, projectId, productId, error: exact.error.message }))
+      logOperationalEvent({ eventName: 'project_pass_product_lookup_failed', userId, projectId, reason: productId, error: exact.error }, 'error')
       return { ok: false, error: exact.error.message || 'Project Pass product lookup failed.' }
     }
     if (exact.data?.product_id === productId) return { ok: true, active: true }
@@ -97,13 +98,13 @@ export async function lookupActiveProjectPassForProduct(
       .maybeSingle()
 
     if (legacy.error) {
-      console.error(JSON.stringify({ eventName: 'project_pass_legacy_product_lookup_failed', userId, projectId, productId, error: legacy.error.message }))
+      logOperationalEvent({ eventName: 'project_pass_legacy_product_lookup_failed', userId, projectId, reason: productId, error: legacy.error }, 'error')
       return { ok: false, error: legacy.error.message || 'Legacy Project Pass lookup failed.' }
     }
     return { ok: true, active: legacy.data?.product_id === null && legacy.data?.work_type === workType }
   } catch (error) {
     const message = errorMessage(error, 'Project Pass product lookup failed.')
-    console.error(JSON.stringify({ eventName: 'project_pass_product_lookup_failed', userId, projectId, productId, error: message }))
+    logOperationalEvent({ eventName: 'project_pass_product_lookup_failed', userId, projectId, reason: productId, error }, 'error')
     return { ok: false, error: message }
   }
 }

@@ -23,8 +23,8 @@ const events: RunStudioEvent[] = [
     actor: 'verifier',
     kind: 'source_verified',
     status: 'complete',
-    title: 'Izvor je provjeren: Ustav Republike Hrvatske',
-    summary: 'Izvor je dostupan kao dokaz uz prijedlog.',
+    title: 'Identitet izvora provjeren: Ustav Republike Hrvatske',
+    summary: 'Bibliografski identitet izvora je neovisno provjeren.',
     sources: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }],
   },
 ]
@@ -38,6 +38,8 @@ describe('AgenticEventFeed', () => {
     expect(screen.getByRole('heading', { name: 'Dnevnik nastanka rada' })).toBeTruthy()
     expect(screen.getByText('Katedra radi')).toBeTruthy()
     expect(screen.getByText('Provjera')).toBeTruthy()
+    expect(screen.getByText('Identitet izvora provjeren: Ustav Republike Hrvatske')).toBeTruthy()
+    expect(screen.getByText('Identitet izvora provjeren')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'https://example.test/ustav' })).toBeTruthy()
   })
 

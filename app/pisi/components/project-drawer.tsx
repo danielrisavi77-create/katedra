@@ -123,7 +123,7 @@ export function ProjectDrawer({
               <p className="pis-kicker">Lokalna biblioteka</p><h3>Literatura uz rukopis.</h3>
               <div className="pis-inline-form"><input value={sourceTitle} onChange={(event) => setSourceTitle(event.target.value)} placeholder="Naslov izvora" /><input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="DOI ili poveznica" /><button type="button" onClick={addSource}>Dodaj</button></div>
               <ul className="pis-tool-list">
-                {manuscript.sources.map((source) => <li key={source.id}><div><b>{source.title}</b><small>{source.urlOrDoi || 'Bez poveznice'} · {source.verified ? 'provjereno' : 'provjeri prije uporabe'}</small></div><button type="button" onClick={() => onRemoveSource(source.id)}>Ukloni</button></li>)}
+                {manuscript.sources.map((source) => <li key={source.id}><div><b>{source.title}</b><small>{source.urlOrDoi || 'Bez poveznice'} · {source.verified ? 'Identitet izvora provjeren' : 'provjeri prije uporabe'}</small></div><button type="button" onClick={() => onRemoveSource(source.id)}>Ukloni</button></li>)}
                 {!manuscript.sources.length && <li className="is-empty">Još nema dodanih izvora.</li>}
               </ul>
             </section>

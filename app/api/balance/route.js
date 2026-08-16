@@ -23,6 +23,7 @@ import { readProjectLock } from '@/lib/academic-suite/project-lock'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { isAdminOverrideUser } from '@/lib/auth/admin-access'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 
 export async function GET(req) {
   return withRequestId(await handleGET(req), getRequestId(req))
@@ -43,11 +44,11 @@ async function handleGET(req) {
   try {
     db = createAdminClient()
   } catch (error) {
-    console.error(JSON.stringify({
+    logOperationalEvent({
       eventName: 'balance_admin_client_unavailable',
       userId: user.id,
-      error: error instanceof Error ? error.message : 'unknown admin client error',
-    }))
+      error,
+    }, 'error')
     return Response.json({ error: 'Stanje AI pristupa trenutno nije dostupno.' }, { status: 503 })
   }
 
@@ -56,7 +57,7 @@ async function handleGET(req) {
     ? await resolveOwnedProjectResult(db, { userId: user.id, projectId })
     : { ok: true, value: null }
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'balance_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    logOperationalEvent({ eventName: 'balance_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const project = projectResult.value
@@ -76,7 +77,7 @@ async function handleGET(req) {
     if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true') {
       const lockResult = await readProjectLock(db, { userId: user.id, projectId: project.projectId })
       if (!lockResult.ok) {
-        console.error(JSON.stringify({ eventName: 'project_lock_lookup_unavailable', userId: user.id, projectId: project.projectId, error: lockResult.error }))
+        logOperationalEvent({ eventName: 'project_lock_lookup_unavailable', userId: user.id, projectId: project.projectId, error: lockResult.error }, 'error')
         return Response.json({ error: 'Zaključavanje projekta trenutno nije moguće provjeriti.' }, { status: 503 })
       }
       if (lockResult.lock) {
@@ -94,7 +95,7 @@ async function handleGET(req) {
     }
   }
   if (!passLookup.ok) {
-    console.error(JSON.stringify({ eventName: 'project_pass_lookup_unavailable', userId: user.id, projectId: project?.projectId, error: passLookup.error }))
+    logOperationalEvent({ eventName: 'project_pass_lookup_unavailable', userId: user.id, projectId: project?.projectId, error: passLookup.error }, 'error')
     return Response.json({ error: 'Stanje Passa trenutno nije moguće provjeriti.' }, { status: 503 })
   }
   const hasPass = passLookup.active
@@ -134,7 +135,7 @@ async function handleGET(req) {
     .eq('user_id', user.id)
     .maybeSingle()
   if (walletError) {
-    console.error(JSON.stringify({ eventName: 'wallet_lookup_failed', userId: user.id, projectId: project?.projectId, error: walletError.message }))
+    logOperationalEvent({ eventName: 'wallet_lookup_failed', userId: user.id, projectId: project?.projectId, error: walletError }, 'error')
     return Response.json({ error: 'Stanje walleta trenutno nije dostupno.' }, { status: 503 })
   }
   const balance = wallet?.balance ?? 0

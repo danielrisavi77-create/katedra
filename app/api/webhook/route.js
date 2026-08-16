@@ -49,6 +49,7 @@ import { katedraPassProductFilter, katedraPassProductId } from '../../../lib/kat
 import { lockPaidProject, readProjectLock } from '../../../lib/academic-suite/project-lock'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 import { JSON_BODY_LIMITS, readTextBody } from '@/lib/http/json-body.js'
+import { logOperationalEvent } from '../../../lib/observability/operational-events'
 
 // purchaseWindowDays: koliko dugo Pass vrijedi za trošenje slota, po tipu
 // rada — diplomski/zavrsni radovi traju dulje od seminarskih, pa dulji
@@ -112,11 +113,11 @@ async function handlePOST(req) {
          try {
            db = createAdminClient()
          } catch (error) {
-           console.error(JSON.stringify({
+           logOperationalEvent({
              eventName: 'webhook_admin_client_unavailable',
              sessionId: s.id,
-             error: error instanceof Error ? error.message : 'unknown admin client error',
-           }))
+             error,
+           }, 'error')
            return new Response('billing storage unavailable', { status: 503 })
          }
 
@@ -191,7 +192,7 @@ async function handlePOST(req) {
            .limit(1)
            .maybeSingle()
          if (activePassError) {
-           console.error('active project pass lookup failed', { sessionId: s.id, userId, projectId, error: activePassError.message })
+           logOperationalEvent({ eventName: 'active_project_pass_lookup_failed', sessionId: s.id, userId, projectId, error: activePassError }, 'error')
            return new Response('active pass lookup failed', { status: 500 })
          }
          if (activePass && activePass.order_id !== s.id) {
@@ -224,7 +225,7 @@ async function handlePOST(req) {
            const topic = String(s.metadata?.topic || project.topic || '').trim()
            const existingLock = await readProjectLock(db, { userId, projectId })
            if (!existingLock.ok) {
-             console.error('paid project lock read failed', { sessionId: s.id, userId, projectId, error: existingLock.error })
+             logOperationalEvent({ eventName: 'paid_project_lock_read_failed', sessionId: s.id, userId, projectId, error: existingLock.error }, 'error')
              return new Response('project lock read failed', { status: 500 })
            }
            if (existingLock.lock) {
@@ -270,7 +271,7 @@ async function handlePOST(req) {
                lockedAt: new Date().toISOString(),
              })
              if (!lockResult.ok) {
-               console.error('paid project lock failed', { sessionId: s.id, userId, projectId, error: lockResult.error })
+               logOperationalEvent({ eventName: 'paid_project_lock_failed', sessionId: s.id, userId, projectId, error: lockResult.error }, 'error')
                return new Response('project lock failed', { status: 500 })
              }
            }
@@ -288,7 +289,7 @@ async function handlePOST(req) {
         })
         // 23505 = unique(provider, order_id) već pogođen (retry iste Stripe sesije) — grant je već izvršen.
         if (insertError && insertError.code !== '23505') {
-          console.error('entitlement grant failed', insertError)
+          logOperationalEvent({ eventName: 'entitlement_grant_failed', sessionId: s.id, userId, projectId, error: insertError }, 'error')
           return new Response('entitlement grant failed', { status: 500 }) // Stripe će retry-ati
         }
 
@@ -301,7 +302,7 @@ async function handlePOST(req) {
           p_amount: amount,
         })
         if (walletError) {
-          console.error('katedra_grant failed', walletError)
+          logOperationalEvent({ eventName: 'katedra_grant_failed', sessionId: s.id, userId, projectId, error: walletError }, 'error')
           return new Response('grant failed', { status: 500 }) // Stripe će retry-ati
         }
 

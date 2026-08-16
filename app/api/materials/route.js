@@ -7,6 +7,7 @@ import { registerAgentPayload } from '@/lib/agents/backend-contract'
 import { resolveCanonicalProjectPass } from '@/lib/product/server-capabilities'
 import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveDistributedRequest, reserveUserRequest } from '@/lib/ai/rate-limit'
 import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { mapWithConcurrency } from '@/lib/async/map-limited'
 import { readMultipartForm } from '@/lib/http/multipart.js'
@@ -45,12 +46,12 @@ async function handlePost(req, requestContext) {
       ? await reserveDistributedRequest(createAdminClient(), { userId: user.id, requestId: reservationRequestId, estimatedCharge: 0 })
       : reserveUserRequest(user.id)
   } catch (error) {
-    console.error(JSON.stringify({
+    logOperationalEvent({
       eventName: 'material_rate_limit_reservation_failed',
       userId: user.id,
       requestId: traceRequestId,
-      error: error instanceof Error ? error.message : 'unknown admin client error',
-    }))
+      error,
+    }, 'error')
     return Response.json({ error: 'Ograničavanje upload zahtjeva trenutno nije dostupno.' }, { status: 503 })
   }
   if (!reservation.allowed) {
@@ -78,7 +79,7 @@ async function handlePost(req, requestContext) {
 
   const projectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'material_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    logOperationalEvent({ eventName: 'material_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const project = projectResult.value
@@ -130,13 +131,13 @@ async function handlePost(req, requestContext) {
   })
   if (!registered.ok) {
     await removeTemporaryObjects(storage, [storagePath, manifestPath], { userId: user.id, projectId: project.projectId, materialId, reason: 'payload_registration_failed' })
-    console.error('canonical register_agent_payload failed', { userId: user.id, projectId: project.projectId, error: registered.error })
+    logOperationalEvent({ eventName: 'register_agent_payload_failed', userId: user.id, projectId: project.projectId, error: registered.error }, 'error')
     return Response.json({ error: 'Registracija privremenog materijala nije uspjela.' }, { status: 503 })
   }
   return privateJson({ asset, storagePath, manifestPath, manifestId: registered.value.manifestId, expiresAt: asset.expiresAt })
   } finally {
     await releaseRateLimitReservation(reservation, (error, attempt) => {
-      console.error(JSON.stringify({ eventName: 'material_rate_limit_release_failed', attempt, userId: user.id, requestId: traceRequestId, reservationRequestId, error: error?.message }))
+      logOperationalEvent({ eventName: 'material_rate_limit_release_failed', attempt, userId: user.id, requestId: traceRequestId, reservationRequestId, error }, 'error')
     })
   }
 }
@@ -154,7 +155,7 @@ async function handleGet(req) {
   const projectId = new URL(req.url).searchParams.get('projectId')?.trim() || ''
   const projectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'material_list_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    logOperationalEvent({ eventName: 'material_list_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const project = projectResult.value

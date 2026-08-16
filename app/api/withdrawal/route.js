@@ -21,6 +21,7 @@ import { reserveWithdrawal } from '@/lib/security/withdrawal-limit'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
+import { logOperationalEvent } from '../../../lib/observability/operational-events'
 
 // 'onboarding@resend.dev' je Resendov test domain — radi bez verifikacije
 // domene, ali NE smije ići u produkciju. Prije lansiranja postaviti
@@ -49,11 +50,11 @@ async function handlePOST(req) {
   try {
     db = createAdminClient()
   } catch (error) {
-    console.error(JSON.stringify({
+    logOperationalEvent({
       eventName: 'withdrawal_admin_client_unavailable',
       userId: user.id,
-      error: error instanceof Error ? error.message : 'unknown admin client error',
-    }))
+      error,
+    }, 'error')
     return Response.json({ error: 'Zahtjev trenutno nije moguće zaprimiti.' }, { status: 503 })
   }
   const distributedStore = isDistributedWithdrawalConfigured()
@@ -97,7 +98,7 @@ async function handlePOST(req) {
     .single()
 
   if (insertError) {
-    console.error('[withdrawal] insert failed', insertError)
+    logOperationalEvent({ eventName: 'withdrawal_insert_failed', userId: user.id, error: insertError }, 'error')
     await safeRelease(reservation, user.id, referenceId)
     const missingWithdrawalContract = insertError?.code === '42P01' || insertError?.code === 'PGRST205'
     return Response.json(
@@ -120,7 +121,7 @@ async function handlePOST(req) {
     // The request row is already durable. Keep an explicit reconciliation
     // signal instead of releasing a possibly live reservation.
     reservationCommitPending = true
-    console.error('[withdrawal] reservation commit pending', commitError)
+    logOperationalEvent({ eventName: 'withdrawal_reservation_commit_pending', userId: user.id, error: commitError }, 'error')
   }
 
   let confirmedAt = null
@@ -142,7 +143,7 @@ async function handlePOST(req) {
       // Zahtjev je već spremljen (ima requested_at) — propust slanja e-maila
       // ne smije izgubiti sam zahtjev. Zabilježi i nastavi; podrška može
       // ručno potvrditi korisniku.
-      console.error('[withdrawal] confirmation email failed', emailError)
+      logOperationalEvent({ eventName: 'withdrawal_confirmation_email_failed', userId: user.id, error: emailError }, 'error')
     }
   } else {
     console.error('[withdrawal] RESEND_API_KEY nije postavljen — automatska potvrda NIJE poslana (zakonski zahtjev nije u potpunosti zadovoljen dok se ne postavi)')
@@ -161,19 +162,11 @@ async function safeRelease(reservation, userId, referenceId) {
   try {
     await reservation.release()
   } catch (error) {
-    console.error('[withdrawal] reservation release pending', {
-      userId,
-      referenceId,
-      error: error?.message,
-    })
+    logOperationalEvent({ eventName: 'withdrawal_reservation_release_pending', userId, reason: referenceId ? 'reference_present' : 'reference_absent', error }, 'error')
     try {
       await reservation.release()
     } catch (retryError) {
-      console.error('[withdrawal] reservation release retry pending', {
-        userId,
-        referenceId,
-        error: retryError?.message,
-      })
+      logOperationalEvent({ eventName: 'withdrawal_reservation_release_retry_pending', userId, reason: referenceId ? 'reference_present' : 'reference_absent', error: retryError }, 'error')
     }
   }
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 import { resolveMaterialStorageNames } from '@/lib/materials/storage-paths.js'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
@@ -27,7 +28,7 @@ async function handleDelete(req, { params }) {
   if (!materialIdCheck.ok && materialIdCheck.status === 400) return Response.json({ error: materialIdCheck.error }, { status: 400 })
   const projectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'material_delete_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    logOperationalEvent({ eventName: 'material_delete_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }, 'error')
     return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
   }
   const project = projectResult.value

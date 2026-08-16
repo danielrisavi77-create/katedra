@@ -7,6 +7,7 @@ import { replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
 import { canEditAgentRunContext } from '@/lib/agents/run-context-policy'
 import { privateJson } from '@/lib/observability/private-response.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
@@ -49,7 +50,7 @@ async function handlePost(req, { params }) {
   }
   const passLookup = await lookupActiveProjectPassForProduct(supabase, { userId: user.id, projectId: run.project_id, productId: `katedra_pass_${productKey}` })
   if (!passLookup.ok) {
-    console.error(JSON.stringify({ eventName: 'agent_run_context_pass_lookup_unavailable', userId: user.id, projectId: run.project_id, runId, error: passLookup.error }))
+    logOperationalEvent({ eventName: 'agent_run_context_pass_lookup_unavailable', userId: user.id, projectId: run.project_id, runId, error: passLookup.error }, 'error')
     return Response.json({ error: 'Status Passa trenutno nije moguće provjeriti.' }, { status: 503 })
   }
   if (!passLookup.active) return Response.json({ error: 'Aktivan Pass za ovaj projekt je potreban.' }, { status: 402 })

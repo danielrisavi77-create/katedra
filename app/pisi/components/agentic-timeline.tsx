@@ -71,7 +71,7 @@ export function verifierLabelFor(verifier: string, fallback: string): string {
 export function AgenticTimeline({ steps }: { steps: AgenticTimelineStep[] }) {
   return (
     <section className="pis-agentic-timeline" aria-labelledby="pis-agentic-timeline-title">
-      <header className="pis-agentic-section-heading"><div><p className="pis-kicker">Tijek rada</p><h3 id="pis-agentic-timeline-title">Koraci izrade</h3></div><span>{steps.filter((step) => step.status === 'verified').length}/{steps.length || 0} provjereno</span></header>
+      <header className="pis-agentic-section-heading"><div><p className="pis-kicker">Tijek rada</p><h3 id="pis-agentic-timeline-title">Koraci izrade</h3></div><span>{steps.filter((step) => step.status === 'verified').length}/{steps.length || 0} spremno za pregled</span></header>
       <ol className="pis-agentic-timeline-list">
         {steps.map((step) => {
           const summary = projectAgentStatus(step)
@@ -118,7 +118,7 @@ function humanize(value: string): string {
 }
 
 function statusLabel(status: string) {
-  return ({ pending: 'Čeka svoj red', running: 'Radi', retrying: 'Popravak', verified: 'Provjereno', blocked: 'Blokirano', failed: 'Greška', paused: 'Pauzirano' } as Record<string, string>)[status] || 'Nije poznato'
+  return ({ pending: 'Čeka svoj red', running: 'Radi', retrying: 'Popravak', verified: 'Strukturno provjereno', blocked: 'Blokirano', failed: 'Greška', paused: 'Pauzirano' } as Record<string, string>)[status] || 'Nije poznato'
 }
 
 function usageLabel(usage: AgenticTimelineStep['usage']) {

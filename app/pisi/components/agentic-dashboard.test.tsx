@@ -54,6 +54,7 @@ describe('AgenticDashboard', () => {
     expect(screen.getByText('Literatura')).toBeTruthy()
     expect(screen.getAllByText(/Pokušaj 2\/3/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/verifikator/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Strukturno provjereno').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Autonomni tijek|Agentički workspace|Agent dashboard|Generator|Autopilot/i)).toBeNull()
   })
 
@@ -87,7 +88,7 @@ describe('AgenticDashboard', () => {
     expect((await screen.findAllByText('Ustav Republike Hrvatske')).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('link', { name: 'https://example.test/ustav' }).length).toBeGreaterThan(0)
     const evidence = screen.getByLabelText('Izvori za Uvod')
-    expect(within(evidence).getByText('Provjereno')).toBeTruthy()
+    expect(within(evidence).getByText('Identitet izvora provjeren')).toBeTruthy()
     expect(screen.getByText('Tvrdnja iz uvoda.')).toBeTruthy()
     expect(screen.getByText('Relevantan odlomak.')).toBeTruthy()
   })
@@ -152,7 +153,7 @@ describe('AgenticDashboard', () => {
 
     expect(await screen.findByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
     expect(screen.getByDisplayValue('Verificirani novi uvod.')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Prihvati sve provjerene' }))
+    await user.click(screen.getByRole('button', { name: 'Prihvati sve spremne za pregled' }))
     expect(onAcceptDraft).toHaveBeenCalledTimes(1)
     await waitFor(() => {
       const proposal = screen.getByRole('heading', { level: 3, name: 'Uvod' }).closest('[data-status]')
@@ -171,7 +172,7 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onAcceptDraft={onAcceptDraft} />)
 
-    await user.click(await screen.findByRole('button', { name: 'Prihvati sve provjerene' }))
+    await user.click(await screen.findByRole('button', { name: 'Prihvati sve spremne za pregled' }))
     expect(onAcceptDraft).toHaveBeenCalledTimes(1)
     const proposal = screen.getByRole('heading', { level: 3, name: 'Uvod' }).closest('[data-status]')
     expect(proposal?.getAttribute('data-status')).toBe('verified')
@@ -260,7 +261,7 @@ describe('AgenticDashboard', () => {
 
     expect(screen.getByText('Prijedlog je izmijenjen nakon verifikacije; potrebna je nova provjera.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Prihvati Uvod' })).toHaveProperty('disabled', true)
-    expect(screen.getByRole('button', { name: 'Prihvati sve provjerene' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Prihvati sve spremne za pregled' })).toHaveProperty('disabled', true)
   })
 
   it('keeps a local proposal edit when a later worker result arrives', async () => {

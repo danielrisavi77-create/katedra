@@ -66,6 +66,10 @@ describe('Run Studio event projection', () => {
       attempt: 3,
       details: ['Nedostaje DOI ili provjerljiva poveznica.'],
     })
+    expect(eventsByKind(result, 'source_verified')[0]).toMatchObject({
+      title: 'Identitet izvora provjeren: Provjereni izvor',
+      summary: 'Bibliografski identitet izvora je neovisno provjeren.',
+    })
     expect(currentRunStudioStatus(result)).toMatchObject({
       state: 'blocked',
       nextAction: 'Dodaj traženi kontekst pa pokušaj ponovno.',
@@ -98,6 +102,19 @@ describe('Run Studio event projection', () => {
     })
 
     expect(currentRunStudioStatus(events)).toMatchObject({ state: 'complete', label: 'Tijek je završen' })
+  })
+
+  it('describes a verified step as structural review, not semantic truth', () => {
+    const events = buildRunStudioEvents({
+      run: { status: 'completed', mode: 'guided' },
+      steps: [{ step_id: 'step-1', agent: 'review', verifier: 'review_verifier', status: 'verified', attempt: 1 }],
+      results: [],
+    })
+
+    expect(eventsByKind(events, 'step_verified')[0]).toMatchObject({
+      title: 'Automatska provjera je završila korak',
+      summary: 'Korak je prošao strukturnu provjeru; pregledaj sadržaj prije prihvaćanja.',
+    })
   })
   it('keeps a paused run visibly paused even when it has no active step', () => {
     const events = buildRunStudioEvents({

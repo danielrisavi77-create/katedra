@@ -36,7 +36,7 @@ function EventItem({ event, onOpenSection }: { event: RunStudioEvent; onOpenSect
         <h4>{event.title}</h4>
         <p>{event.summary}</p>
         {event.details && event.details.length > 0 && <ul className="pis-agentic-event-details">{event.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}
-        {event.sources && event.sources.length > 0 && <div className="pis-agentic-event-sources" aria-label="Izvori događaja">{event.sources.map((source) => <span key={source.id} className="pis-agentic-event-source"><b>{source.verified ? 'Provjereno' : 'Čeka provjeru'}</b>{source.url && isSafeManuscriptHref(source.url) ? <a href={source.url} target="_blank" rel="noreferrer">{source.url}</a> : <span>{source.title}</span>}</span>)}</div>}
+        {event.sources && event.sources.length > 0 && <div className="pis-agentic-event-sources" aria-label="Izvori događaja">{event.sources.map((source) => <span key={source.id} className="pis-agentic-event-source"><b>{source.verified ? 'Identitet izvora provjeren' : 'Čeka provjeru'}</b>{source.url && isSafeManuscriptHref(source.url) ? <a href={source.url} target="_blank" rel="noreferrer">{source.url}</a> : <span>{source.title}</span>}</span>)}</div>}
         {event.sectionId && onOpenSection && <button type="button" className="pis-agentic-event-link" onClick={() => onOpenSection(event.sectionId as string)}>Otvori {event.title.includes('poglavlje') ? event.title.replace(/^.*poglavlje\s/u, '') : 'sekciju'} u rukopisu</button>}
       </div>
     </li>

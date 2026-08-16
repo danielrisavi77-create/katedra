@@ -3,6 +3,7 @@ import { cancelAgentRun } from '@/lib/agents/backend-contract'
 import { createSupabaseRunPayloadManifestStore } from '@/lib/agents/run-context-loader'
 import { loadAgentRunResults } from '@/lib/agents/run-result-storage'
 import { privateJson } from '@/lib/observability/private-response.js'
+import { logOperationalEvent } from '@/lib/observability/operational-events'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
@@ -45,7 +46,7 @@ async function handleGet(req, { params }) {
     }
     results = await loadAgentRunResults(createSupabaseRunPayloadManifestStore(supabase), payloadStorage, { runId, projectId: run.project_id, userId: user.id, bucket })
   } catch (resultError) {
-    console.error('agent run result payload load failed', { runId, projectId: run.project_id, error: resultError instanceof Error ? resultError.message : 'unknown' })
+    logOperationalEvent({ eventName: 'agent_run_result_payload_load_failed', runId, projectId: run.project_id, error: resultError }, 'error')
     return Response.json({ error: 'Rezultate runa trenutno nije moguće učitati.' }, { status: 503 })
   }
   return privateJson({ run, steps: steps || [], results })
