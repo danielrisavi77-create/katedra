@@ -92,6 +92,7 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
   if (base.status !== 'verified') return base
 
   const citations = Array.isArray(result.citations) ? result.citations : []
+  const requireIndependentSourceVerification = options.requireIndependentSourceVerification !== false
   const issues: VerificationIssue[] = []
   if (!Array.isArray(result.claims) || result.claims.length === 0) {
     return {
@@ -117,7 +118,7 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
     }
   }
 
-  if (options.requireIndependentSourceVerification) {
+  if (requireIndependentSourceVerification) {
     const independentFailures = citations.filter((citation) => citation.verified && citation.verification?.status !== 'verified')
     if (independentFailures.length) {
       return {
@@ -131,7 +132,7 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
       }
     }
 
-    const graph = buildEvidenceGraph(result, options)
+    const graph = buildEvidenceGraph(result, { ...options, requireIndependentSourceVerification })
     if (graph.status === 'needs_passage') {
       return {
         status: 'needs_revision',

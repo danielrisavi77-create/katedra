@@ -44,7 +44,19 @@ describe('agent verifier', () => {
       output: 'Ovo je argument koji proizlazi iz izvora.',
       claims: [{ id: 'claim-1', text: 'Ovo je argument koji proizlazi iz izvora.', citationIds: ['source-1'] }],
       citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }],
-    })).toMatchObject({ status: 'verified', issues: [] })
+    }, { requireIndependentSourceVerification: false })).toMatchObject({ status: 'verified', issues: [] })
+  })
+
+  it('fails closed when a citation only claims verified without independent metadata', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s oznakom izvora.',
+      claims: [{ id: 'claim-1', text: 'Tvrdnja s oznakom izvora.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }],
+    })).toMatchObject({
+      status: 'blocked',
+      issues: [{ code: 'unverified_source' }],
+    })
   })
 
   it('requires independent source verification for agentic citation-bound results', () => {
