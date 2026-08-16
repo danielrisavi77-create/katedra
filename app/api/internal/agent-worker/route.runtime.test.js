@@ -47,11 +47,11 @@ function request(body = { runId: 'run-1' }) {
   })
 }
 
-function database() {
+function database(runRecord = run) {
   const query = {
     select: vi.fn(() => query),
     eq: vi.fn(() => query),
-    async maybeSingle() { return { data: run, error: null } },
+    async maybeSingle() { return { data: runRecord, error: null } },
   }
   return {
     from: vi.fn(() => query),
@@ -127,5 +127,16 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({ runId: 'run-1', status: 'retrying', stepsProcessed: 1 })
+  })
+
+  it('does not execute an initializing run before its context is activated', async () => {
+    mocks.createAdminClient.mockReturnValue(database({ ...run, status: 'initializing' }))
+    const { POST } = await loadRoute()
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ status: 'initializing', stepsProcessed: 0 })
+    expect(mocks.runAgentWorkerLoop).not.toHaveBeenCalled()
   })
 })

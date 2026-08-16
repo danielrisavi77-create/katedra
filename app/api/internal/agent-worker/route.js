@@ -77,6 +77,8 @@ async function handlePost(req) {
   if (!run) return privateJson({ error: 'Run nije pronađen.' }, { status: 404 })
   if (['completed', 'blocked', 'failed', 'cancelled'].includes(run.status)) return privateJson({ status: run.status, stepsProcessed: 0 })
 
+  if (run.status === 'initializing') return privateJson({ status: run.status, stepsProcessed: 0 }, { status: 409 })
+
   const provider = createAnthropicAgentProvider({
     apiKey: process.env.ANTHROPIC_API_KEY,
     model: workerConfig.model,
