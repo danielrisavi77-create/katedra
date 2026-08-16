@@ -1,4 +1,5 @@
 import type { ClaimEvidence, ClaimSupport, ClaimSupportVerification, CitationEvidence } from './contracts'
+import { hasIndependentCitationVerification } from './citation-provenance'
 
 export type EvidenceGraphClaimStatus = 'ready_for_review' | 'needs_passage' | 'blocked'
 export type EvidenceGraphStatus = 'ready_for_review' | 'needs_passage' | 'blocked' | 'empty'
@@ -98,7 +99,7 @@ function isVerifiedIdentity(
 ): boolean {
   if (!citation.verified || !hasValidCitationLocator(citation)) return false
   if (!options.requireIndependentSourceVerification) return true
-  return citation.verification?.status === 'verified'
+  return hasIndependentCitationVerification(citation)
 }
 
 function normalizeSupports(value: ClaimSupport[] | undefined): ClaimSupport[] {

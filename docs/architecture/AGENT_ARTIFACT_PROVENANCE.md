@@ -33,6 +33,8 @@ kandidate, nakon čega server:
   `needs_review` stanju;
 - agenticni source/writing/citation/review verifikatori zahtijevaju
   `verification.status === 'verified'` za svaki korišteni izvor.
+- evidence graph koristi isti strogi provenance helper kao verifier, pa UI i
+  server ne mogu imati različit zaključak o tome je li izvor neovisno provjeren.
 
 ## Claim evidence graph
 

@@ -7,7 +7,7 @@ describe('evidence graph', () => {
     const graph = buildEvidenceGraph({
       claims: [{ id: 'claim-1', text: 'Tvrdnja.', citationIds: ['source-1'] }],
       citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
-        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample', titleMatch: true, authorMatch: true, yearMatch: true,
       } }],
     }, { requireIndependentSourceVerification: true })
 
@@ -15,7 +15,7 @@ describe('evidence graph', () => {
     expect(graph.claims[0]).toMatchObject({ claimId: 'claim-1', status: 'needs_passage' })
   })
 
-  it('attaches a bounded passage to the correct citation without calling entailment verified', () => {
+  it('does not treat a URL identity flag as independent verification', () => {
     const graph = buildEvidenceGraph({
       claims: [{
         id: 'claim-1',
@@ -28,9 +28,21 @@ describe('evidence graph', () => {
       } }],
     }, { requireIndependentSourceVerification: true })
 
-    expect(graph.status).toBe('ready_for_review')
-    expect(graph.claims[0]).toMatchObject({ claimId: 'claim-1', status: 'ready_for_review' })
+    expect(graph.status).toBe('blocked')
+    expect(graph.claims[0]).toMatchObject({ claimId: 'claim-1', status: 'blocked' })
     expect(graph.claims[0].support).toEqual([{ citationId: 'source-1', quote: 'Kratak odlomak iz izvora.', locator: 'p. 4' }])
+  })
+
+  it('does not treat incomplete Crossref provenance as independent verification', () => {
+    const graph = buildEvidenceGraph({
+      claims: [{ id: 'claim-1', text: 'Tvrdnja.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z', evidenceUrl: 'https://api.crossref.org/works/10.1234%2Fexample',
+      } }],
+    }, { requireIndependentSourceVerification: true })
+
+    expect(graph.status).toBe('blocked')
+    expect(graph.claims[0]).toMatchObject({ claimId: 'claim-1', status: 'blocked' })
   })
 
   it('blocks support that points to a source outside the claim map', () => {

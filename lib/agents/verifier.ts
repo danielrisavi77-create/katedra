@@ -1,4 +1,5 @@
 import type { AgentId, AgentResultV1, CitationEvidence, VerificationIssue, VerificationResultV1 } from './contracts'
+import { hasIndependentCitationVerification } from './citation-provenance'
 import { buildEvidenceGraph } from './evidence-graph'
 
 export type AgentVerifier = (result: Pick<AgentResultV1, 'agent' | 'output' | 'citations' | 'claims'>, options?: VerifyAgentResultOptions) => VerificationResultV1
@@ -164,21 +165,6 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
   }
 
   return { status: 'verified', issues, evidence: citations }
-}
-
-function hasIndependentCitationVerification(citation: CitationEvidence): boolean {
-  const verification = citation.verification
-  if (!verification || verification.status !== 'verified') return false
-  if (typeof verification.checkedAt !== 'string' || !verification.checkedAt.trim()) return false
-  if (!Number.isFinite(Date.parse(verification.checkedAt))) return false
-  if (verification.retracted === true) return false
-  if (!isHttpUrl(verification.evidenceUrl)) return false
-  if (verification.method !== 'crossref') return false
-  return typeof citation.doi === 'string'
-    && /^10\.\d{4,9}\/\S+$/i.test(citation.doi.trim())
-    && verification.titleMatch === true
-    && verification.authorMatch === true
-    && verification.yearMatch === true
 }
 
 export function hasVerifiedCitation(citations: CitationEvidence[], citationId: string): boolean {
