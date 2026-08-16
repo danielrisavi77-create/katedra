@@ -4623,6 +4623,10 @@ release or reconciliation record.
 - Internal worker route and runtime regressions: **11 passed**.
 - Full Katedra suite: **198 test files passed, 4 skipped; 842 tests passed,
   4 skipped**.
+- Lekta focused project-lock, payload-replacement/revocation and checkout
+  contracts: **4 test files, 33 tests passed**; its full `npm run check` did not
+  finish within the 180-second verification window and is not counted as a
+  pass.
 - Typecheck: PASS. Lint: PASS. Production build: PASS with 28 routes.
 - Browser agent-studio smoke test and GitHub Foundation/Academic browser gates:
   PASS on commit `b67803a`.

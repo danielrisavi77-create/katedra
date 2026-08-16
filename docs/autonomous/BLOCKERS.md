@@ -52,11 +52,13 @@ proven against the canonical Supabase project. Katedra fails closed on
 malformed or mismatched responses, but production safety still depends on the
 canonical migration and a real concurrency test.
 
-The local Lekta contract suite currently passes for the available agentic
-contract, billing, payload-attachment, payload-tombstone and worker-dispatcher
-fixtures. Lekta's full local check also passes (typecheck, Vitest and Vite
-build). This is local source evidence only; it does not prove that the
-canonical RPCs, RLS policies or worker are deployed.
+The focused Lekta project-lock, payload-replacement/revocation and checkout
+contract suite currently passes: **4 test files, 33 tests**. The available
+focused Lekta contract fixtures have passed in local runs, and
+the TypeScript portion of the full local check passed. The complete
+`npm run check` did not finish within the 180-second verification window, so it
+must not be recorded as a full local pass. This is local source evidence only;
+it does not prove that the canonical RPCs, RLS policies or worker are deployed.
 
 Required owner action: update the canonical Lekta RPC to use an atomic
 conflict-safe insert/claim path that verifies the existing immutable snapshot,
@@ -82,7 +84,7 @@ The materials feature remains disabled by the existing production flag, so this
 is a pre-activation blocker rather than an enabled production incident. A
 direct Katedra update would violate the database authority rule.
 
-Required owner action: deploy migrations `0077` through `0083` to the canonical
+Required owner action: deploy migrations `0077` through `0085` to the canonical
 Lekta environment, set `KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1` only there,
 and run staging tests proving that a deleted material cannot be attached, that
 replacement cannot partially mutate a run, and that repeated deletion is
