@@ -11,6 +11,9 @@ import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { verifyAgentResult } from '@/lib/agents/verifier'
 import { storeAgentStepResult } from '@/lib/agents/run-result-storage'
+import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
+import { privateJson } from '@/lib/observability/private-response.js'
+import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 
 export const runtime = 'nodejs'
 
@@ -19,38 +22,66 @@ const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-m
 const WORKER_TOKEN = process.env.KATEDRA_AGENT_WORKER_TOKEN || ''
 
 export async function POST(req) {
-  if (!ENABLED) return Response.json({ error: 'Agenticni worker još nije aktivan u backendu.' }, { status: 503 })
+  const requestId = getRequestId(req)
+  try {
+    return withRequestId(await handlePost(req), requestId)
+  } catch (error) {
+    console.error(JSON.stringify({
+      eventName: 'agent_worker_execution_failed',
+      requestId,
+      error: error instanceof Error ? error.name : 'unknown',
+    }))
+    return withRequestId(privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 }), requestId)
+  }
+}
+
+async function handlePost(req) {
+  if (!ENABLED) return privateJson({ error: 'Agenticni worker još nije aktivan u backendu.' }, { status: 503 })
   if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
-    return Response.json({ error: 'Agenticni worker nije aktivan bez server-side project lock ugovora.' }, { status: 503 })
+    return privateJson({ error: 'Agenticni worker nije aktivan bez server-side project lock ugovora.' }, { status: 503 })
   }
   if (!isAuthorized(req.headers.get('x-katedra-agent-worker-token'), WORKER_TOKEN)) {
-    return Response.json({ error: 'Neovlašteni worker.' }, { status: 401 })
+    return privateJson({ error: 'Neovlašteni worker.' }, { status: 401 })
   }
-  if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: 'AI provider nije konfiguriran.' }, { status: 503 })
+  if (!process.env.ANTHROPIC_API_KEY) return privateJson({ error: 'AI provider nije konfiguriran.' }, { status: 503 })
   const workerConfig = resolveAgentWorkerConfiguration(process.env)
   if (!workerConfig.ok) {
     console.error('agent worker safety configuration unavailable', {
       missing: workerConfig.missing,
       invalid: workerConfig.invalid,
     })
-    return Response.json({ error: 'Agent worker još nije konfiguriran za sigurnu naplatu.' }, { status: 503 })
+    return privateJson({ error: 'Agent worker još nije konfiguriran za sigurnu naplatu.' }, { status: 503 })
   }
 
-  let body
-  try { body = await req.json() } catch { return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 }) }
+  const parsed = await readJsonBody(req, JSON_BODY_LIMITS.worker)
+  if (!parsed.ok) return privateJson({ error: parsed.error }, { status: parsed.status })
+  const body = parsed.value
   const runId = typeof body?.runId === 'string' ? body.runId.trim() : ''
-  if (!runId || runId.length > 200) return Response.json({ error: 'Nedostaje run.' }, { status: 400 })
+  if (!runId || runId.length > 200) return privateJson({ error: 'Nedostaje run.' }, { status: 400 })
 
-  const db = createAdminClient()
+  let db
+  try {
+    db = createAdminClient()
+  } catch (error) {
+    console.error(JSON.stringify({
+      eventName: 'agent_worker_admin_client_unavailable',
+      error: error instanceof Error ? error.message : 'unknown admin client error',
+    }))
+    return privateJson({ error: 'Agent worker storage trenutno nije konfiguriran.' }, { status: 503 })
+  }
   const { data: run, error: runError } = await db.from('agent_runs')
     .select('run_id, user_id, project_id, source_policy, status')
     .eq('run_id', runId)
     .maybeSingle()
-  if (runError) return Response.json({ error: 'Run nije moguće učitati.' }, { status: 503 })
-  if (!run) return Response.json({ error: 'Run nije pronađen.' }, { status: 404 })
-  if (['completed', 'blocked', 'failed', 'cancelled'].includes(run.status)) return Response.json({ status: run.status, stepsProcessed: 0 })
+  if (runError) return privateJson({ error: 'Run nije moguće učitati.' }, { status: 503 })
+  if (!run) return privateJson({ error: 'Run nije pronađen.' }, { status: 404 })
+  if (['completed', 'blocked', 'failed', 'cancelled'].includes(run.status)) return privateJson({ status: run.status, stepsProcessed: 0 })
 
-  const provider = createAnthropicAgentProvider({ apiKey: process.env.ANTHROPIC_API_KEY, model: workerConfig.model })
+  const provider = createAnthropicAgentProvider({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: workerConfig.model,
+    timeoutMs: 150_000,
+  })
   const router = createProviderRouter({
     providers: [provider],
     assignments: Object.fromEntries(AGENT_IDS.map((agent) => [agent, provider.id])),
@@ -59,7 +90,7 @@ export async function POST(req) {
   const payloadStorage = {
     async download(path) {
       const downloaded = await storage.download(path)
-      if (downloaded.error) throw new Error('Privatni agent payload nije moguće učitati.')
+      if (downloaded.error || !downloaded.data) throw new Error('Privatni agent payload nije moguće učitati.')
       return downloaded.data.arrayBuffer()
     },
   }
@@ -70,7 +101,7 @@ export async function POST(req) {
     runId,
     sourcePolicy: run.source_policy,
     loadContext: () => loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
-    loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id }),
+    loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     router,
     billing: { db, userId: run.user_id, model: workerConfig.model },
   })
@@ -91,7 +122,7 @@ export async function POST(req) {
     { execute, verify: verifyAgentResult, storeResult },
     { maxSteps: 1 },
   )
-  return Response.json({ runId, ...result })
+  return privateJson({ runId, ...result })
 }
 
 function isAuthorized(actual, expected) {

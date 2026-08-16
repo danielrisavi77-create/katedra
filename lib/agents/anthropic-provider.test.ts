@@ -116,4 +116,34 @@ describe('Anthropic AgentProvider', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'error', message: expect.stringMatching(/prekinut/i) })])
     expect(events[0].message).not.toContain('request aborted')
   })
+
+  it('aborts a provider request that exceeds the configured timeout', async () => {
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('request timed out', 'AbortError')), { once: true })
+    }))
+    const provider = createAnthropicAgentProvider({ apiKey: 'test-key', fetchImpl, timeoutMs: 5 })
+
+    const events = await eventsFrom(provider, { messages: [{ role: 'user', content: 'Test' }] })
+
+    expect(events).toEqual([{ type: 'error', message: 'AI zahtjev traje predugo.', retryable: true }])
+  })
+
+  it('supports the worker production timeout of 150 seconds', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchImpl = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('request timed out', 'AbortError')), { once: true })
+      }))
+      const provider = createAnthropicAgentProvider({ apiKey: 'test-key', fetchImpl, timeoutMs: 150_000 })
+      const eventsPromise = eventsFrom(provider, { messages: [{ role: 'user', content: 'Test' }] })
+
+      await vi.advanceTimersByTimeAsync(149_999)
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await expect(eventsPromise).resolves.toEqual([{ type: 'error', message: 'AI zahtjev traje predugo.', retryable: true }])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
