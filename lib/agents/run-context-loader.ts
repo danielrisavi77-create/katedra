@@ -6,6 +6,8 @@ import { isScopedAgentPayload } from './payload-scope'
 const MAX_RUN_MATERIALS = 100
 const MAX_MATERIAL_MANIFEST_BYTES = 1 * 1024 * 1024
 const MAX_TOTAL_MATERIAL_CONTEXT_BYTES = 4 * 1024 * 1024
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_TOTAL_IMAGE_BYTES = 12 * 1024 * 1024
 class MaterialContextLimitError extends Error {}
 
 export interface RunPayloadStorage {
@@ -45,6 +47,7 @@ export interface RunMaterialContext {
   name: string
   kind: string
   text?: string
+  image?: { mimeType: string; data: string }
   warnings: string[]
 }
 
@@ -102,6 +105,7 @@ export async function loadRunMaterialContexts(
   if (entries.length > MAX_RUN_MATERIALS) throw new MaterialContextLimitError('Previše materijala za jedan agenticni run.')
   const now = input.now ?? Date.now()
   const budget = { totalBytes: 0 }
+  const imageBudget = { totalBytes: 0 }
   const contexts = await mapWithConcurrency(entries, 8, async (entry) => {
     if (entry.runId !== input.runId || entry.projectId !== input.projectId) return null
     if (!isScopedAgentPayload(entry, { userId: input.userId, projectId: input.projectId, runId: input.runId, bucket: input.bucket })) return null
@@ -126,6 +130,16 @@ export async function loadRunMaterialContexts(
       const warnings = Array.isArray(value.warnings) ? value.warnings.filter((warning): warning is string => typeof warning === 'string').slice(0, 20) : []
       const context: RunMaterialContext = { id: entry.materialId, name, kind, warnings }
       if (text !== undefined) context.text = text
+      const mimeType = typeof value.mimeType === 'string' ? value.mimeType.toLowerCase() : ''
+      if (kind === 'scan' && isSupportedImageMime(mimeType)) {
+        const raw = toBytes(await storage.download(entry.storagePath))
+        if (raw.byteLength > MAX_IMAGE_BYTES || imageBudget.totalBytes + raw.byteLength > MAX_TOTAL_IMAGE_BYTES) {
+          context.warnings = [...context.warnings, 'Sken je prevelik za sigurnu analizu slike.'].slice(0, 20)
+        } else {
+          imageBudget.totalBytes += raw.byteLength
+          context.image = { mimeType, data: Buffer.from(raw).toString('base64') }
+        }
+      }
       return context
     } catch (error) {
       if (error instanceof MaterialContextLimitError) throw error
@@ -145,4 +159,8 @@ function toBytes(value: Uint8Array | ArrayBuffer | string): Uint8Array {
   if (typeof value === 'string') return new TextEncoder().encode(value)
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
   return value
+}
+
+function isSupportedImageMime(value: string): boolean {
+  return ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(value)
 }

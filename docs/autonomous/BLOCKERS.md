@@ -102,13 +102,17 @@ staging Supabase environment.
 
 ## BLOCKED_EXTERNAL: web/vision provider activation
 
-The local agent worker currently wires only the text Anthropic adapter. The
-product contract exposes `web_research` and scan/vision paths, but no
-provider-specific web/vision adapter or staging credential is configured.
-The worker therefore fails closed when a step requires an unavailable
-capability; these options must not be treated as production-ready.
+The local agent worker now contains a native Anthropic vision adapter for image
+scans and a server-side HTTPS research-gateway adapter. Neither is enabled by
+default: vision requires `KATEDRA_ANTHROPIC_VISION_ENABLED=true`, while web
+research additionally requires an approved gateway URL/key/model and
+`KATEDRA_RESEARCH_POLICY_APPROVED=true`.
+
+The worker still fails closed when a required capability is unavailable; these
+options must not be treated as production-ready. The gateway contract also
+needs a real provider implementation, source evidence/DOI verification and
+staging credentials.
 
 Required owner action: configure and test the provider router with the approved
-web and vision adapters, including source URL/DOI verification, then add a
-staging run proving research, OCR, citation evidence and the three-attempt
-quality gate before enabling those capabilities.
+web and vision adapters, then add a staging run proving research, OCR, citation
+evidence and the three-attempt quality gate before enabling those capabilities.

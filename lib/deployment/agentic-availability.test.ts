@@ -38,4 +38,17 @@ describe('agentic workspace availability', () => {
   it('keeps web research unavailable until its policy and provider adapters exist', () => {
     expect(isAgentWebResearchAvailable(completeEnvironment)).toBe(false)
   })
+
+  it('advertises web research only for an approved HTTPS gateway', () => {
+    const configured = {
+      ...completeEnvironment,
+      KATEDRA_RESEARCH_POLICY_APPROVED: 'true',
+      KATEDRA_RESEARCH_PROVIDER_URL: 'https://research.example.test/run',
+      KATEDRA_RESEARCH_PROVIDER_KEY: 'gateway-secret',
+      KATEDRA_RESEARCH_PROVIDER_MODEL: 'research-model',
+    }
+    expect(isAgentWebResearchAvailable(configured)).toBe(true)
+    expect(isAgentWebResearchAvailable({ ...configured, KATEDRA_RESEARCH_PROVIDER_URL: 'http://localhost:4000' })).toBe(false)
+    expect(isAgentWebResearchAvailable({ ...configured, KATEDRA_RESEARCH_POLICY_APPROVED: 'false' })).toBe(false)
+  })
 })

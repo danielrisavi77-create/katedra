@@ -15,6 +15,7 @@ type AnthropicPayload = {
   system?: string
   signal?: AbortSignal
   maxTokens?: number
+  images?: Array<{ mimeType: string; data: string }>
 }
 
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -37,6 +38,9 @@ function readPayload(payload: unknown): { ok: true, value: AnthropicPayload } | 
   }
   if (value.maxTokens !== undefined && (!Number.isInteger(value.maxTokens) || value.maxTokens < 1)) {
     return { ok: false, message: 'Maksimalan broj tokena nije valjan.' }
+  }
+  if (value.images !== undefined && (!Array.isArray(value.images) || value.images.length > 4 || !value.images.every(isImageAttachment))) {
+    return { ok: false, message: 'Skenovi za AI zahtjev nisu valjani.' }
   }
   for (const message of value.messages) {
     if (!message || typeof message !== 'object' || (message.role !== 'user' && message.role !== 'assistant')) {
@@ -101,16 +105,18 @@ export function createAnthropicAgentProvider({
   model = DEFAULT_MODEL,
   endpoint = DEFAULT_ENDPOINT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  enableVision = false,
 }: {
   apiKey: string
   fetchImpl?: FetchImplementation
   model?: string
   endpoint?: string
   timeoutMs?: number
+  enableVision?: boolean
 }): AgentProvider {
   return {
     id: 'anthropic',
-    capabilities: ['text'],
+    capabilities: enableVision ? ['text', 'vision'] : ['text'],
     async *run(input: AgentInput): AsyncIterable<AgentEvent> {
       const parsed = readPayload(input.payload)
       if (parsed.ok === false) {
@@ -122,7 +128,13 @@ export function createAnthropicAgentProvider({
         return
       }
 
-      const { messages, system, signal, maxTokens } = parsed.value
+      if (parsed.value.images?.length && !enableVision) {
+        yield errorEvent('AI provider nema aktiviranu podrĹˇku za obradu slika.')
+        return
+      }
+
+      const { messages, system, signal, maxTokens, images } = parsed.value
+      const providerMessages = images?.length ? addImagesToMessages(messages!, images) : messages
       const requestTimeout = createRequestTimeout(signal, timeoutMs)
       try {
         let response: Response
@@ -139,7 +151,7 @@ export function createAnthropicAgentProvider({
               stream: true,
               max_tokens: maxTokens ?? 4096,
               ...(system ? { system } : {}),
-              messages,
+              messages: providerMessages,
             }),
             signal: requestTimeout.signal,
           })
@@ -213,6 +225,33 @@ export function createAnthropicAgentProvider({
       }
     },
   }
+}
+
+function isImageAttachment(value: unknown): value is { mimeType: string; data: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const image = value as Record<string, unknown>
+  return typeof image.mimeType === 'string'
+    && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(image.mimeType)
+    && typeof image.data === 'string'
+    && image.data.length > 0
+    && image.data.length <= 8_000_000
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(image.data)
+}
+
+function addImagesToMessages(messages: AnthropicMessage[], images: Array<{ mimeType: string; data: string }>): AnthropicMessage[] {
+  const firstUserIndex = messages.findIndex((message) => message.role === 'user')
+  if (firstUserIndex < 0) return messages
+  return messages.map((message, index) => {
+    if (index !== firstUserIndex) return message
+    const textContent = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content
+    return {
+      ...message,
+      content: [
+        ...textContent,
+        ...images.map((image) => ({ type: 'image', source: { type: 'base64', media_type: image.mimeType, data: image.data } })),
+      ],
+    }
+  })
 }
 
 function createRequestTimeout(externalSignal: AbortSignal | undefined, timeoutMs: number) {

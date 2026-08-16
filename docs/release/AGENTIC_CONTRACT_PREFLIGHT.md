@@ -2,6 +2,11 @@
 
 Katedra endpointi moraju ostati iza feature flagova dok canonical Lekta ugovor nije deployan i provjeren.
 
+Lokalna implementacija sada ima provjerljivi artifact chain, Crossref DOI
+provjeru, native vision adapter i konfigurirani research-gateway adapter. To
+ne predstavlja production activation: gateway mora imati odobreni policy,
+staging credentiale i E2E dokaz izvora prije uključivanja web researcha.
+
 Lokalni razvoj bez tog ugovora mora ostati fail-closed: agent worker vraća
 kontrolirani `503`, a scheduler i staging E2E ne smiju ispisati uspješan run.
 Za operativni redoslijed koristi [Agent worker staging runbook](./AGENT_WORKER_RUNBOOK.md).

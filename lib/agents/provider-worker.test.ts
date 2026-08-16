@@ -60,6 +60,71 @@ describe('provider-backed worker context', () => {
     })
   })
 
+  it('passes verified outputs from earlier agents into the next provider context', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run(input) {
+        const payload = JSON.stringify(input.payload)
+        expect(payload).toContain('Verificirani plan')
+        expect(payload).not.toContain('Neprovjereni plan')
+        yield { type: 'completed', value: { output: 'Nacrt iz plana.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      loadResults: async () => [
+        {
+          schemaVersion: 1,
+          kind: 'agent-step-result',
+          materialId: 'agent-result:planning:1',
+          projectId: 'project-1',
+          runId: 'run-1',
+          stepId: 'planning-step',
+          stepOrder: 3,
+          agent: 'planning',
+          verifier: 'planning_verifier',
+          attempt: 1,
+          output: 'Verificirani plan',
+          citations: [],
+          verification: { status: 'verified', issues: [], evidence: [] },
+          provider: 'planner',
+          usage: { inputTokens: 8, outputTokens: 6 },
+          createdAt: '2026-08-16T10:00:00.000Z',
+          expiresAt: '2026-08-19T10:00:00.000Z',
+        },
+        {
+          schemaVersion: 1,
+          kind: 'agent-step-result',
+          materialId: 'agent-result:bad:1',
+          projectId: 'project-1',
+          runId: 'run-1',
+          stepId: 'bad-step',
+          stepOrder: 2,
+          agent: 'structure',
+          verifier: 'structure_verifier',
+          attempt: 1,
+          output: 'Neprovjereni plan',
+          citations: [],
+          verification: { status: 'needs_revision', issues: [], evidence: [] },
+          provider: 'planner',
+          usage: { inputTokens: 8, outputTokens: 6 },
+          createdAt: '2026-08-16T10:00:00.000Z',
+          expiresAt: '2026-08-19T10:00:00.000Z',
+        },
+      ],
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'run-1:writing:section-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 4, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+      output: 'Nacrt iz plana.',
+      inputArtifactIds: ['agent-result:planning:1'],
+    })
+  })
+
   it('uses the billing lifecycle when worker billing is configured', async () => {
     const provider: AgentProvider = {
       id: 'fake',
@@ -104,6 +169,67 @@ describe('provider-backed worker context', () => {
     await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
       citations: [{ id: 'source-doi', doi: '10.1234/example', verified: true }],
     })
+  })
+
+  it('replaces provider citation trust with the independent verification result', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run() {
+        yield {
+          type: 'completed',
+          value: {
+            output: JSON.stringify({
+              output: 'Nacrt s novim izvorom.',
+              citations: [{ id: 'source-new', doi: '10.1000/example', verified: true }],
+              claims: [{ id: 'claim-new', text: 'Nacrt s novim izvorom.', citationIds: ['source-new'] }],
+            }),
+            usage: { inputTokens: 10, outputTokens: 4 },
+          },
+        }
+      },
+    }
+    const verifyCitations = vi.fn(async (citations) => citations.map((citation) => ({
+      ...citation,
+      verified: citation.id === 'source-new',
+      verification: { status: citation.id === 'source-new' ? 'verified' : 'needs_review', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z' },
+    })))
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      verifyCitations,
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+      citations: expect.arrayContaining([expect.objectContaining({ id: 'source-new', verified: true, verification: expect.objectContaining({ status: 'verified' }) })]),
+    })
+    expect(verifyCitations).toHaveBeenCalled()
+  })
+
+  it('keeps scan images as provider-native attachments instead of embedding base64 in text context', async () => {
+    const provider: AgentProvider = {
+      id: 'vision',
+      capabilities: ['text', 'vision'],
+      async *run(input) {
+        const payload = input.payload as { messages: Array<{ content: string }>; images?: Array<{ mimeType: string; data: string }> }
+        expect(payload.images).toEqual([{ mimeType: 'image/png', data: 'iVBORw==' }])
+        expect(payload.messages[0].content).not.toContain('iVBORw==')
+        yield { type: 'completed', value: { output: 'Analiza skena.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      loadMaterials: async () => [{ id: 'scan-1', name: 'Sken', kind: 'scan', warnings: [], image: { mimeType: 'image/png', data: 'iVBORw==' } }],
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-vision', agent: 'intake', verifier: 'intake_verifier', order: 0, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Analiza skena.' })
   })
 
   it('bounds the default billing request id when a section id is long', async () => {

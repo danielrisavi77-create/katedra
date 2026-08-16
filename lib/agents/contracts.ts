@@ -42,9 +42,24 @@ export interface AgentProvider {
 export interface CitationEvidence {
   id: string
   title?: string
+  year?: number
   url?: string
   doi?: string
   verified: boolean
+  verification?: CitationVerification
+}
+
+export type CitationVerificationMethod = 'crossref' | 'url_fetch'
+export type CitationVerificationStatus = 'verified' | 'needs_review' | 'blocked'
+
+export interface CitationVerification {
+  status: CitationVerificationStatus
+  method: CitationVerificationMethod
+  checkedAt: string
+  titleMatch?: boolean
+  authorMatch?: boolean
+  yearMatch?: boolean
+  evidenceUrl?: string
 }
 
 export interface ClaimEvidence {
@@ -63,6 +78,7 @@ export interface AgentResultV1 {
   output: unknown
   citations: CitationEvidence[]
   claims?: ClaimEvidence[]
+  inputArtifactIds?: string[]
   provider: string
   usage?: UsageRecord
   billingState?: Exclude<BillingAttemptState, 'reserved'>

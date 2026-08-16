@@ -1,6 +1,10 @@
 import type { AgentId, AgentResultV1, CitationEvidence, VerificationIssue, VerificationResultV1 } from './contracts'
 
-export type AgentVerifier = (result: Pick<AgentResultV1, 'agent' | 'output' | 'citations' | 'claims'>) => VerificationResultV1
+export type AgentVerifier = (result: Pick<AgentResultV1, 'agent' | 'output' | 'citations' | 'claims'>, options?: VerifyAgentResultOptions) => VerificationResultV1
+
+export interface VerifyAgentResultOptions {
+  requireIndependentSourceVerification?: boolean
+}
 
 const AGENT_VERIFIERS: Record<AgentId, AgentVerifier> = {
   intake: verifyIntakeResult,
@@ -17,8 +21,8 @@ export function verifierForAgent(agent: AgentId): AgentVerifier {
   return AGENT_VERIFIERS[agent]
 }
 
-export function verifyAgentResult(result: Pick<AgentResultV1, 'agent' | 'output' | 'citations' | 'claims'>): VerificationResultV1 {
-  return verifierForAgent(result.agent)(result)
+export function verifyAgentResult(result: Pick<AgentResultV1, 'agent' | 'output' | 'citations' | 'claims'>, options: VerifyAgentResultOptions = {}): VerificationResultV1 {
+  return verifierForAgent(result.agent)(result, options)
 }
 
 function verifyIntakeResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
@@ -37,20 +41,20 @@ function verifyExportResult(result: Parameters<AgentVerifier>[0]): VerificationR
   return verifyBasicResult(result)
 }
 
-function verifySourcesResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
-  return verifyCitationBoundResult(result)
+function verifySourcesResult(result: Parameters<AgentVerifier>[0], options?: VerifyAgentResultOptions): VerificationResultV1 {
+  return verifyCitationBoundResult(result, options)
 }
 
-function verifyWritingResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
-  return verifyCitationBoundResult(result)
+function verifyWritingResult(result: Parameters<AgentVerifier>[0], options?: VerifyAgentResultOptions): VerificationResultV1 {
+  return verifyCitationBoundResult(result, options)
 }
 
-function verifyCitationResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
-  return verifyCitationBoundResult(result)
+function verifyCitationResult(result: Parameters<AgentVerifier>[0], options?: VerifyAgentResultOptions): VerificationResultV1 {
+  return verifyCitationBoundResult(result, options)
 }
 
-function verifyReviewResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
-  return verifyCitationBoundResult(result)
+function verifyReviewResult(result: Parameters<AgentVerifier>[0], options?: VerifyAgentResultOptions): VerificationResultV1 {
+  return verifyCitationBoundResult(result, options)
 }
 
 function verifyBasicResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
@@ -81,7 +85,7 @@ function verifyBasicResult(result: Parameters<AgentVerifier>[0]): VerificationRe
   return { status: 'verified', issues: [], evidence: citations }
 }
 
-function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0]): VerificationResultV1 {
+function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options: VerifyAgentResultOptions = {}): VerificationResultV1 {
   const base = verifyBasicResult(result)
   if (base.status !== 'verified') return base
 
@@ -108,6 +112,21 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0]): Verifi
       status: 'blocked',
       issues: [{ code: 'missing_source', message: 'Nema provjerenog izvora za rezultat.' }],
       evidence: citations,
+    }
+  }
+
+  if (options.requireIndependentSourceVerification) {
+    const independentFailures = citations.filter((citation) => citation.verified && citation.verification?.status !== 'verified')
+    if (independentFailures.length) {
+      return {
+        status: 'blocked',
+        issues: independentFailures.map((citation) => ({
+          code: 'unverified_source' as const,
+          message: 'Izvor nema neovisnu provjeru identiteta i ne smije u završni nacrt.',
+          citationId: citation.id,
+        })),
+        evidence: citations,
+      }
     }
   }
 

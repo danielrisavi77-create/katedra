@@ -36,6 +36,18 @@ describe('agent verifier', () => {
     })).toMatchObject({ status: 'verified', issues: [] })
   })
 
+  it('requires independent source verification for agentic citation-bound results', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s legacy oznakom izvora.',
+      claims: [{ id: 'claim-1', text: 'Tvrdnja s legacy oznakom izvora.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }],
+    }, { requireIndependentSourceVerification: true })).toMatchObject({
+      status: 'blocked',
+      issues: [{ code: 'unverified_source' }],
+    })
+  })
+
   it('blocks citation-required results when claim-to-source evidence is missing', () => {
     expect(verifyAgentResult({
       agent: 'writing',

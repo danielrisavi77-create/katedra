@@ -35,6 +35,25 @@ describe('run material context loader', () => {
     expect(storage.download).toHaveBeenCalledWith('user-1/project-1/run-1/manifest')
   })
 
+  it('loads bounded scan images separately for a vision-capable provider', async () => {
+    const manifestStore = {
+      list: vi.fn(async () => [{
+        materialId: 'scan-1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket',
+        storagePath: 'user-1/project-1/run-1/scan.png', manifestPath: 'user-1/project-1/run-1/scan.manifest',
+      }]),
+    }
+    const storage = {
+      download: vi.fn(async (path: string) => path.endsWith('.manifest')
+        ? JSON.stringify({ id: 'scan-1', projectId: 'project-1', name: 'Sken', kind: 'scan', mimeType: 'image/png', warnings: [], expiresAt: '2026-08-17T10:00:00.000Z' })
+        : new Uint8Array([137, 80, 78, 71]).buffer),
+    }
+
+    await expect(loadRunMaterialContexts(manifestStore, storage, {
+      runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket',
+    })).resolves.toEqual([{ id: 'scan-1', name: 'Sken', kind: 'scan', warnings: [], image: { mimeType: 'image/png', data: 'iVBORw==' } }])
+    expect(storage.download).toHaveBeenCalledWith('user-1/project-1/run-1/scan.png')
+  })
+
   it('does not load scoped material when the caller omits the storage bucket', async () => {
     const manifestStore = {
       list: vi.fn(async () => [{

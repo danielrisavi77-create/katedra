@@ -51,6 +51,51 @@ describe('provider execution bridge', () => {
     })
   })
 
+  it('preserves structured citation candidates for independent verification', async () => {
+    const testProvider: AgentProvider = {
+      id: 'anthropic',
+      capabilities: ['text'],
+      async *run() {
+        yield {
+          type: 'completed',
+          value: {
+            output: JSON.stringify({
+              output: 'Rezultat s kandidatom izvora.',
+              citations: [{ id: 'source-2', title: 'Naslov', doi: '10.1000/example', verified: false }],
+              claims: [{ id: 'claim-2', text: 'Rezultat s kandidatom izvora.', citationIds: ['source-2'] }],
+            }),
+            usage: { inputTokens: 5, outputTokens: 8 },
+          },
+        }
+      },
+    }
+
+    await expect(executeAgentProvider(testProvider, input)).resolves.toMatchObject({
+      citations: [{ id: 'source-2', doi: '10.1000/example', verified: false }],
+      claims: [{ id: 'claim-2', citationIds: ['source-2'] }],
+    })
+  })
+
+  it('never accepts the provider own verified flag as independent evidence', async () => {
+    const testProvider: AgentProvider = {
+      id: 'anthropic',
+      capabilities: ['text'],
+      async *run() {
+        yield {
+          type: 'completed',
+          value: {
+            output: JSON.stringify({ output: 'Kandidat', citations: [{ id: 'source-3', url: 'https://example.test', verified: true }] }),
+            usage: { inputTokens: 1, outputTokens: 1 },
+          },
+        }
+      },
+    }
+
+    await expect(executeAgentProvider(testProvider, input)).resolves.toMatchObject({
+      citations: [{ id: 'source-3', verified: false }],
+    })
+  })
+
   it('leaves an unstructured provider response without claims so source agents fail closed', async () => {
     const testProvider: AgentProvider = {
       id: 'anthropic',

@@ -1,4 +1,4 @@
-import type { AgentInput, AgentProvider, AgentResultV1, ClaimEvidence, UsageRecord } from './contracts'
+import type { AgentInput, AgentProvider, AgentResultV1, CitationEvidence, ClaimEvidence, UsageRecord } from './contracts'
 
 const STRUCTURED_EVIDENCE_INSTRUCTION = [
   'Vrati završni rezultat isključivo kao JSON objekt bez markdown omota.',
@@ -53,7 +53,7 @@ export async function executeAgentProvider(
   const parsed = parseStructuredAgentOutput(completedOutput || streamedOutput)
   return {
     output: parsed.output,
-    citations: [],
+    citations: parsed.citations,
     ...(parsed.claims ? { claims: parsed.claims } : {}),
     provider: provider.id,
     usage,
@@ -74,16 +74,45 @@ function withStructuredEvidenceInstruction(input: AgentInput): AgentInput {
   }
 }
 
-function parseStructuredAgentOutput(value: string): { output: string; claims?: ClaimEvidence[] } {
+function parseStructuredAgentOutput(value: string): { output: string; citations: CitationEvidence[]; claims?: ClaimEvidence[] } {
   try {
     const parsed = JSON.parse(value) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { output: value }
-    const candidate = parsed as { output?: unknown; claims?: unknown }
-    if (typeof candidate.output !== 'string' || !Array.isArray(candidate.claims)) return { output: value }
-    if (!candidate.claims.every(isClaimEvidence)) return { output: value }
-    return { output: candidate.output, claims: candidate.claims }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { output: value, citations: [] }
+    const candidate = parsed as { output?: unknown; citations?: unknown; claims?: unknown }
+    if (typeof candidate.output !== 'string') return { output: value, citations: [] }
+    const citations = candidate.citations === undefined
+      ? []
+      : Array.isArray(candidate.citations) && candidate.citations.every(isCitationEvidence)
+        ? candidate.citations.map(asUnverifiedCitation)
+        : []
+    if (!Array.isArray(candidate.claims)) return { output: candidate.output, citations }
+    if (!candidate.claims.every(isClaimEvidence)) return { output: candidate.output, citations }
+    return { output: candidate.output, citations, claims: candidate.claims }
   } catch {
-    return { output: value }
+    return { output: value, citations: [] }
+  }
+}
+
+function isCitationEvidence(value: unknown): value is CitationEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const citation = value as Record<string, unknown>
+  return typeof citation.id === 'string'
+    && citation.id.trim().length > 0
+    && typeof citation.verified === 'boolean'
+    && (citation.title === undefined || typeof citation.title === 'string')
+    && (citation.year === undefined || (typeof citation.year === 'number' && Number.isInteger(citation.year)))
+    && (citation.url === undefined || typeof citation.url === 'string')
+    && (citation.doi === undefined || typeof citation.doi === 'string')
+}
+
+function asUnverifiedCitation(citation: CitationEvidence): CitationEvidence {
+  return {
+    id: citation.id,
+    ...(citation.title ? { title: citation.title } : {}),
+    ...(citation.year !== undefined ? { year: citation.year } : {}),
+    ...(citation.url ? { url: citation.url } : {}),
+    ...(citation.doi ? { doi: citation.doi } : {}),
+    verified: false,
   }
 }
 

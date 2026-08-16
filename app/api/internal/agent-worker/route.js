@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createAnthropicAgentProvider } from '@/lib/agents/anthropic-provider'
+import { createGatewayAgentProvider } from '@/lib/agents/provider-gateway'
 import { createProviderRouter } from '@/lib/agents/provider-router'
 import { createProviderBackedExecutor } from '@/lib/agents/provider-worker'
 import { runAgentWorkerLoop } from '@/lib/agents/worker-loop'
@@ -10,7 +11,8 @@ import { runContextStoragePaths } from '@/lib/agents/run-context'
 import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { verifyAgentResult } from '@/lib/agents/verifier'
-import { storeAgentStepResult } from '@/lib/agents/run-result-storage'
+import { createIndependentCitationVerifier } from '@/lib/agents/source-verification'
+import { loadAgentRunResults, storeAgentStepResult } from '@/lib/agents/run-result-storage'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
@@ -85,11 +87,27 @@ async function handlePost(req) {
     apiKey: process.env.ANTHROPIC_API_KEY,
     model: workerConfig.model,
     timeoutMs: 150_000,
+    enableVision: process.env.KATEDRA_ANTHROPIC_VISION_ENABLED === 'true',
   })
+  const providers = [provider]
+  const assignments = Object.fromEntries(AGENT_IDS.map((agent) => [agent, provider.id]))
+  if (isResearchGatewayConfigured(process.env)) {
+    const researchProvider = createGatewayAgentProvider({
+      id: 'configured-research-gateway',
+      endpoint: process.env.KATEDRA_RESEARCH_PROVIDER_URL,
+      apiKey: process.env.KATEDRA_RESEARCH_PROVIDER_KEY,
+      model: process.env.KATEDRA_RESEARCH_PROVIDER_MODEL,
+      capabilities: ['text', 'web_research'],
+      timeoutMs: 150_000,
+    })
+    providers.push(researchProvider)
+    assignments.sources = researchProvider.id
+  }
   const router = createProviderRouter({
-    providers: [provider],
-    assignments: Object.fromEntries(AGENT_IDS.map((agent) => [agent, provider.id])),
+    providers,
+    assignments,
   })
+  const citationVerifier = createIndependentCitationVerifier()
   const storage = db.storage.from(BUCKET)
   const payloadStorage = {
     async download(path) {
@@ -106,6 +124,8 @@ async function handlePost(req) {
     sourcePolicy: run.source_policy,
     loadContext: () => loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
     loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
+    loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
+    verifyCitations: citationVerifier.verify,
     router,
     billing: { db, userId: run.user_id, model: workerConfig.model },
   })
@@ -123,7 +143,7 @@ async function handlePost(req) {
   })
   const result = await runAgentWorkerLoop(
     { db, workerId: process.env.KATEDRA_AGENT_WORKER_ID || 'katedra-web-worker', runId },
-    { execute, verify: verifyAgentResult, storeResult },
+    { execute, verify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: true }), storeResult },
     { maxSteps: 1 },
   )
   if (result.error) return privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 })
@@ -135,4 +155,22 @@ function isAuthorized(actual, expected) {
   const left = Buffer.from(actual)
   const right = Buffer.from(expected)
   return left.length === right.length && timingSafeEqual(left, right)
+}
+
+function isResearchGatewayConfigured(env) {
+  if (env.KATEDRA_RESEARCH_POLICY_APPROVED !== 'true') return false
+  if (!isHttpsUrl(env.KATEDRA_RESEARCH_PROVIDER_URL)) return false
+  return isConfigured(env.KATEDRA_RESEARCH_PROVIDER_KEY) && isConfigured(env.KATEDRA_RESEARCH_PROVIDER_MODEL)
+}
+
+function isConfigured(value) {
+  return typeof value === 'string' && Boolean(value.trim()) && !value.trim().startsWith('REPLACE_')
+}
+
+function isHttpsUrl(value) {
+  try {
+    return new URL(String(value)).protocol === 'https:'
+  } catch {
+    return false
+  }
 }

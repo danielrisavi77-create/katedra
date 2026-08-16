@@ -37,11 +37,19 @@ export function isAgenticWorkspaceAvailable(env: RuntimeEnvironment = process.en
 }
 
 /**
- * Web research remains unavailable until the canonical policy source and a
- * provider adapter are deployed. The current worker only has text capability.
+ * Web research is advertised only when the server-side gateway, model and
+ * explicit policy approval are all configured. The browser never receives the
+ * gateway key or routing details.
  */
-export function isAgentWebResearchAvailable(_env: RuntimeEnvironment = process.env): boolean {
-  return false
+export function isAgentWebResearchAvailable(env: RuntimeEnvironment = process.env): boolean {
+  if (!isAgenticWorkspaceAvailable(env)) return false
+  if (env.KATEDRA_RESEARCH_POLICY_APPROVED !== 'true') return false
+  if (!isConfigured(env.KATEDRA_RESEARCH_PROVIDER_KEY) || !isConfigured(env.KATEDRA_RESEARCH_PROVIDER_MODEL)) return false
+  try {
+    return new URL(String(env.KATEDRA_RESEARCH_PROVIDER_URL)).protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 function isConfigured(value: unknown): value is string {

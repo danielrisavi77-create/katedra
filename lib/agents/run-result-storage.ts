@@ -4,6 +4,7 @@ import type { AgentStepRecord } from './run-state'
 import type { RunPayloadManifest, RunPayloadManifestStore, RunPayloadStorage } from './run-context-loader'
 import { mapWithConcurrency } from '../async/map-limited'
 import { isScopedAgentPayload } from './payload-scope'
+import { citationVerificationMethod } from './source-verification'
 
 const DEFAULT_BUCKET = 'katedra-temporary-materials'
 const RESULT_TTL_MS = 72 * 60 * 60 * 1000
@@ -22,12 +23,14 @@ export interface AgentStepResultPayloadV1 {
   stepId: string
   agent: AgentResultV1['agent']
   verifier: AgentStepRecord['verifier']
+  stepOrder?: number
   sectionId?: string
   baseRevision?: string
   attempt: 1 | 2 | 3
   output: string
   citations: CitationEvidence[]
   claims?: ClaimEvidence[]
+  inputArtifactIds?: string[]
   verification: VerificationResultV1
   provider: string
   usage: UsageRecord
@@ -39,6 +42,7 @@ export interface AgentStepResultPayloadV1 {
 interface ResultStorageObjectClient {
   upload: (path: string, body: Uint8Array, options: { contentType: string; cacheControl: string; upsert: boolean }) => Promise<{ error?: { message?: string } | null }>
   remove: (paths: string[]) => Promise<{ error?: { message?: string } | null }>
+  download?: (path: string) => Promise<{ data?: unknown; error?: { message?: string } | null }>
 }
 
 interface ResultDatabase {
@@ -86,12 +90,16 @@ export async function storeAgentStepResult(
     stepId: input.step.id,
     agent: input.step.agent,
     verifier: input.step.verifier,
+    stepOrder: input.step.order,
     ...(input.step.sectionId ? { sectionId: input.step.sectionId } : {}),
     ...(input.result.baseRevision ? { baseRevision: input.result.baseRevision } : {}),
     attempt: input.step.attempt,
     output,
     citations: Array.isArray(input.result.citations) ? input.result.citations.slice(0, 100) : [],
     ...(Array.isArray(input.result.claims) ? { claims: input.result.claims.slice(0, 200) } : {}),
+    ...(Array.isArray(input.result.inputArtifactIds)
+      ? { inputArtifactIds: uniqueBoundedStrings(input.result.inputArtifactIds, 100) }
+      : {}),
     verification: input.verification,
     provider: input.result.provider,
     usage: input.result.usage || { inputTokens: 0, outputTokens: 0 },
@@ -104,11 +112,12 @@ export async function storeAgentStepResult(
   const bucket = input.bucket || DEFAULT_BUCKET
   const manifest = { ...payload, storageBucket: bucket, storagePath, manifestPath }
   const storage = db.storage.from(bucket)
-  const upload = await storage.upload(storagePath, body, { contentType: 'application/json', cacheControl: '3600', upsert: true })
-  if (upload.error) return { ok: false, error: 'Spremanje rezultata agenta nije uspjelo.' }
-  const manifestUpload = await storage.upload(manifestPath, new TextEncoder().encode(JSON.stringify(manifest)), { contentType: 'application/json', cacheControl: '3600', upsert: true })
-  if (manifestUpload.error) {
-    await storage.remove([storagePath])
+  const payloadUpload = await ensureImmutableObject(storage, storagePath, body)
+  if (!payloadUpload.ok) return { ok: false, error: 'Spremanje rezultata agenta nije uspjelo.' }
+  const manifestBody = new TextEncoder().encode(JSON.stringify(manifest))
+  const manifestUpload = await ensureImmutableObject(storage, manifestPath, manifestBody)
+  if (!manifestUpload.ok) {
+    if (payloadUpload.created) await storage.remove([storagePath])
     return { ok: false, error: 'Spremanje manifesta rezultata nije uspjelo.' }
   }
   const registered = await registerAgentPayload(db, {
@@ -122,10 +131,37 @@ export async function storeAgentStepResult(
     expiresAt,
   })
   if (!registered.ok) {
-    await storage.remove([storagePath, manifestPath])
+    if (payloadUpload.created || manifestUpload.created) await storage.remove([storagePath, manifestPath])
     return { ok: false, error: 'Registracija rezultata agenta nije uspjela.' }
   }
   return { ok: true, value: { manifestId: registered.value.manifestId, materialId, expiresAt } }
+}
+
+async function ensureImmutableObject(storage: ResultStorageObjectClient, path: string, body: Uint8Array): Promise<{ ok: true; created: boolean } | { ok: false }> {
+  const uploaded = await storage.upload(path, body, { contentType: 'application/json', cacheControl: '3600', upsert: false })
+  if (!uploaded.error) return { ok: true, created: true }
+  if (!storage.download) return { ok: false }
+  try {
+    const existing = await storage.download(path)
+    if (existing.error || existing.data === undefined || existing.data === null) return { ok: false }
+    const existingBytes = await storageValueToBytes(existing.data)
+    return bytesEqual(existingBytes, body) ? { ok: true, created: false } : { ok: false }
+  } catch {
+    return { ok: false }
+  }
+}
+
+async function storageValueToBytes(value: unknown): Promise<Uint8Array> {
+  if (value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (typeof value === 'string') return new TextEncoder().encode(value)
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return new Uint8Array(await value.arrayBuffer())
+  throw new Error('Nepoznat format privatnog objekta.')
+}
+
+function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false
+  return left.every((value, index) => value === right[index])
 }
 
 export async function loadAgentRunResults(
@@ -167,11 +203,13 @@ function validatePayload(value: Record<string, unknown>, entry: RunPayloadManife
   if (value.schemaVersion !== 1 || value.kind !== 'agent-step-result') return null
   if (value.materialId !== entry.materialId || value.projectId !== entry.projectId || value.runId !== entry.runId) return null
   if (typeof value.stepId !== 'string' || !value.stepId.trim() || !isAgentId(value.agent) || value.verifier !== `${value.agent}_verifier` || typeof value.output !== 'string') return null
+  if (value.stepOrder !== undefined && (!Number.isInteger(value.stepOrder) || Number(value.stepOrder) < 0)) return null
   const attempt = typeof value.attempt === 'number' ? value.attempt : NaN
   if (!Number.isInteger(attempt) || attempt < 1 || attempt > 3) return null
   if (`${RESULT_PREFIX}${safeSegment(value.stepId)}:${attempt}` !== entry.materialId) return null
   if (!Array.isArray(value.citations) || !value.citations.every(isCitationEvidence) || !isVerificationResult(value.verification)) return null
   if (value.claims !== undefined && (!Array.isArray(value.claims) || !value.claims.every(isClaimEvidence))) return null
+  if (value.inputArtifactIds !== undefined && (!Array.isArray(value.inputArtifactIds) || !value.inputArtifactIds.every((id) => typeof id === 'string' && id.trim().length > 0 && id.length <= 200))) return null
   if (typeof value.provider !== 'string' || !value.provider.trim() || !isUsageRecord(value.usage)) return null
   if (value.billingState !== undefined && !['settled', 'released', 'pending_reconciliation'].includes(String(value.billingState))) return null
   if (typeof value.createdAt !== 'string' || !isActiveTemporaryPayload(value.expiresAt, now)) return null
@@ -185,8 +223,22 @@ function isCitationEvidence(value: unknown): value is CitationEvidence {
     && citation.id.trim().length > 0
     && typeof citation.verified === 'boolean'
     && (citation.title === undefined || typeof citation.title === 'string')
+    && (citation.year === undefined || (typeof citation.year === 'number' && Number.isInteger(citation.year)))
     && (citation.url === undefined || typeof citation.url === 'string')
     && (citation.doi === undefined || typeof citation.doi === 'string')
+    && (citation.verification === undefined || isCitationVerification(citation.verification))
+}
+
+function isCitationVerification(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const verification = value as Record<string, unknown>
+  return ['verified', 'needs_review', 'blocked'].includes(String(verification.status))
+    && citationVerificationMethod(verification.method)
+    && typeof verification.checkedAt === 'string'
+    && (verification.titleMatch === undefined || typeof verification.titleMatch === 'boolean')
+    && (verification.authorMatch === undefined || typeof verification.authorMatch === 'boolean')
+    && (verification.yearMatch === undefined || typeof verification.yearMatch === 'boolean')
+    && (verification.evidenceUrl === undefined || typeof verification.evidenceUrl === 'string')
 }
 
 function isUsageRecord(value: unknown): value is UsageRecord {
@@ -225,4 +277,8 @@ function isActiveTemporaryPayload(value: unknown, now: number): boolean {
 function safeSegment(value: string): string {
   const cleaned = value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 180)
   return cleaned || 'unknown'
+}
+
+function uniqueBoundedStrings(values: string[], max: number): string[] {
+  return [...new Set(values.filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim().slice(0, 200)))].slice(0, max)
 }
