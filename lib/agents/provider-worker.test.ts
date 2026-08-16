@@ -56,7 +56,7 @@ describe('provider-backed worker context', () => {
     await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
       output: 'Nacrt.',
       provider: 'fake',
-      citations: [{ id: 'source-1', verified: true }],
+      citations: [{ id: 'source-1', verified: false }],
     })
   })
 
@@ -167,7 +167,49 @@ describe('provider-backed worker context', () => {
     })
 
     await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
-      citations: [{ id: 'source-doi', doi: '10.1234/example', verified: true }],
+      citations: [{ id: 'source-doi', doi: '10.1234/example', verified: false }],
+    })
+  })
+
+  it('normalizes DOI URLs from the manuscript before building inherited evidence', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run() {
+        yield { type: 'completed', value: { output: 'Nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => ({ ...manuscript, sources: [{ id: 'source-doi-url', title: 'DOI URL izvor', urlOrDoi: 'https://doi.org/10.1234/example', verified: true }] }),
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+      citations: [{ id: 'source-doi-url', doi: '10.1234/example', verified: false }],
+    })
+  })
+
+  it('does not treat inherited manuscript sources as independently verified without a verifier', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run() {
+        yield { type: 'completed', value: { output: 'Nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => ({ ...manuscript, sources: [{ id: 'source-unchecked', title: 'Nepotvrđen izvor', urlOrDoi: '10.1234/example', verified: true }] }),
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+      citations: [{ id: 'source-unchecked', doi: '10.1234/example', verified: false }],
     })
   })
 

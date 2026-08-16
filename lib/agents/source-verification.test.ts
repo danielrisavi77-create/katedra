@@ -23,6 +23,32 @@ describe('independent citation verification', () => {
     expect(fetchImpl).toHaveBeenCalledWith('https://api.crossref.org/works/10.1000%2Fexample', expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
+  it('canonicalizes a DOI URL before returning verified citation evidence', async () => {
+    const verifier = createIndependentCitationVerifier({
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({
+        message: { title: ['Matching title'], published: { 'date-parts': [[2024]] } },
+      }), { status: 200 })),
+    })
+
+    await expect(verifier.verify([{ id: 'doi-url', title: 'Matching title', year: 2024, doi: 'https://doi.org/10.1000/example', verified: false }])).resolves.toEqual([
+      expect.objectContaining({
+        doi: '10.1000/example',
+        verified: true,
+        verification: expect.objectContaining({ status: 'verified' }),
+      }),
+    ])
+  })
+
+  it('accepts the common doi: prefix as the same canonical DOI locator', async () => {
+    const verifier = createIndependentCitationVerifier({
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ message: { title: ['Matching title'] } }), { status: 200 })),
+    })
+
+    await expect(verifier.verify([{ id: 'doi-prefix', title: 'Matching title', doi: 'doi:10.1000/example', verified: false }])).resolves.toEqual([
+      expect.objectContaining({ doi: '10.1000/example', verified: true }),
+    ])
+  })
+
   it('does not trust a mismatching DOI title', async () => {
     const verifier = createIndependentCitationVerifier({
       fetchImpl: vi.fn(async () => new Response(JSON.stringify({ message: { title: ['Different title'] } }), { status: 200 })),

@@ -43,7 +43,7 @@ describe('agentic runtime integration', () => {
       workType: 's' as const,
       activeSectionId: 'section-1',
       sections: [{ id: 'section-1', title: 'Uvod', kind: 'chapter' as const, order: 0, status: 'draft' as const, content: { type: 'doc' as const, content: [{ type: 'paragraph' as const }] }, updatedAt: '2026-08-14T10:00:00.000Z' }],
-      sources: [{ id: 'source-1', title: 'Provjereni izvor', urlOrDoi: 'https://example.com', verified: true }],
+      sources: [{ id: 'source-1', title: 'Provjereni izvor', urlOrDoi: '10.1234/example', verified: true }],
       meta: {},
       createdAt: '2026-08-14T10:00:00.000Z',
       updatedAt: '2026-08-14T10:00:00.000Z',
@@ -53,6 +53,11 @@ describe('agentic runtime integration', () => {
       runId: 'run-1',
       sourcePolicy: 'uploaded_only',
       loadContext: async () => manuscript,
+      verifyCitations: async (citations) => citations.map((citation) => ({
+        ...citation,
+        verified: true,
+        verification: { status: 'verified', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z' },
+      })),
       router: { providerFor: () => provider },
       billing: { db: { rpc }, userId: 'user-1', model: 'agent-model' },
     })

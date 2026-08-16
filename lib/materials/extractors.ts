@@ -31,6 +31,8 @@ export async function extractMaterial(input: MaterialInput, options: { ocr?: Ocr
   const extension = input.name.toLowerCase().split('.').pop()
   try {
     if (!isMimeCompatible(extension, input.mimeType)) return failed('MIME tip i ekstenzija materijala nisu usklađeni.')
+    const signatureError = validateBinarySignature(extension, input.buffer)
+    if (signatureError) return failed(signatureError)
     if (extension === 'txt' || extension === 'md') return normalizeText(input.buffer.toString('utf8'))
     if (extension === 'docx') return await withTimeout(extractDocx(input), MATERIAL_LIMITS.timeoutMs)
     if (extension === 'pdf') return await withTimeout(extractPdf(input), MATERIAL_LIMITS.timeoutMs)
@@ -55,6 +57,25 @@ function isMimeCompatible(extension: string | undefined, mimeType: string): bool
   if (extension === 'pdf') return type === 'application/pdf'
   if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'tif', 'tiff'].includes(extension || '')) return type.startsWith('image/')
   return true
+}
+
+function validateBinarySignature(extension: string | undefined, buffer: Buffer): string | null {
+  if (extension === 'pdf' && !buffer.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+    return 'Datoteka nema valjan PDF potpis.'
+  }
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'tif', 'tiff'].includes(extension || '') && !hasImageSignature(extension, buffer)) {
+    return `Datoteka nema valjan ${String(extension).toUpperCase()} potpis.`
+  }
+  return null
+}
+
+function hasImageSignature(extension: string | undefined, buffer: Buffer): boolean {
+  if (extension === 'png') return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  if (extension === 'jpg' || extension === 'jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+  if (extension === 'gif') return buffer.subarray(0, 6).toString('ascii') === 'GIF87a' || buffer.subarray(0, 6).toString('ascii') === 'GIF89a'
+  if (extension === 'webp') return buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  if (extension === 'tif' || extension === 'tiff') return buffer.subarray(0, 4).equals(Buffer.from([0x49, 0x49, 0x2a, 0x00])) || buffer.subarray(0, 4).equals(Buffer.from([0x4d, 0x4d, 0x00, 0x2a]))
+  return false
 }
 
 async function extractDocx(input: MaterialInput): Promise<MaterialExtractionResult> {

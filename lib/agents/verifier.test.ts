@@ -27,6 +27,17 @@ describe('agent verifier', () => {
     })).toMatchObject({ status: 'blocked' })
   })
 
+  it('requests a bounded repair when an agent returns empty output', () => {
+    expect(verifyAgentResult({
+      agent: 'planning',
+      output: '',
+      citations: [],
+    })).toMatchObject({
+      status: 'needs_revision',
+      issues: [{ code: 'invalid_output' }],
+    })
+  })
+
   it('accepts a result when every factual claim has verified evidence', () => {
     expect(verifyAgentResult({
       agent: 'writing',

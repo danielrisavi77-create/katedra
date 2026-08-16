@@ -112,7 +112,7 @@ export const GOLDEN_ACADEMIC_PROJECTS: readonly GoldenAcademicProject[] = [
     sourcePolicy: 'web_research',
     materialProfile: ['rules', 'source'],
     result: result({ output: '   ' }),
-    expectedVerification: 'failed',
+    expectedVerification: 'needs_revision',
   },
   {
     id: 'golden-diplomski-unmapped-claim',

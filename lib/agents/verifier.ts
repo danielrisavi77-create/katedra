@@ -64,7 +64,7 @@ function verifyBasicResult(result: Parameters<AgentVerifier>[0]): VerificationRe
 
   if (typeof result.output !== 'string' || !result.output.trim()) {
     issues.push({ code: 'invalid_output', message: 'Agent nije vratio sadržaj za provjeru.' })
-    return { status: 'failed', issues, evidence: citations }
+    return { status: 'needs_revision', issues, evidence: citations }
   }
 
   const incomplete = citations.filter((citation) => citation.verified && !hasValidCitationLocator(citation))

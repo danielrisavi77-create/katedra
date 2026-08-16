@@ -8,7 +8,7 @@ describe('Golden Academic Projects', () => {
     expect(GOLDEN_ACADEMIC_PROJECTS).toHaveLength(10)
     expect(new Set(GOLDEN_ACADEMIC_PROJECTS.map((project) => project.id)).size).toBe(10)
     expect(new Set(GOLDEN_ACADEMIC_PROJECTS.map((project) => project.workType))).toEqual(new Set(['s', 'z', 'd']))
-    expect(new Set(GOLDEN_ACADEMIC_PROJECTS.map((project) => project.expectedVerification))).toEqual(new Set(['verified', 'needs_revision', 'blocked', 'failed']))
+    expect(new Set(GOLDEN_ACADEMIC_PROJECTS.map((project) => project.expectedVerification))).toEqual(new Set(['verified', 'needs_revision', 'blocked']))
   })
 
   it.each(GOLDEN_ACADEMIC_PROJECTS)('$id remains aligned with the verifier contract', (project) => {

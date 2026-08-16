@@ -23,10 +23,20 @@ describe('material extractors', () => {
     await expect(extractMaterial({ name: 'scan.png', mimeType: 'text/plain', buffer: Buffer.from('slika') })).resolves.toMatchObject({ status: 'failed' })
   })
 
+  it('rejects an image or PDF whose binary signature does not match its declared format', async () => {
+    await expect(extractMaterial({ name: 'scan.png', mimeType: 'image/png', buffer: Buffer.from('not actually a PNG') }, {
+      ocr: async () => ({ text: 'Ne smije se pozvati', warnings: [] }),
+    })).resolves.toMatchObject({ status: 'failed', warnings: ['Datoteka nema valjan PNG potpis.'] })
+    await expect(extractMaterial({ name: 'rad.pdf', mimeType: 'application/pdf', buffer: Buffer.from('not actually a PDF') })).resolves.toMatchObject({
+      status: 'failed',
+      warnings: ['Datoteka nema valjan PDF potpis.'],
+    })
+  })
+
   it('uses the configured OCR provider for image material', async () => {
     const ocr = vi.fn().mockResolvedValue({ text: 'Prepoznati tekst', warnings: [] })
 
-    await expect(extractMaterial({ name: 'scan.png', mimeType: 'image/png', buffer: Buffer.from('image') }, { ocr })).resolves.toMatchObject({
+    await expect(extractMaterial({ name: 'scan.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) }, { ocr })).resolves.toMatchObject({
       status: 'extracted',
       text: 'Prepoznati tekst',
     })
@@ -34,13 +44,13 @@ describe('material extractors', () => {
   })
 
   it('returns needs_review when OCR cannot confidently read the image', async () => {
-    await expect(extractMaterial({ name: 'scan.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('image') }, {
+    await expect(extractMaterial({ name: 'scan.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff]) }, {
       ocr: async () => ({ text: '', warnings: ['Nizak OCR confidence'] }),
     })).resolves.toMatchObject({ status: 'needs_review', warnings: expect.arrayContaining(['Nizak OCR confidence']) })
   })
 
   it('does not expose provider exception details to the upload client', async () => {
-    const result = await extractMaterial({ name: 'scan.png', mimeType: 'image/png', buffer: Buffer.from('image') }, {
+    const result = await extractMaterial({ name: 'scan.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) }, {
       ocr: async () => { throw new Error('internal provider URL and credential detail') },
     })
 

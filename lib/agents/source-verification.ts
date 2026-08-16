@@ -52,14 +52,15 @@ async function verifyDoi(
   doi: string,
   input: { fetchImpl: FetchImplementation; now: () => string; timeoutMs: number },
 ): Promise<CitationEvidence> {
+  const canonicalCitation = citation.doi === doi ? citation : { ...citation, doi }
   const verificationBase = { method: 'crossref' as const, checkedAt: input.now(), evidenceUrl: `https://api.crossref.org/works/${encodeURIComponent(doi)}` }
   try {
     const fetched = await fetchJsonWithTimeout(verificationBase.evidenceUrl, input)
-    if (!fetched) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
+    if (!fetched) return withVerification(canonicalCitation, { ...verificationBase, status: 'needs_review' })
     const { response, body } = fetched
-    if (!response.ok) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
+    if (!response.ok) return withVerification(canonicalCitation, { ...verificationBase, status: 'needs_review' })
     const message = readCrossrefMessage(body)
-    if (!message) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
+    if (!message) return withVerification(canonicalCitation, { ...verificationBase, status: 'needs_review' })
 
     const titleMatch = !citation.title || normalizeText(citation.title) === normalizeText(message.title)
     const authorMatch = !citation.authors || !citation.authors.trim()
@@ -67,12 +68,12 @@ async function verifyDoi(
       : Boolean(message.authors && authorsMatch(citation.authors, message.authors))
     const yearMatch = !citation.year || (message.year !== undefined && citation.year === message.year)
     if (message.retracted) {
-      return withVerification(citation, { ...verificationBase, status: 'blocked', titleMatch, authorMatch, yearMatch, retracted: true })
+      return withVerification(canonicalCitation, { ...verificationBase, status: 'blocked', titleMatch, authorMatch, yearMatch, retracted: true })
     }
     const status = titleMatch && authorMatch && yearMatch ? 'verified' : 'needs_review'
-    return withVerification(citation, { ...verificationBase, status, titleMatch, authorMatch, yearMatch })
+    return withVerification(canonicalCitation, { ...verificationBase, status, titleMatch, authorMatch, yearMatch })
   } catch {
-    return withVerification(citation, { ...verificationBase, status: 'needs_review' })
+    return withVerification(canonicalCitation, { ...verificationBase, status: 'needs_review' })
   }
 }
 
@@ -144,7 +145,7 @@ function withVerification(citation: CitationEvidence, verification: CitationVeri
 
 function normalizeDoi(value: string | undefined): string | null {
   if (typeof value !== 'string') return null
-  const normalized = value.trim().replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+  const normalized = value.trim().replace(/^doi:\s*/i, '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
   return DOI_PATTERN.test(normalized) ? normalized : null
 }
 

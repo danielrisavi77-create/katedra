@@ -16,6 +16,7 @@ const MAX_BILLING_REQUEST_ID_LENGTH = 100
 const MAX_SECTION_CONTEXT_CHARS = 120_000
 const MAX_MATERIAL_CONTEXT_CHARS = 50_000
 const MAX_TOTAL_MATERIAL_CONTEXT_CHARS = 300_000
+const DOI_PATTERN = /^10\.\d{4,9}\/\S+$/i
 
 export function createProviderBackedExecutor(input: {
   projectId: string
@@ -119,10 +120,16 @@ function citationFromSource(source: ManuscriptV1['sources'][number]) {
     : typeof source.year === 'string' && /^\d{4}$/.test(source.year)
       ? Number(source.year)
       : undefined
-  const base = { id: source.id, title: source.title, ...(source.authors ? { authors: source.authors } : {}), ...(numericYear ? { year: numericYear } : {}), verified: true as const }
-  return /^10\.\d{4,9}\/\S+$/i.test(locator)
-    ? { ...base, doi: locator }
+  const base = { id: source.id, title: source.title, ...(source.authors ? { authors: source.authors } : {}), ...(numericYear ? { year: numericYear } : {}), verified: false as const }
+  const doi = normalizeDoi(locator)
+  return doi
+    ? { ...base, doi }
     : { ...base, url: locator }
+}
+
+function normalizeDoi(value: string): string | null {
+  const normalized = value.replace(/^doi:\s*/i, '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+  return DOI_PATTERN.test(normalized) ? normalized : null
 }
 
 function mergeCitations(citations: AgentResultV1['citations']): AgentResultV1['citations'] {
