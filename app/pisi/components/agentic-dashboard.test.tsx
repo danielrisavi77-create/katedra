@@ -41,13 +41,18 @@ afterEach(() => {
 describe('AgenticDashboard', () => {
   it('shows read-only manuscript context and the active verifier', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => runningBody }))
-    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
+    const onOpenAssistant = vi.fn()
+    render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onOpenAssistant={onOpenAssistant} />)
 
     expect(await screen.findByRole('heading', { name: 'Tijek izrade rada' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Dnevnik nastanka rada' })).toBeTruthy()
+    expect(screen.getAllByText('Katedra istražuje literaturu').length).toBeGreaterThan(0)
     expect(screen.getByText('Read-only pregled')).toBeTruthy()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Pitaj Katedru o ovom koraku' }))
+    expect(onOpenAssistant).toHaveBeenCalledWith(undefined)
     expect(screen.getByText('Početni tekst rada.')).toBeTruthy()
     expect(screen.getByText('Literatura')).toBeTruthy()
-    expect(screen.getByText(/Pokušaj 2\/3/)).toBeTruthy()
+    expect(screen.getAllByText(/Pokušaj 2\/3/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/verifikator/i).length).toBeGreaterThan(0)
     expect(screen.queryByText(/Autonomni tijek|Agentički workspace|Agent dashboard|Generator|Autopilot/i)).toBeNull()
   })
@@ -67,7 +72,7 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
-    expect(await screen.findByText(/Verifikator Evidence Guard V2/i)).toBeTruthy()
+    expect((await screen.findAllByText(/Verifikator Evidence Guard V2/i)).length).toBeGreaterThan(0)
     expect(screen.queryByText('Verifikator literature')).toBeNull()
   })
 
@@ -79,8 +84,8 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
-    expect(await screen.findByText('Ustav Republike Hrvatske')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'https://example.test/ustav' })).toBeTruthy()
+    expect((await screen.findAllByText('Ustav Republike Hrvatske')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: 'https://example.test/ustav' }).length).toBeGreaterThan(0)
     const evidence = screen.getByLabelText('Izvori za Uvod')
     expect(within(evidence).getByText('Provjereno')).toBeTruthy()
   })
@@ -114,7 +119,7 @@ describe('AgenticDashboard', () => {
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
     expect(await screen.findByText('Potrebna je intervencija')).toBeTruthy()
-    expect(screen.getByText('Nedostaje provjeren izvor.')).toBeTruthy()
+    expect(screen.getAllByText('Nedostaje provjeren izvor.').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeTruthy()
   })
 
@@ -127,7 +132,7 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} onReset={onReset} />)
 
-    expect(await screen.findByText(/Tijek je zaustavljen zbog gre/)).toBeTruthy()
+    expect((await screen.findAllByText(/Tijek je zaustavljen zbog gre/)).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Novi tijek' }))
     expect(onReset).toHaveBeenCalledTimes(1)
@@ -203,7 +208,7 @@ describe('AgenticDashboard', () => {
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
     expect(await screen.findByText('Literatura')).toBeTruthy()
-    expect(screen.getByText(/Verifikator literature/)).toBeTruthy()
+    expect(screen.getAllByText(/Verifikator literature/).length).toBeGreaterThan(0)
     expect(pollers.length).toBeGreaterThan(0)
     await act(async () => {
       pollers[0]()
@@ -213,7 +218,7 @@ describe('AgenticDashboard', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Literatura')).toBeTruthy()
-    expect(screen.getByText(/Verifikator literature/)).toBeTruthy()
+    expect(screen.getAllByText(/Verifikator literature/).length).toBeGreaterThan(0)
     expect((await screen.findByRole('alert')).textContent).toMatch(/mrež.*greš/i)
     fireEvent.click(screen.getByRole('button', { name: /Pokušaj ponovno/i }))
     await act(async () => {
@@ -223,7 +228,7 @@ describe('AgenticDashboard', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(screen.getByText('Literatura')).toBeTruthy()
-    expect(screen.getByText(/Verifikator literature/)).toBeTruthy()
+    expect(screen.getAllByText(/Verifikator literature/).length).toBeGreaterThan(0)
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
@@ -234,7 +239,7 @@ describe('AgenticDashboard', () => {
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
-      expect(await screen.findAllByText('Plan rada čeka svoj red.')).toHaveLength(2)
+      expect(await screen.findAllByText('Plan rada čeka svoj red.')).toHaveLength(1)
     expect(screen.queryByText(/Plan rada je u tijeku/i)).toBeNull()
   })
 

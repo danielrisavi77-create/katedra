@@ -6,6 +6,7 @@ import { createAcademicCatalog, displayAcademicProfile, findAcademicUnits, findP
 import type { ProjectCurrentState } from '../../../lib/project/completion-scan'
 import type { LegacyWorkType } from '../../../lib/manuscript/types'
 import { ThemeToggle } from '../../theme-toggle'
+import { AgenticProcessPreview } from './agentic-process-preview'
 
 export type OnboardingResult = {
   startMode: 'new' | 'existing'
@@ -141,6 +142,7 @@ export function OnboardingFlow({
               <span>02</span><b>Imam tekst</b><small>Zalijepi postojeći nacrt i nastavi ga uređivati.</small><em>→</em>
             </button>
           </div>
+          <AgenticProcessPreview mode="guided" sourcePolicy="uploaded_only" />
         </section>
       )}
 

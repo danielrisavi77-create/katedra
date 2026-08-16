@@ -46,7 +46,9 @@ describe('AgenticIntervention', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/agent-runs/run-1/context', expect.objectContaining({ method: 'POST' })))
     expect(fetchMock).toHaveBeenCalledWith('/api/agent-runs/run-1/resume', expect.objectContaining({ method: 'POST' }))
-    expect(onResumed).toHaveBeenCalled()
+    expect(onResumed).toHaveBeenCalledWith(expect.objectContaining({
+      sections: [expect.objectContaining({ id: 'intro', title: 'Uvod rada' })],
+    }))
   })
 
   it('keeps the user in intervention when context upload fails', async () => {

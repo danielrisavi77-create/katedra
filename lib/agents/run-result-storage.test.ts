@@ -24,29 +24,174 @@ describe('agent result payload storage', () => {
     expect(rpc).toHaveBeenCalledWith('register_agent_payload', expect.objectContaining({ p_run_id: 'run-1', p_material_id: expect.stringMatching(/^agent-result:/), p_storage_path: expect.stringContaining('/results/') }))
   })
 
+  it('rejects a result that targets a different section than the claimed step', async () => {
+    const rpc = vi.fn(async () => ({ data: [{ manifest_id: 'manifest-result-1' }], error: null }))
+    const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({
+      upload: vi.fn(async () => ({ error: null })),
+      remove: vi.fn(async () => ({ error: null })),
+    })) } }, {
+      userId: 'user-1',
+      projectId: 'project-1',
+      runId: 'run-1',
+      step,
+      result: { ...result, sectionId: 'section-2' },
+      verification,
+    })
+
+    expect(stored).toEqual({ ok: false, error: 'Rezultat agenta ne pripada claimanoj sekciji.' })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
   it('loads only result payloads belonging to the requested run and project', async () => {
     const manifests = { list: vi.fn(async () => [
-      { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'result.json', manifestPath: 'manifest.json' },
+      { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json' },
       { materialId: 'source-1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'source.json', manifestPath: 'source.manifest.json' },
     ]) }
     const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2026-08-17T10:00:00.000Z', verification }
-    const storage = { download: vi.fn(async (path: string) => path === 'manifest.json' ? JSON.stringify({ ...payload, storagePath: 'result.json', materialId: 'agent-result:step-1:1' }) : JSON.stringify(payload)) }
-    const loaded = await loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1' })
+    const storage = { download: vi.fn(async (path: string) => path.endsWith('/manifest.json') ? JSON.stringify({ ...payload, storagePath: 'result.json', materialId: 'agent-result:step-1:1' }) : JSON.stringify(payload)) }
+    const loaded = await loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' })
     expect(loaded).toHaveLength(1)
     expect(loaded[0]).toMatchObject({ stepId: 'step-1', output: 'Novi odlomak rada.', projectId: 'project-1', claims: [{ id: 'claim-1', citationIds: ['source-1'] }] })
-    expect(storage.download).toHaveBeenCalledWith('manifest.json')
-    expect(storage.download).toHaveBeenCalledWith('result.json')
+    expect(storage.download).toHaveBeenCalledWith('user-1/project-1/run-1/manifest.json')
+    expect(storage.download).toHaveBeenCalledWith('user-1/project-1/run-1/result.json')
+  })
+
+  it('does not load scoped results when the caller omits the storage bucket', async () => {
+    const manifests = { list: vi.fn(async () => [{
+      materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1',
+      storageBucket: 'bucket', storagePath: 'result.json', manifestPath: 'manifest.json',
+    }]) }
+    const storage = { download: vi.fn() }
+
+    await expect(loadAgentRunResults(manifests, storage, {
+      runId: 'run-1', projectId: 'project-1', userId: 'user-1',
+    })).resolves.toEqual([])
+    expect(storage.download).not.toHaveBeenCalled()
+  })
+
+  it('does not load results when the caller omits the owner scope', async () => {
+    const manifests = { list: vi.fn(async () => [{
+      materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1',
+      storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json',
+    }]) }
+    const storage = { download: vi.fn() }
+
+    await expect(loadAgentRunResults(manifests, storage, {
+      runId: 'run-1', projectId: 'project-1', bucket: 'bucket',
+    })).resolves.toEqual([])
+    expect(storage.download).not.toHaveBeenCalled()
   })
 
   it('does not expose an expired temporary result payload', async () => {
     const manifests = { list: vi.fn(async () => [
-      { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'result.json', manifestPath: 'manifest.json' },
+      { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json' },
     ]) }
     const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2026-08-14T23:59:59.000Z', verification }
-    const storage = { download: vi.fn(async (path: string) => path === 'manifest.json' ? JSON.stringify({ ...payload, storagePath: 'result.json', materialId: 'agent-result:step-1:1' }) : JSON.stringify(payload)) }
+    const storage = { download: vi.fn(async (path: string) => path.endsWith('/manifest.json') ? JSON.stringify({ ...payload, storagePath: 'result.json', materialId: 'agent-result:step-1:1' }) : JSON.stringify(payload)) }
 
     await expect(loadAgentRunResults(manifests, storage, {
       runId: 'run-1', projectId: 'project-1', now: Date.parse('2026-08-15T00:00:00.000Z'),
     })).resolves.toEqual([])
   })
+
+  it('fails closed when a result manifest exceeds the bounded download size', async () => {
+    const manifests = { list: vi.fn(async () => [
+      { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json' },
+    ]) }
+    const storage = { download: vi.fn(async () => 'x'.repeat(3 * 1024 * 1024)) }
+
+    await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' }))
+      .rejects.toThrow('Rezultat agenta je prevelik')
+  })
+
+  it('rejects result payloads with malformed citations or usage', async () => {
+    const manifests = { list: vi.fn(async () => [
+      { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json' },
+    ]) }
+    const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2026-08-17T10:00:00.000Z', verification, citations: [{ id: '', verified: 'yes' }], usage: { inputTokens: -1, outputTokens: 4 } }
+    const storage = { download: vi.fn(async (path: string) => path.endsWith('/manifest.json') ? JSON.stringify({ ...payload, storagePath: 'result.json' }) : JSON.stringify(payload)) }
+
+    await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' })).resolves.toEqual([])
+  })
+
+  it('rejects a result whose step identity does not match its manifest identity', async () => {
+    const manifests = { list: vi.fn(async () => [{
+      materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1',
+      storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json',
+    }]) }
+    const payload = {
+      ...result,
+      agent: 'writing',
+      stepId: 'step-other',
+      materialId: 'agent-result:step-1:1',
+      projectId: 'project-1',
+      runId: 'run-1',
+      schemaVersion: 1,
+      kind: 'agent-step-result',
+      verifier: 'writing_verifier',
+      attempt: 1,
+      createdAt: '2026-08-14T10:00:00.000Z',
+      expiresAt: '2026-08-17T10:00:00.000Z',
+      verification,
+    }
+    const storage = {
+      download: vi.fn(async (path: string) => path.endsWith('/manifest.json')
+        ? JSON.stringify({ ...payload, storagePath: 'result.json' })
+        : JSON.stringify(payload)),
+    }
+
+    await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' }))
+      .resolves.toEqual([])
+  })
+
+  it('accepts canonical step ids after storage-safe path normalization', async () => {
+    const manifests = { list: vi.fn(async () => [{
+      materialId: 'agent-result:run-1_writing_section-1:1', projectId: 'project-1', runId: 'run-1',
+      storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json',
+    }]) }
+    const payload = {
+      ...result,
+      agent: 'writing',
+      stepId: 'run-1:writing:section-1',
+      materialId: 'agent-result:run-1_writing_section-1:1',
+      projectId: 'project-1',
+      runId: 'run-1',
+      schemaVersion: 1,
+      kind: 'agent-step-result',
+      verifier: 'writing_verifier',
+      attempt: 1,
+      createdAt: '2026-08-14T10:00:00.000Z',
+      expiresAt: '2026-08-17T10:00:00.000Z',
+      verification,
+    }
+    const storage = {
+      download: vi.fn(async (path: string) => path.endsWith('/manifest.json')
+        ? JSON.stringify({ ...payload, storagePath: 'result.json' })
+        : JSON.stringify(payload)),
+    }
+
+    await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' }))
+      .resolves.toHaveLength(1)
+  })
+
+  it('rejects a step attempt outside the bounded retry range before upload', async () => {
+    const upload = vi.fn(async () => ({ error: null }))
+    const rpc = vi.fn(async () => ({ data: [{ manifest_id: 'manifest-result-1' }], error: null }))
+    const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({
+      upload,
+      remove: vi.fn(async () => ({ error: null })),
+    })) } }, {
+      userId: 'user-1',
+      projectId: 'project-1',
+      runId: 'run-1',
+      step: { ...step, attempt: 4 as unknown as 1 | 2 | 3 },
+      result,
+      verification,
+    })
+
+    expect(stored).toEqual({ ok: false, error: 'Pokusaj agenta nije valjan.' })
+    expect(upload).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
 })

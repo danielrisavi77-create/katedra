@@ -28,6 +28,7 @@ describe('OnboardingFlow', () => {
     const onComplete = vi.fn()
     render(<ThemeProvider><OnboardingFlow initialTip="z" onComplete={onComplete} /></ThemeProvider>)
 
+    expect(screen.getByRole('heading', { name: 'Kako nastaje tvoj rad' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /novi rad/i }))
     await user.type(screen.getByLabelText(/fakultet ili ustanova/i), 'FPZG')
     await user.click(screen.getByRole('button', { name: /dalje/i }))

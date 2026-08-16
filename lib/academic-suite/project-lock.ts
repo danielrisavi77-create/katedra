@@ -158,6 +158,8 @@ function parseCanonicalProjectLockRow(row: unknown): { lock: ProjectLockSnapshot
   const lockedAt = readNonEmptyText(record.locked_at ?? record.lockedAt)
 
   if (!lockId || !userId || !projectId || !topic || !workType || !productKey || !paymentId || !lockedAt) return null
+  if (record.status != null && record.status !== 'locked') return null
+  if (!isLockedWorkType(workType) || normalizeWorkType(productKey) !== normalizeWorkType(workType)) return null
 
   return {
     lock: {
@@ -172,6 +174,10 @@ function parseCanonicalProjectLockRow(row: unknown): { lock: ProjectLockSnapshot
     },
     lockId,
   }
+}
+
+function isLockedWorkType(value: string): value is LockedWorkType {
+  return value === 'seminarski' || value === 'zavrsni' || value === 'diplomski'
 }
 
 function readNonEmptyText(value: unknown): string | null {

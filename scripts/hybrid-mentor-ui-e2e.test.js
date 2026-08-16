@@ -30,6 +30,8 @@ describe('hybrid mentor workspace browser contract', () => {
 
   it('keeps local UI checks separate from authenticated external gates', () => {
     expect(source).toContain("process.env.KATEDRA_INTEGRATION_URL || 'http://localhost:3000'")
+    expect(source).toContain("from '../lib/deployment/agentic-preflight.mjs'")
+    expect(source).toContain('evaluateAgenticStagingEnvironment')
     expect(source).toContain('BLOCKED_EXTERNAL')
     expect(source).toContain('KATEDRA_AUTH_E2E_EMAIL')
     expect(source).toContain('KATEDRA_AUTH_E2E_PASSWORD')
@@ -76,6 +78,8 @@ describe('hybrid mentor workspace browser contract', () => {
 
   it('exposes a runtime npm command and keeps the legacy agentic gate truthful', () => {
     expect(packageJson.scripts?.['test:e2e:hybrid-ui']).toBe('node scripts/hybrid-mentor-ui-e2e.mjs')
+    expect(legacySource).toContain("from '../lib/deployment/agentic-preflight.mjs'")
+    expect(legacySource).not.toContain('function evaluateAgenticStagingEnvironment')
     expect(legacySource).toContain('evaluateAgenticStagingEnvironment')
     expect(legacySource).toContain('AGENTIC_WORKSPACE_UI_STAGING_E2E_PASS')
     expect(legacySource).not.toContain('AGENTIC_WORKSPACE_UI_BROWSER_E2E_PASS')

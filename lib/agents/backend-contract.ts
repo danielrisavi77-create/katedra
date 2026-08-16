@@ -1,6 +1,6 @@
 import type { AgentStepRecord, AgentStepStatus } from './run-state'
 import type { AgentRunMode, SourcePolicy } from './run-state'
-import type { UsageRecord, VerificationResultV1 } from './contracts'
+import { isAgentId, type UsageRecord, type VerificationResultV1 } from './contracts'
 
 interface RpcClient {
   rpc: (functionName: string, params: Record<string, unknown>) => Promise<{ data?: unknown; error?: { message?: string } | null }>
@@ -57,7 +57,11 @@ export async function claimAgentStep(db: RpcClient, input: { runId: string; work
   const row = firstRecord(result.data)
   const backendStatus = controlStatus(row?.status)
   if (backendStatus) return { ok: true, value: null, backendStatus }
-  return { ok: true, value: row ? normalizeStep(row) : null }
+  if (!row) return { ok: true, value: null }
+  const step = normalizeStep(row)
+  return step
+    ? { ok: true, value: step }
+    : { ok: false, error: 'Lekta claim_agent_step vratio je neispravan korak.' }
 }
 
 export async function completeAgentStep(db: RpcClient, input: {
@@ -146,6 +150,34 @@ export async function attachAgentPayloadsToRun(db: RpcClient, input: {
   return { ok: true, value: { materialIds } }
 }
 
+/**
+ * Replaces the input-material selection for a paused/blocked run (and for a
+ * newly initializing run). The canonical RPC validates the complete set and
+ * performs the detach/attach in one transaction, so a stale or foreign
+ * material ID can never leave a partial selection behind.
+ */
+export async function replaceAgentPayloadsForRun(db: RpcClient, input: {
+  userId: string
+  projectId: string
+  runId: string
+  materialIds: string[]
+}): Promise<AgentBackendResult<{ materialIds: string[] }>> {
+  const result = await callRpc(db, 'replace_agent_payloads_for_run', {
+    p_user_id: input.userId,
+    p_project_id: input.projectId,
+    p_run_id: input.runId,
+    p_material_ids: input.materialIds,
+  })
+  if (result.ok === false) return { ok: false, error: result.error }
+  const rows = Array.isArray(result.data) ? result.data : result.data ? [result.data] : []
+  const materialIds = rows.flatMap((row) => {
+    if (!row || typeof row !== 'object') return []
+    const id = String((row as Record<string, unknown>).material_id ?? (row as Record<string, unknown>).materialId ?? '')
+    return id ? [id] : []
+  })
+  return { ok: true, value: { materialIds } }
+}
+
 export async function pauseAgentRun(db: RpcClient, input: { userId: string; runId: string }): Promise<AgentBackendResult<{ runId: string; status: string }>> {
   return transitionAgentRun(db, 'pause_agent_run', input)
 }
@@ -190,17 +222,43 @@ function controlStatus(value: unknown): AgentRunControlStatus | undefined {
   return value === 'paused' || value === 'cancelled' ? value : undefined
 }
 
-function normalizeStep(row: Record<string, unknown>): AgentStepRecord {
-  const status = String(row.status || 'pending') as AgentStepStatus
-  const attempt = Math.min(3, Math.max(1, Number(row.attempt || 1))) as 1 | 2 | 3
+function normalizeStep(row: Record<string, unknown>): AgentStepRecord | null {
+  const id = normalizeBoundedString(row.step_id ?? row.id, 200)
+  const agent = isAgentId(row.agent) ? row.agent : null
+  const verifier = typeof row.verifier === 'string' ? row.verifier.trim() : ''
+  const status = normalizeStepStatus(row.status)
+  const order = normalizeInteger(row.step_order ?? row.order, 0, 1_000_000)
+  const attempt = normalizeInteger(row.attempt, 1, 3)
+  const sectionId = row.section_id == null ? undefined : normalizeBoundedString(row.section_id, 200)
+  if (!id || !agent || verifier !== `${agent}_verifier` || !status || order === null || attempt === null || (row.section_id != null && !sectionId)) return null
   return {
-    id: String(row.step_id ?? row.id ?? ''),
-    agent: String(row.agent || 'intake') as AgentStepRecord['agent'],
-    verifier: String(row.verifier || 'intake_verifier') as AgentStepRecord['verifier'],
-    sectionId: row.section_id == null ? undefined : String(row.section_id),
-    order: Number(row.step_order ?? row.order ?? 0),
-    attempt,
+    id,
+    agent,
+    verifier: verifier as AgentStepRecord['verifier'],
+    sectionId,
+    order,
+    attempt: attempt as 1 | 2 | 3,
     status,
     lastVerification: row.last_verification as AgentStepRecord['lastVerification'],
   }
+}
+
+function normalizeStepStatus(value: unknown): AgentStepStatus | null {
+  return value === 'pending' || value === 'running' || value === 'retrying'
+    || value === 'verified' || value === 'blocked' || value === 'failed'
+    ? value
+    : null
+}
+
+function normalizeBoundedString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized && normalized.length <= maxLength ? normalized : null
+}
+
+function normalizeInteger(value: unknown, min: number, max: number): number | null {
+  const number = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^\d+$/u.test(value.trim()) ? Number(value) : NaN
+  return Number.isSafeInteger(number) && number >= min && number <= max ? number : null
 }

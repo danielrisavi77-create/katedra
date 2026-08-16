@@ -2,6 +2,7 @@
 
 export interface AgenticTimelineStep {
   id: string
+  sectionId?: string
   agent: string
   verifier: string
   status: string

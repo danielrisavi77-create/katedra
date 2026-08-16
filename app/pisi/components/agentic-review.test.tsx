@@ -25,6 +25,9 @@ describe('AgenticReview', () => {
 
     expect(screen.getByRole('heading', { name: 'Pregled rezultata' })).toBeTruthy()
     expect(screen.getByText('Nedostaje izvor.')).toBeTruthy()
+    expect(screen.getAllByText('Usporedba s rukopisom')).toHaveLength(2)
+    expect(screen.getAllByText('Trenutna verzija')).toHaveLength(2)
+    expect(screen.getAllByText('Novi prijedlog')).toHaveLength(2)
     expect(screen.getByText('Pregledaj rezultat')).toBeTruthy()
     expect(screen.queryByText(/Agent dashboard|Generator|Autopilot/i)).toBeNull()
     expect(screen.getByRole('button', { name: 'Prihvati sve provjerene' })).toBeTruthy()
@@ -38,5 +41,26 @@ describe('AgenticReview', () => {
     expect(screen.queryByRole('button', { name: `Prihvati ${first.title}` })).toBeNull()
     expect((screen.getByRole('textbox', { name: `Prijedlog za ${first.title}` }) as HTMLTextAreaElement).readOnly).toBe(true)
     expect(screen.getAllByText(/Nema.*izvora/).length).toBeGreaterThan(0)
+  })
+
+  it('does not turn an unsafe verifier URL into a clickable link', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'z', now: '2026-08-14T10:00:00.000Z' })
+    const first = manuscript.sections[0]
+    const draft = [
+      {
+        sectionId: first.id,
+        baseRevision: first.updatedAt,
+        proposedContent: plainTextDocument('Novi uvod.'),
+        status: 'verified' as const,
+        verificationMessage: 'Provjereno.',
+        updatedAt: '2026-08-14T10:02:00.000Z',
+        evidence: [{ id: 'unsafe', title: 'Neprovjereni izvor', url: 'javascript:alert(1)', verified: false }],
+      },
+    ].reduce((current, revision) => upsertSectionRevision(current, revision), createAgenticDraft({ projectId: manuscript.projectId, runId: 'run-1', base: manuscript }))
+
+    render(<AgenticReview manuscript={manuscript} draft={draft} onAccept={vi.fn()} onEdit={vi.fn()} onReject={vi.fn()} />)
+
+    expect(screen.getByText('Neprovjereni izvor')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).toBeNull()
   })
 })

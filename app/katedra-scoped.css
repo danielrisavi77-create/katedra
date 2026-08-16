@@ -1515,6 +1515,7 @@
 .account-overview{margin-top:20px;min-width:0;overflow:hidden}
 .account-overview h2{margin:4px 0 4px;font-family:var(--serif, Georgia, serif);font-size:28px;font-weight:500}
 .account-email{margin:0;color:var(--mut);font-size:14px;overflow-wrap:anywhere}
+.account-admin-link{margin:8px 0 0;font-size:13px}.account-admin-link a{color:var(--acc)}
 .account-subsection{min-width:0;margin-top:24px;padding-top:18px;border-top:1px solid var(--line, #d8d1c4)}
 .account-subsection h3{margin:0 0 10px;font-family:var(--serif, Georgia, serif);font-size:20px;font-weight:500}
 .account-overview-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--line, #d8d1c4); }
@@ -1556,4 +1557,42 @@
   .account-overview-grid div:last-child { border-bottom: 0; }
   .account-data-actions { align-items: flex-start; flex-direction: column; }
   .account-pass-list li{align-items:flex-start;flex-direction:column;gap:5px}
+}
+.admin-page-header{max-width:720px;margin:54px 0 26px}
+.admin-page-header h1{margin:6px 0 10px;font-family:var(--serif,Georgia,serif);font-size:clamp(38px,6vw,64px);font-weight:500;letter-spacing:-.03em}
+.admin-page-lede{max-width:620px;margin:0;color:var(--mut);font-size:16px;line-height:1.6}
+.admin-identity{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:14px}
+.admin-identity h2,.admin-section-heading h2{margin:4px 0;font-family:var(--serif,Georgia,serif);font-size:25px;font-weight:500}
+.admin-identity p:last-child{margin:8px 0 0;color:var(--mut);overflow-wrap:anywhere}
+.admin-access-badge{padding:6px 0;color:var(--ok);font-size:12px;font-weight:700;white-space:nowrap}
+.admin-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-block:1px solid var(--line);margin-bottom:14px}
+.admin-metric{min-width:0;padding:17px 14px 17px 0;border-right:1px solid var(--line)}
+.admin-metric+.admin-metric{padding-left:14px}
+.admin-metric:last-child{border-right:0}
+.admin-metric span,.admin-metric strong{display:block}
+.admin-metric span{color:var(--mut);font-size:12px;line-height:1.35}
+.admin-metric strong{margin-top:6px;font-size:26px;font-weight:600;overflow-wrap:anywhere}
+.admin-content-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.admin-section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.admin-section-heading>span{color:var(--mut);font-size:12px;padding-top:7px}
+.admin-list{list-style:none;margin:0;padding:0}
+.admin-list li{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--line)}
+.admin-list li:last-child{border-bottom:0}
+.admin-list li>div{min-width:0}
+.admin-list strong,.admin-list small{display:block;overflow-wrap:anywhere}
+.admin-list small{margin-top:4px;color:var(--mut);font-size:12px;line-height:1.45}
+.admin-list a{color:var(--acc);font-size:13px;white-space:nowrap}
+.admin-list li>span{color:var(--mut);font-size:12px;white-space:nowrap}
+.admin-flags{margin-top:14px}
+.admin-flag-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.admin-flag{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px}
+.admin-flag strong{font-size:12px;color:var(--mut);white-space:nowrap}
+.admin-flag strong[data-state='on']{color:var(--ok)}
+.admin-warning{margin:13px 0 0;color:var(--warn);font-size:12px;line-height:1.5}
+@media (max-width: 760px){
+  .admin-content-grid,.admin-metric-grid,.admin-flag-list{grid-template-columns:1fr}
+  .admin-metric{border-right:0;border-bottom:1px solid var(--line);padding:12px 0}
+  .admin-metric+.admin-metric{padding-left:0}
+  .admin-metric:last-child{border-bottom:0}
+  .admin-identity{align-items:flex-start;flex-direction:column}
 }

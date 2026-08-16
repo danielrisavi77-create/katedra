@@ -24,7 +24,7 @@ export function hasProductCapability(tier: ProductTier, capability: ProjectCapab
 }
 
 export type CapabilityDecision =
-  | { allowed: true; tier: ProductTier; projectId: string }
+  | { allowed: true; tier: ProductTier; projectId: string; adminOverride?: boolean; unlimited?: boolean }
   | {
       allowed: false
       code: 'unauthenticated' | 'project_not_owned' | 'pass_required' | 'policy_unverified' | 'capability_unavailable'
@@ -39,6 +39,7 @@ export interface CapabilityContext {
   lockedProductKey?: ProductTier | null
   hasActivePass?: boolean
   verifiedPolicy?: boolean
+  adminOverride?: boolean
 }
 
 /** Pure decision layer used by server routes and unit tests. */
@@ -50,6 +51,18 @@ export function decideProjectCapability(
   if (!context.userId) return { allowed: false, code: 'unauthenticated', projectId: context.projectId, tier }
   if (!context.ownedProjectId || context.ownedProjectId !== context.projectId) {
     return { allowed: false, code: 'project_not_owned', projectId: context.projectId, tier }
+  }
+
+  // This is an explicit server-side support override, not a product Pass.
+  // Ownership is checked above so the override cannot cross project boundaries.
+  if (context.adminOverride === true) {
+    return {
+      allowed: true,
+      tier: 'diplomski',
+      projectId: context.projectId,
+      adminOverride: true,
+      unlimited: true,
+    }
   }
 
   const freeCapability = tier === 'free' && ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai'].includes(capability)

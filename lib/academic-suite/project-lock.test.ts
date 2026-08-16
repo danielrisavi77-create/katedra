@@ -176,6 +176,65 @@ describe('project lock', () => {
     await expect(readProjectLock(db, { userId: 'user-1', projectId: 'project-1' })).resolves.toMatchObject({ ok: false })
   })
 
+  it('fails closed when the stored lock has an unknown work type', async () => {
+    const db = {
+      from() {
+        const query = {
+          select() { return query },
+          eq() { return query },
+          async maybeSingle() {
+            return {
+              data: {
+                lock_id: 'lock-1',
+                user_id: baseInput.userId,
+                project_id: baseInput.projectId,
+                topic: baseInput.topic,
+                work_type: 'unknown-work',
+                product_key: baseInput.productKey,
+                payment_id: baseInput.paymentId,
+                locked_at: baseInput.lockedAt,
+              },
+              error: null,
+            }
+          },
+        }
+        return query
+      },
+    }
+
+    await expect(readProjectLock(db, { userId: 'user-1', projectId: 'project-1' })).resolves.toMatchObject({ ok: false })
+  })
+
+  it('fails closed when a stored row is not marked locked', async () => {
+    const db = {
+      from() {
+        const query = {
+          select() { return query },
+          eq() { return query },
+          async maybeSingle() {
+            return {
+              data: {
+                lock_id: 'lock-1',
+                user_id: baseInput.userId,
+                project_id: baseInput.projectId,
+                topic: baseInput.topic,
+                work_type: baseInput.workType,
+                product_key: baseInput.productKey,
+                payment_id: baseInput.paymentId,
+                locked_at: baseInput.lockedAt,
+                status: 'unlocked',
+              },
+              error: null,
+            }
+          },
+        }
+        return query
+      },
+    }
+
+    await expect(readProjectLock(db, { userId: 'user-1', projectId: 'project-1' })).resolves.toMatchObject({ ok: false })
+  })
+
   it('fails closed when the lock read adapter returns no response envelope', async () => {
     const db = {
       from() {

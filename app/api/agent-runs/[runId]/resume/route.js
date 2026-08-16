@@ -3,10 +3,16 @@ import { readProjectLock } from '@/lib/academic-suite/project-lock'
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
 import { resumeAgentRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
+import { privateJson } from '@/lib/observability/private-response.js'
+import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
 
 export async function POST(req, { params }) {
+  return withRequestId(await handlePost(req, { params }), getRequestId(req))
+}
+
+async function handlePost(req, { params }) {
   if (!ENABLED) return Response.json({ error: 'Agenticni run ugovor još nije aktivan u backendu.' }, { status: 503 })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +42,7 @@ export async function POST(req, { params }) {
   if (!passLookup.active) return Response.json({ error: 'Aktivan Pass za ovaj projekt je potreban.' }, { status: 402 })
   const transitioned = await resumeAgentRun(supabase, { userId: user.id, runId })
   if (!transitioned.ok) return Response.json({ error: 'Nastavak runa nije uspio.' }, { status: 503 })
-  return Response.json(transitioned.value)
+  return privateJson(transitioned.value)
 }
 
 function normalizeProductKey(value) {

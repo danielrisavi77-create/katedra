@@ -11,12 +11,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import mammoth from 'mammoth'
 import { DOCX_LIMITS, validateDocxBuffer } from '@/lib/docx/validation'
 import { reserveDocxUpload } from '@/lib/docx/rate-limit'
-import { isDistributedRateLimitConfigured, reserveDistributedRequest } from '@/lib/ai/rate-limit'
+import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveDistributedRequest } from '@/lib/ai/rate-limit'
 import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
+import { privateJson } from '@/lib/observability/private-response.js'
+import { readMultipartForm } from '@/lib/http/multipart.js'
 
 const MAX_TEXT_CHARS = 250_000
 const EXTRACTION_TIMEOUT_MS = 20_000
-const MULTIPART_OVERHEAD_BYTES = 1 * 1024 * 1024
 
 function extractRawTextWithTimeout(buffer) {
   let timer
@@ -43,11 +44,6 @@ async function handlePOST(req, requestContext) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return json(401, { error: 'Prijavi se.' })
-
-  const contentLength = Number(req.headers.get('content-length') || 0)
-  if (Number.isFinite(contentLength) && contentLength > DOCX_LIMITS.maxBytes + MULTIPART_OVERHEAD_BYTES) {
-    return json(413, { error: 'Datoteka je prevelika (max 20 MB).' })
-  }
 
   const distributedRateLimit = isDistributedRateLimitConfigured()
   if (process.env.NODE_ENV === 'production' && !distributedRateLimit) {
@@ -80,19 +76,15 @@ async function handlePOST(req, requestContext) {
   }
 
   try {
-    let file
-    try {
-      const form = await req.formData()
-      file = form.get('file')
-    } catch {
-      return json(400, { error: 'Neispravan zahtjev.' })
-    }
-    if (!file || typeof file.arrayBuffer !== 'function')
+    const form = await readMultipartForm(req, { maxBytes: DOCX_LIMITS.maxBytes + 1 * 1024 * 1024, maxFileBytes: DOCX_LIMITS.maxBytes })
+    if (!form.ok) return json(form.status, { error: form.error })
+    const file = form.file
+    if (!file || !Buffer.isBuffer(file.buffer))
       return json(400, { error: 'Nedostaje datoteka.' })
     if (file.size > DOCX_LIMITS.maxBytes)
       return json(413, { error: 'Datoteka je prevelika (max 20 MB).' })
 
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const buffer = file.buffer
     const validation = validateDocxBuffer(buffer, { name: file.name, type: file.type })
     if (!validation.ok) return json(validation.status, { error: validation.error })
 
@@ -116,15 +108,12 @@ async function handlePOST(req, requestContext) {
     }
     return json(422, { error: 'Nisam uspio pročitati ovu datoteku — provjeri da je stvarno .docx.' })
   } finally {
-    await Promise.resolve(reservation.release()).catch((error) => {
-      console.error(JSON.stringify({ eventName: 'docx_rate_limit_release_failed', userId: user.id, requestId: traceRequestId, error: error?.message }))
+    await releaseRateLimitReservation(reservation, (error, attempt) => {
+      console.error(JSON.stringify({ eventName: 'docx_rate_limit_release_failed', attempt, userId: user.id, requestId: traceRequestId, error: error?.message }))
     })
   }
 }
 
 function json(status, data) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  })
+  return privateJson(data, { status })
 }

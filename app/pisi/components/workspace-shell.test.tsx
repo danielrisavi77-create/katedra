@@ -169,4 +169,28 @@ describe('WorkspaceShell', () => {
     expect(screen.getByTestId('pis-workspace-root').getAttribute('data-workspace-view')).toBe('dashboard')
     expect(screen.getByRole('main', { name: 'Agentički workspace' }).textContent).toContain('Agentic screen')
   })
+
+  it('does not expose the manual navigation inside an autonomous project', () => {
+    render(<ThemeProvider><WorkspaceShell
+      manuscript={createManuscript({ projectId: 'project-1', workType: 'z' })}
+      saveStatus="saved"
+      activeMobileView="editor"
+      onMobileViewChange={vi.fn()}
+      onExport={vi.fn()}
+      outline={<p>Outline</p>}
+      editor={<p>Editor</p>}
+      assistant={<p>Assistant</p>}
+      view="dashboard"
+      projectMode="autonomous"
+      projectLocked
+      agenticContent={<p>Autonomous process</p>}
+      activeNavItem="studio"
+      onNavigate={vi.fn()}
+      workType="z"
+    /></ThemeProvider>)
+
+    expect(screen.queryByRole('navigation', { name: 'Projekt' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: /Radni prostor/i })).toBeNull()
+    expect(screen.getByRole('main', { name: 'Agentički workspace' })).toBeTruthy()
+  })
 })

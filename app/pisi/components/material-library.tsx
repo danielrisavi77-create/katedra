@@ -18,6 +18,7 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
   const [materials, setMaterials] = useState<MaterialAssetV1[]>([])
   const [busy, setBusy] = useState(false)
   const [reuploadId, setReuploadId] = useState('')
+  const [deletingId, setDeletingId] = useState('')
   const [message, setMessage] = useState('')
   const reuploadInput = useRef<HTMLInputElement>(null)
 
@@ -83,13 +84,33 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
     reuploadInput.current?.click()
   }
 
+  const deleteMaterial = async (material: MaterialAssetV1) => {
+    if (busy || !window.confirm(`Obrisati materijal „${material.name}”?`)) return
+    setBusy(true)
+    setDeletingId(material.id)
+    setMessage('')
+    try {
+      const response = await fetch(`/api/materials/${encodeURIComponent(material.id)}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' }).catch(() => null)
+      if (!response) throw new Error('Materijal trenutačno nije moguće obrisati zbog mrežne greške. Pokušaj ponovno.')
+      const body = await response.json().catch(() => ({})) as Record<string, unknown>
+      if (!response.ok) throw new Error(materialRequestMessage(response.status, body.error, 'Materijal nije moguće obrisati.'))
+      publish(materials.filter((item) => item.id !== material.id))
+      setMessage('Materijal je obrisan.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Brisanje materijala nije uspjelo.')
+    } finally {
+      setBusy(false)
+      setDeletingId('')
+    }
+  }
+
   return <section className="pis-material-library" aria-labelledby="pis-material-title">
     <div className="pis-agent-section-heading"><div><p className="pis-kicker">Ulazni materijali</p><h3 id="pis-material-title">Dodaj kontekst za rad.</h3></div><span>{materials.length} učitano</span></div>
     <p className="pis-agent-copy">Dodaj postojeći rad, literaturu, mentorove upute ili pravila fakulteta. Materijali su privremeni i privatni; rukopis ostaje lokalno spremljen.</p>
     <div className="pis-material-upload"><select aria-label="Vrsta materijala" value={kind} onChange={(event) => setKind(event.target.value as MaterialKind)}>{MATERIAL_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><label className="pis-file-button">{busy ? 'Čitamo…' : 'Dodaj datoteku'}<input type="file" accept=".docx,.pdf,.txt,.md,image/*" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.currentTarget.value = '' }} /></label></div>
     {message && <p className="pis-agent-message" role="status">{message}</p>}
     <input ref={reuploadInput} type="file" accept=".docx,.pdf,.txt,.md,image/*" hidden aria-label="Odaberi zamjenski materijal" onChange={(event) => { const file = event.target.files?.[0]; const material = materials.find((item) => item.id === reuploadId); if (file && material) void upload(file, material.kind, material.id); event.currentTarget.value = '' }} />
-    {materials.length > 0 && <ul className="pis-material-list">{materials.map((material) => <li key={material.id} data-status={material.extractionStatus}><span className={`pis-status-dot is-${material.extractionStatus}`} aria-hidden="true" /><div><b title={material.name}>{material.name}</b><small>{materialStatus(material.extractionStatus)}</small></div>{material.extractionStatus === 'failed' && <button type="button" onClick={() => reupload(material)} disabled={busy} aria-label="Ponovno učitaj materijal">{busy && reuploadId === material.id ? 'Odaberi datoteku…' : 'Ponovno učitaj materijal'}</button>}</li>)}</ul>}
+    {materials.length > 0 && <ul className="pis-material-list">{materials.map((material) => <li key={material.id} data-status={material.extractionStatus}><span className={`pis-status-dot is-${material.extractionStatus}`} aria-hidden="true" /><div><b title={material.name}>{material.name}</b><small>{materialStatus(material.extractionStatus)}</small></div><div className="pis-material-actions">{material.extractionStatus === 'failed' && <button type="button" onClick={() => reupload(material)} disabled={busy} aria-label="Ponovno učitaj materijal">{busy && reuploadId === material.id ? 'Odaberi datoteku…' : 'Ponovno učitaj materijal'}</button>}<button type="button" className="pis-material-delete" onClick={() => void deleteMaterial(material)} disabled={busy} aria-label={`Obriši materijal ${material.name}`}>{busy && deletingId === material.id ? 'Brišem…' : 'Obriši'}</button></div></li>)}</ul>}
   </section>
 }
 

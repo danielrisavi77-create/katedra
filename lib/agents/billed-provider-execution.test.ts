@@ -50,20 +50,38 @@ describe('billed provider execution', () => {
   it('fails closed and releases when provider usage is unavailable', async () => {
     const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
       ? { data: { status: 'reserved' }, error: null }
-      : { data: { status: 'released' }, error: null })
+      : name === 'katedra_mark_pending'
+        ? { data: { status: 'pending_reconciliation' }, error: null }
+        : { data: { status: 'released' }, error: null })
 
     await expect(executeBilledAgentProvider({ rpc }, {
       provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 0, outputTokens: 0 } } }]),
       agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
       userId: 'user-1', projectId: 'project-1', requestId: 'request-3', model: 'agent-model',
-    })).rejects.toThrow('usage')
+    })).rejects.toMatchObject({ billingState: 'pending_reconciliation' })
     expect(rpc).not.toHaveBeenCalledWith('katedra_consume', expect.anything())
+    expect(rpc).toHaveBeenCalledWith('katedra_mark_pending', expect.objectContaining({ p_request_id: 'request-3', p_estimated_charge: expect.any(Number) }))
+  })
+
+  it('surfaces a failed pending marker instead of pretending reconciliation was recorded', async () => {
+    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
+      ? { data: { status: 'reserved' }, error: null }
+      : name === 'katedra_mark_pending'
+        ? { data: null, error: null }
+        : { data: { status: 'released' }, error: null })
+
+    await expect(executeBilledAgentProvider({ rpc }, {
+      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 0, outputTokens: 0 } } }]),
+      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
+      userId: 'user-1', projectId: 'project-1', requestId: 'request-missing-marker', model: 'agent-model',
+    })).rejects.toThrow('reconciliation marker unavailable')
   })
 
   it('marks an unknown consume response as pending reconciliation instead of hiding billing ambiguity', async () => {
     const rpc = vi.fn(async (name: string) => {
       if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
       if (name === 'katedra_consume') return { data: { status: 'unexpected_status' }, error: null }
+      if (name === 'katedra_mark_pending') return { data: { status: 'pending_reconciliation' }, error: null }
       return { data: { status: 'released' }, error: null }
     })
 
@@ -76,5 +94,25 @@ describe('billed provider execution', () => {
       billingState: 'pending_reconciliation',
     })
     expect(rpc).toHaveBeenCalledWith('katedra_release_request', { p_user: 'user-1', p_request_id: 'request-ambiguous' })
+    expect(rpc).toHaveBeenCalledWith('katedra_mark_pending', expect.objectContaining({ p_request_id: 'request-ambiguous', p_estimated_charge: 110 }))
+  })
+
+  it('retries a transient reservation release failure after billing settles', async () => {
+    let releaseAttempts = 0
+    const rpc = vi.fn(async (name: string) => {
+      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
+      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
+      releaseAttempts += 1
+      if (releaseAttempts === 1) throw new Error('temporary release failure')
+      return { data: { status: 'released' }, error: null }
+    })
+
+    await expect(executeBilledAgentProvider({ rpc }, {
+      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 10, outputTokens: 20 } } }]),
+      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
+      userId: 'user-1', projectId: 'project-1', requestId: 'request-release-retry', model: 'agent-model',
+    })).resolves.toMatchObject({ billingState: 'settled' })
+
+    expect(releaseAttempts).toBe(2)
   })
 })

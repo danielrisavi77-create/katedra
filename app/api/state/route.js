@@ -19,10 +19,12 @@ import {
   isAcademicWorkType,
 } from '@/lib/academic-suite/contracts'
 import { GEN_SERVER_SAFE_KEYS, LOG_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
-import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
+import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { readProjectLock, validateLockedProjectMutation } from '../../../lib/academic-suite/project-lock'
 import { stripManuscriptFromStatePayload } from '@/lib/manuscript/privacy'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
+import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
+import { privateJson } from '@/lib/observability/private-response.js'
 
 const COLUMNS =
   'id, project_id, contract_version, unit_id, profile_id, work_type, work_type_canonical, ' +
@@ -34,7 +36,7 @@ function projectLocksEnabled() {
 }
 
 function projectLockUnavailableResponse() {
-  return Response.json(
+  return privateJson(
     { error: 'Server-side zaklju\u010davanje projekta trenutno nije aktivno.' },
     { status: 503 },
   )
@@ -51,6 +53,8 @@ const LEKTA_ISSUE_STRING_FIELDS = {
 }
 const LEKTA_ISSUE_SEVERITIES = new Set(['critical', 'error', 'warning', 'info'])
 const LEKTA_ISSUE_STATUSES = new Set(['OPEN', 'USER_CHANGED', 'RECHECK_REQUIRED', 'VERIFIED_FIXED', 'SKIPPED'])
+const LOCKED_PROJECT_MUTATION_ERROR = 'Locked Katedra project identity is immutable'
+const LOCKED_PROJECT_MUTATION_MESSAGE = 'Tema je zaključana nakon naplate. Za novu temu potreban je novi projekt i Pass.'
 
 function boundedIssueString(value, maxLength) {
   if (typeof value !== 'string') return undefined
@@ -349,14 +353,16 @@ export async function GET(req) {
 async function handleGET(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (!user) return privateJson({ error: 'Prijavi se.' }, { status: 401 })
   if (process.env.NODE_ENV === 'production' && !projectLocksEnabled()) return projectLockUnavailableResponse()
 
   const projectId = cleanOpaqueId(new URL(req.url).searchParams.get('projectId'))
-  if (!projectId) return Response.json({ error: 'Nedostaje ID projekta.' }, { status: 400 })
+  if (!projectId) return privateJson({ error: 'Nedostaje ID projekta.' }, { status: 400 })
 
-  const project = await resolveOwnedProject(supabase, { userId: user.id, projectId })
-  if (!project) return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
+  const projectLookup = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
+  if (!projectLookup.ok) return privateJson({ error: 'Provjera projekta nije uspjela.' }, { status: 503 })
+  const project = projectLookup.value
+  if (!project) return privateJson({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
 
   const { data: row, error } = await supabase
     .from('katedra_projects')
@@ -365,12 +371,13 @@ async function handleGET(req) {
     .eq('project_id', project.projectId)
     .maybeSingle()
 
-  if (error) return Response.json({ error: 'Učitavanje nije uspjelo.' }, { status: 500 })
-  if (!projectLocksEnabled()) return Response.json(rowToCamel(row))
+  if (error) return privateJson({ error: 'Učitavanje nije uspjelo.' }, { status: 500 })
+  if (!row) return privateJson({ error: 'Stanje projekta nije pronađeno.' }, { status: 404 })
+  if (!projectLocksEnabled()) return privateJson(rowToCamel(row))
 
   const lockResult = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
-  if (!lockResult.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
-  return Response.json({ ...rowToCamel(row), projectLock: lockResult.lock })
+  if (!lockResult.ok) return privateJson({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
+  return privateJson({ ...rowToCamel(row), projectLock: lockResult.lock })
 }
 
 export async function PUT(req) {
@@ -380,15 +387,12 @@ export async function PUT(req) {
 async function handlePUT(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (!user) return privateJson({ error: 'Prijavi se.' }, { status: 401 })
   if (process.env.NODE_ENV === 'production' && !projectLocksEnabled()) return projectLockUnavailableResponse()
 
-  let body
-  try {
-    body = await req.json()
-  } catch {
-    return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 })
-  }
+  const parsed = await readJsonBody(req, JSON_BODY_LIMITS.state)
+  if (!parsed.ok) return privateJson({ error: parsed.error }, { status: parsed.status })
+  let body = parsed.value
 
   // Product Constitution: document body text is always local-only. This is
   // unconditional and therefore also applies to requests that explicitly opt
@@ -399,33 +403,38 @@ async function handlePUT(req) {
   // localStorage before login. During v0.1 it is also accepted as the canonical
   // projectId if a newer UUID projectId has not yet been supplied.
   const projectId = cleanOpaqueId(body?.projectId) || cleanOpaqueId(body?.guestProjectId)
-  if (!projectId) return Response.json({ error: 'Nedostaje ID projekta.' }, { status: 400 })
+  if (!projectId) return privateJson({ error: 'Nedostaje ID projekta.' }, { status: 400 })
 
-  const project = await resolveOwnedProject(supabase, { userId: user.id, projectId })
+  const projectLookup = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
+  if (!projectLookup.ok) return privateJson({ error: 'Provjera projekta nije uspjela.' }, { status: 503 })
+  const project = projectLookup.value
   const submittedGuestProjectId = cleanOpaqueId(body?.guestProjectId)
-  const guestProjectId = submittedGuestProjectId || projectId
+  // Once the canonical project exists, its server-resolved guest alias is the
+  // only alias that may be written. A stale client alias must not become the
+  // upsert conflict key and accidentally rewrite another project row.
+  const guestProjectId = project?.guestProjectId || submittedGuestProjectId || projectId
   const isFirstAccountSync = !project && Boolean(submittedGuestProjectId) && submittedGuestProjectId === projectId
-  if (!project && !isFirstAccountSync) return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
+  if (!project && !isFirstAccountSync) return privateJson({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
   const canonicalProjectId = project?.projectId || projectId
 
   // Keep the old upsert key alive so current clients do not create duplicate rows.
   // New clients may send both: projectId=canonical UUID, guestProjectId=legacy k... alias.
 
   const canonicalType = canonicalWorkType(body)
-  if (!canonicalType) return Response.json({ error: 'Nepoznata vrsta rada.' }, { status: 400 })
+  if (!canonicalType) return privateJson({ error: 'Nepoznata vrsta rada.' }, { status: 400 })
 
   if (projectLocksEnabled()) {
     const lockResult = project
       ? await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
       : { ok: true, lock: null }
-    if (!lockResult.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
+    if (!lockResult.ok) return privateJson({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
     if (lockResult.lock) {
       const lockValidation = validateLockedProjectMutation(lockResult.lock, {
         projectId: canonicalProjectId,
         topic: Object.prototype.hasOwnProperty.call(body, 'topic') ? body.topic : undefined,
         workType: canonicalType,
       })
-      if (!lockValidation.ok) return Response.json({ error: lockValidation.error }, { status: lockValidation.status })
+      if (!lockValidation.ok) return privateJson({ error: lockValidation.error }, { status: lockValidation.status })
     }
   }
 
@@ -446,12 +455,12 @@ async function handlePUT(req) {
   } else if (canonicalType === 'seminar') patch.work_type = 's'
   else if (canonicalType === 'final') patch.work_type = 'z'
   else if (canonicalType === 'graduate') patch.work_type = 'd'
-  else return Response.json({ error: 'Ova vrsta rada još nije podržana u Katedra v1 sučelju.' }, { status: 400 })
+  else return privateJson({ error: 'Ova vrsta rada još nije podržana u Katedra v1 sučelju.' }, { status: 400 })
 
   if (Object.prototype.hasOwnProperty.call(body, 'deadline')) {
     const deadline = normalizeDeadline(body.deadline)
     if (deadline === undefined) {
-      return Response.json({ error: 'Neispravan datum roka.' }, { status: 400 })
+      return privateJson({ error: 'Neispravan datum roka.' }, { status: 400 })
     }
     patch.deadline = deadline
   }
@@ -459,7 +468,7 @@ async function handlePUT(req) {
   if (Object.prototype.hasOwnProperty.call(body, 'lektaCheckedAt')) {
     const checkedAt = normalizeTimestamp(body.lektaCheckedAt)
     if (checkedAt === undefined) {
-      return Response.json({ error: 'Neispravno vrijeme Lekta provjere.' }, { status: 400 })
+      return privateJson({ error: 'Neispravno vrijeme Lekta provjere.' }, { status: 400 })
     }
     patch.lekta_checked_at = checkedAt
   }
@@ -467,7 +476,7 @@ async function handlePUT(req) {
   if (Object.prototype.hasOwnProperty.call(body, 'lektaScore')) {
     const score = normalizeNullableInteger(body.lektaScore, 0, 100)
     if (score === undefined) {
-      return Response.json({ error: 'Neispravan Lekta rezultat.' }, { status: 400 })
+      return privateJson({ error: 'Neispravan Lekta rezultat.' }, { status: 400 })
     }
     patch.lekta_score = score
   }
@@ -475,7 +484,7 @@ async function handlePUT(req) {
   if (Object.prototype.hasOwnProperty.call(body, 'lektaFixedTotal')) {
     const fixedTotal = normalizeNullableInteger(body.lektaFixedTotal, 0)
     if (fixedTotal === undefined) {
-      return Response.json({ error: 'Neispravan broj riješenih Lekta nalaza.' }, { status: 400 })
+      return privateJson({ error: 'Neispravan broj riješenih Lekta nalaza.' }, { status: 400 })
     }
     // Database column is NOT NULL; legacy empty/null UI state means zero fixes.
     patch.lekta_fixed_total = fixedTotal ?? 0
@@ -498,7 +507,7 @@ async function handlePUT(req) {
     if (!Object.prototype.hasOwnProperty.call(body, camel)) continue
     const sanitize = SANITIZERS[camel]
     const value = sanitize ? sanitize(body[camel]) : body[camel]
-    if (value === undefined) return Response.json({ error: `Neispravan podatak: ${camel}.` }, { status: 400 })
+    if (value === undefined) return privateJson({ error: `Neispravan podatak: ${camel}.` }, { status: 400 })
     patch[column] = value
   }
 
@@ -509,13 +518,16 @@ async function handlePUT(req) {
     .maybeSingle()
 
   if (error) {
+    if (error.code === '23514' && String(error.message || '').includes(LOCKED_PROJECT_MUTATION_ERROR)) {
+      return privateJson({ error: LOCKED_PROJECT_MUTATION_MESSAGE }, { status: 409 })
+    }
     if (error.code === '23505') {
-      return Response.json(
+      return privateJson(
         { error: 'Projekt je već povezan s drugim računom ili projektom.' },
         { status: 409 },
       )
     }
-    return Response.json({ error: 'Spremanje nije uspjelo.' }, { status: 500 })
+    return privateJson({ error: 'Spremanje nije uspjelo.' }, { status: 500 })
   }
-  return Response.json(rowToCamel(row))
+  return privateJson(rowToCamel(row))
 }

@@ -22,7 +22,7 @@ export function parseAgentRunRequest(body: unknown):
   if (Object.prototype.hasOwnProperty.call(body, 'materialIds')) {
     const materialIds = (body as Record<string, unknown>).materialIds
     if (!Array.isArray(materialIds) || materialIds.length > 100 || materialIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 200)) return invalid()
-    value.materialIds = materialIds
+    value.materialIds = [...new Set(materialIds)]
   }
   if (Object.prototype.hasOwnProperty.call(body, 'manuscript')) value.manuscript = (body as Record<string, unknown>).manuscript
   return { ok: true, value }

@@ -143,8 +143,8 @@ Agenticni browser gate pokreće se nakon potvrđenog Passa:
 npm.cmd run test:e2e:agentic
 ```
 
-Na GitHubu je isti test ukljuÄŤen u manualni `Academic Suite browser E2E`
-workflow i izvrĹˇava se nakon authenticated money-flow gatea. Ako staging
+Na GitHubu je isti test uključen u manualni `Academic Suite browser E2E`
+workflow i izvršava se nakon authenticated money-flow gatea. Ako staging
 provider ili worker nije konfiguriran, rezultat ostaje release blocker.
 
 `scripts/agentic-workflow-e2e.mjs` provjerava da se run kreira s lokalnim

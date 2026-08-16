@@ -17,7 +17,7 @@ otključava capabilityje za jedan canonical `projectId`.
 zatim canonical lock i aktivni Project Pass. Klijentski payload ne određuje
 product tier, zaključanu temu ili dostupne capabilityje.
 
-Chat zahtjevi u zakljuÄŤanom production flowu moraju navesti poznatu
+Chat zahtjevi u zaključanom production flowu moraju navesti poznatu
 capability vrijednost. `contextual_ai` je namjerno odvojena od generiranja
 cijelih sekcija; prazne ili nepoznate vrijednosti odbijaju se umjesto da
 upadnu u legacy fallback.

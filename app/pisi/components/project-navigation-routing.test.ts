@@ -5,6 +5,7 @@ import { projectNavigationDestination } from './project-navigation-routing'
 describe('projectNavigationDestination', () => {
   it('maps every project navigation item to its concrete workspace destination', () => {
     expect(projectNavigationDestination('home')).toEqual({ kind: 'home' })
+    expect(projectNavigationDestination('studio')).toEqual({ kind: 'agentic', phase: 'preparation' })
     expect(projectNavigationDestination('writing')).toEqual({ kind: 'writing' })
     expect(projectNavigationDestination('review')).toEqual({ kind: 'agentic-review' })
     expect(projectNavigationDestination('plan')).toEqual({ kind: 'drawer', tab: 'plan' })

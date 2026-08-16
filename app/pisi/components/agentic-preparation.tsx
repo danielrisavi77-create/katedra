@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react'
 
 import { AgentTeamSelector, type AgentRunMode, type AgentSourcePolicy } from './agent-team-selector'
+import { AgenticProcessPreview } from './agentic-process-preview'
 import { MaterialLibrary } from './material-library'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 
@@ -17,15 +18,19 @@ export function AgenticPreparation({
   passActive,
   sectionIds,
   manuscript,
+  lockedMode,
+  webResearchAvailable = false,
   onRunCreated,
 }: {
   projectId: string
   passActive: boolean
   sectionIds: string[]
   manuscript: ManuscriptV1
+  lockedMode?: 'autonomous'
+  webResearchAvailable?: boolean
   onRunCreated: (runId: string) => void
 }) {
-  const [mode, setMode] = useState<AgentRunMode>('guided')
+  const [mode, setMode] = useState<AgentRunMode>(lockedMode || 'guided')
   const [sourcePolicy, setSourcePolicy] = useState<AgentSourcePolicy>('uploaded_only')
   const [materialIds, setMaterialIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -41,6 +46,7 @@ export function AgenticPreparation({
       <section className="pis-agentic-preparation is-locked" aria-labelledby="pis-preparation-locked-title">
         <p className="pis-kicker">Priprema rada</p>
         <h2 id="pis-preparation-locked-title">Aktiviraj Pass za ovaj projekt.</h2>
+        <AgenticProcessPreview mode="guided" sourcePolicy="uploaded_only" />
         <p>Materijali, planiranje i vođeni proces izrade dostupni su nakon potvrđene naplate.</p>
       </section>
     )
@@ -93,8 +99,10 @@ export function AgenticPreparation({
 
       <div className="pis-preparation-step">
         <div className="pis-preparation-step-label"><span>02</span><div><b>Odredi granice rada</b><small>Katedra odabire tehničku postavu. Ti određuješ izvore i razinu samostalnosti.</small></div></div>
-        <AgentTeamSelector mode={mode} sourcePolicy={sourcePolicy} onModeChange={setMode} onSourcePolicyChange={setSourcePolicy} />
+        <AgentTeamSelector mode={mode} sourcePolicy={sourcePolicy} lockedMode={lockedMode} webResearchAvailable={webResearchAvailable} onModeChange={setMode} onSourcePolicyChange={setSourcePolicy} />
       </div>
+
+      <AgenticProcessPreview mode={mode} sourcePolicy={sourcePolicy} />
 
       <div className="pis-preparation-step pis-preparation-start">
         <div className="pis-preparation-step-label"><span>03</span><div><b>Pokreni izradu rada</b><small>Tijek se izvršava po kontrolnim točkama. Možeš zatvoriti preglednik, pauzirati ga i kasnije urediti kontekst.</small></div></div>

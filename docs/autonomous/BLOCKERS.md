@@ -16,8 +16,12 @@ The production preflight also intentionally fails without
 fail-closed guard.
 
 Required owner action: deploy and verify Lekta migrations/RPCs, RLS, worker
-lease/claim, payload cleanup and staging credentials. Then rerun the read-only
-preflight and the authenticated agentic E2E before enabling flags.
+lease/claim, payload cleanup and staging credentials. The local follow-up
+Migrations `0077`-`0083` now cover material tombstoning, exact Pass checks for
+worker lifecycle transitions, lease-expiry protection, billing-ceiling
+accounting and atomic replacement of a run's selected input materials, but
+they are not canonical until deployed. Then rerun the
+read-only preflight and the authenticated agentic E2E before enabling flags.
 
 ## BLOCKED_EXTERNAL: authenticated commerce proof
 
@@ -37,15 +41,6 @@ does not claim deletion succeeded.
 Required owner action: define and connect the canonical identity deletion
 workflow, then add its authenticated integration test.
 
-## BLOCKED_EXTERNAL: npm dependency advisory service
-
-Evidence: `npm.cmd run audit:dependencies` could not reach the npm bulk
-advisory endpoint and exited with `audit endpoint returned an error`. This is a
-missing release verification signal, not evidence that dependencies are safe.
-
-Required owner action: rerun the dependency audit from a network-enabled CI or
-release environment and triage any high-severity findings before promotion.
-
 ## BLOCKED_EXTERNAL: atomic paid project-lock idempotency
 
 Evidence: the original local Lekta contract in
@@ -58,38 +53,40 @@ malformed or mismatched responses, but production safety still depends on the
 canonical migration and a real concurrency test.
 
 The local Lekta contract suite currently passes for the available agentic
-contract, billing, payload-attachment and worker-dispatcher fixtures (4 files,
-11 tests, run-mode execution on 2026-08-15). Lekta's full local check also
-passes (typecheck, 311 test files / 3,786 tests and Vite build). This is local
-source evidence only; it does not prove that the canonical RPCs, RLS policies
-or worker are deployed.
+contract, billing, payload-attachment, payload-tombstone and worker-dispatcher
+fixtures. Lekta's full local check also passes (typecheck, Vitest and Vite
+build). This is local source evidence only; it does not prove that the
+canonical RPCs, RLS policies or worker are deployed.
 
 Required owner action: update the canonical Lekta RPC to use an atomic
 conflict-safe insert/claim path that verifies the existing immutable snapshot,
 then add a database concurrency test and staging proof for two simultaneous
 identical payment/project requests before enabling paid production traffic.
 
-## BLOCKED_EXTERNAL: canonical material deletion tombstone
+## BLOCKED_EXTERNAL: canonical material payload contract deployment
 
-Evidence: `app/api/materials/[materialId]/route.js` now fails closed unless
-`KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1` is explicitly enabled. The route's
-storage-removal path still lacks the canonical RPC for marking the
-corresponding `agent_payload_manifests` row as deleted. Lekta's current
-`attach_agent_payloads_to_run` contract accepts only manifests with
-`deleted_at is null` and can therefore return a deleted material ID even after
-its storage object is gone. The run then reports the attachment as successful,
-while the worker silently has no material context to load.
+Evidence: the local Lekta contracts now exist in
+`Lekta/supabase/migrations/0077_agent_payload_tombstone.sql` and
+`Lekta/supabase/migrations/0082_replace_agent_payloads_for_run.sql` and the
+durable billing marker in `Lekta/supabase/migrations/0083_billing_pending_marker.sql`.
+`app/api/materials/[materialId]/route.js` calls the tombstone RPC only when
+`KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1` is explicitly enabled. The route
+validates the canonical returned paths before removing private objects, and
+the local contract tests cover ownership, active-run rejection and idempotent
+tombstoning. The agent context route now uses the replacement RPC so removing
+all or changing selected materials is atomic; the production/staging
+deployment and database proof are still missing, so these features remain
+fail-closed.
 
 The materials feature remains disabled by the existing production flag, so this
 is a pre-activation blocker rather than an enabled production incident. A
 direct Katedra update would violate the database authority rule.
 
-Required owner action: add and deploy a canonical Lekta deletion RPC that checks
-user/project ownership, atomically tombstones the manifest (and defines the
-behavior for material IDs attached to active runs), removes or schedules the
-private storage objects, and make `DELETE /api/materials/:materialId` call it.
-Add a contract test proving that a deleted material cannot be attached and a
-staging test proving idempotent deletion.
+Required owner action: deploy migrations `0077` through `0083` to the canonical
+Lekta environment, set `KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1` only there,
+and run staging tests proving that a deleted material cannot be attached, that
+replacement cannot partially mutate a run, and that repeated deletion is
+idempotent. Keep the flags unset until that proof exists.
 
 Local Supabase execution is not currently available either: the installed CLI
 reports that the Docker engine pipe is missing when inspecting the local
@@ -102,3 +99,16 @@ was rejected by Windows as an invalid application platform. The temporary
 installer was removed after the failed launch; Docker Desktop remains
 uninstalled and this requires a manual/system-level installation path or a
 staging Supabase environment.
+
+## BLOCKED_EXTERNAL: web/vision provider activation
+
+The local agent worker currently wires only the text Anthropic adapter. The
+product contract exposes `web_research` and scan/vision paths, but no
+provider-specific web/vision adapter or staging credential is configured.
+The worker therefore fails closed when a step requires an unavailable
+capability; these options must not be treated as production-ready.
+
+Required owner action: configure and test the provider router with the approved
+web and vision adapters, including source URL/DOI verification, then add a
+staging run proving research, OCR, citation evidence and the three-attempt
+quality gate before enabling those capabilities.

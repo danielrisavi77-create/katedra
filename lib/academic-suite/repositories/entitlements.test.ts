@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { hasActiveProjectPass, lookupActiveProjectPass } from './entitlements'
+import { hasActiveProjectPass, lookupActiveProjectPass, lookupActiveProjectPassForProduct } from './entitlements'
 
 type EntitlementFixture = {
   id: string
@@ -157,5 +157,28 @@ describe('hasActiveProjectPass', () => {
     await expect(lookupActiveProjectPass({
       from() { throw new Error('database unavailable') },
     } as never, { userId: 'user-1', projectId: 'project-1', now: NOW })).resolves.toMatchObject({ ok: false })
+  })
+})
+
+describe('lookupActiveProjectPassForProduct', () => {
+  it('accepts the legacy null-product Pass when its work type matches the requested SKU', async () => {
+    await expect(lookupActiveProjectPassForProduct(createEntitlementDb([ACTIVE_PASS]) as never, {
+      userId: 'user-1',
+      projectId: 'project-1',
+      productId: 'katedra_pass_seminarski',
+      now: NOW,
+    })).resolves.toEqual({ ok: true, active: true })
+  })
+
+  it('does not use a legacy Pass from another work type for the requested capability tier', async () => {
+    await expect(lookupActiveProjectPassForProduct(createEntitlementDb([{
+      ...ACTIVE_PASS,
+      work_type: 'zavrsni',
+    }]) as never, {
+      userId: 'user-1',
+      projectId: 'project-1',
+      productId: 'katedra_pass_seminarski',
+      now: NOW,
+    })).resolves.toEqual({ ok: true, active: false })
   })
 })

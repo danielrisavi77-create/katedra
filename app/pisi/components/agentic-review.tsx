@@ -5,6 +5,7 @@ import { useRef, useState } from 'react'
 import { documentText, plainTextDocument } from '../../../lib/manuscript/model'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
+import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 
 export type AgenticReviewEvidence = { id: string; title?: string; url?: string; doi?: string; verified?: boolean; status?: string }
 export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[] }
@@ -36,10 +37,17 @@ export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }:
       const evidence = revision.evidence || []
       return <article key={revision.sectionId} className="pis-review-item" data-status={revision.status}>
         <header><div><p className="pis-kicker">{locallyAccepted ? 'Prihvaćeno' : reviewStatus(revision.status)}</p><h3>{section.title}</h3></div><span>{locallyAccepted ? 'Prihvaćeno' : acceptable ? 'Provjereno' : 'Pregledaj rezultat'}</span></header>
+        <div className="pis-review-diff" aria-label={`Usporedba s rukopisom za ${section.title}`}>
+          <div className="pis-review-diff-heading"><strong>Usporedba s rukopisom</strong><span>{documentText(section.content) === documentText(revision.proposedContent) ? 'Bez promjene' : 'Prijedlog mijenja tekst'}</span></div>
+          <div className="pis-review-diff-columns">
+            <div className="pis-review-diff-version is-current"><span>Trenutna verzija</span><p>{documentText(section.content) || 'Sekcija još nema tekst.'}</p></div>
+            <div className="pis-review-diff-version is-proposed"><span>Novi prijedlog</span><p>{documentText(revision.proposedContent) || 'Prijedlog nema tekst.'}</p></div>
+          </div>
+        </div>
         <textarea ref={(element) => { textareas.current[section.id] = element }} aria-label={`Prijedlog za ${section.title}`} value={documentText(revision.proposedContent)} onChange={(event) => onEdit(section.id, plainTextDocument(event.target.value))} readOnly={!canReview} />
         <div className="pis-review-evidence" aria-label={`Izvori za ${section.title}`}>
           <strong>Izvori i dokazi</strong>
-          {evidence.length > 0 ? <ul>{evidence.map((item) => <li key={item.id}><span>{item.title || item.url || item.doi || 'Neimenovani izvor'}</span>{item.url && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}{item.doi && <small>DOI: {item.doi}</small>}<em>{item.verified ? 'Provjereno' : item.status || 'Potrebna provjera'}</em></li>)}</ul> : <p>Nema priloženih izvora za ovaj rezultat.</p>}
+          {evidence.length > 0 ? <ul>{evidence.map((item) => <li key={item.id}><span>{item.title || item.url || item.doi || 'Neimenovani izvor'}</span>{item.url && isSafeManuscriptHref(item.url) && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}{item.doi && <small>DOI: {item.doi}</small>}<em>{item.verified ? 'Provjereno' : item.status || 'Potrebna provjera'}</em></li>)}</ul> : <p>Nema priloženih izvora za ovaj rezultat.</p>}
         </div>
         {revision.verificationMessage && <p className="pis-review-verification"><strong>{revision.status === 'blocked' ? 'Potrebna provjera · ' : ''}Verifikator</strong> {revision.verificationMessage}</p>}
         {canReview && <div className="pis-review-item-actions"><button type="button" onClick={() => textareas.current[section.id]?.focus()} aria-label={`Uredi ${section.title}`}>Uredi</button><button type="button" className="is-primary" disabled={!acceptable} onClick={() => void accept([section.id])} aria-label={`Prihvati ${section.title}`}>Prihvati</button><button type="button" onClick={() => onReject(section.id)} aria-label={`Odbaci ${section.title}`}>Odbaci</button></div>}

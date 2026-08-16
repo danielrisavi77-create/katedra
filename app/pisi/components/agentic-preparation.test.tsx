@@ -40,7 +40,7 @@ describe('AgenticPreparation', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ runId: 'run-1' }) })
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} onRunCreated={onRunCreated} />)
+    render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} webResearchAvailable onRunCreated={onRunCreated} />)
     await user.click(screen.getByRole('radio', { name: /Autonomno/ }))
     await user.click(screen.getByRole('radio', { name: /Šira pretraga/ }))
     await user.click(screen.getByRole('button', { name: 'Pokreni autonomni tijek' }))
@@ -58,9 +58,20 @@ describe('AgenticPreparation', () => {
 
     expect(screen.getByRole('heading', { name: 'Priprema rada' })).toBeTruthy()
     expect(screen.getByText('Digitalna javna uprava')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Kako nastaje tvoj rad' })).toBeTruthy()
     expect(screen.getByText(/Tema i vrsta rada zaključane su za ovaj Pass/)).toBeTruthy()
     expect(screen.getByText(/Katedra odabire tehničku postavu/i)).toBeTruthy()
     expect(screen.getByText(/Pokreni izradu rada/i)).toBeTruthy()
+  })
+
+  it('keeps autonomous projects in the autonomous mode selected during onboarding', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ materials: [] }) }))
+    render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} lockedMode="autonomous" onRunCreated={vi.fn()} />)
+
+    expect(screen.queryByRole('radio', { name: /Vođeno/ })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Ubrzano/ })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Autonomno/ })).toBeNull()
+    expect(screen.getByText(/Svaki agent ima zasebnog verifikatora/i)).toBeTruthy()
   })
 
   it('shows readable material states and a retry action', async () => {

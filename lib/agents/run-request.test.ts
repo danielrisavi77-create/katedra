@@ -26,6 +26,13 @@ describe('agent run request', () => {
     expect(parseAgentRunRequest({ mode: 'guided', sourcePolicy: 'uploaded_only', sectionIds: [], materialIds: new Array(101).fill('material') })).toMatchObject({ ok: false, status: 400 })
   })
 
+  it('deduplicates selected material ids before attaching a run', () => {
+    expect(parseAgentRunRequest({ mode: 'guided', sourcePolicy: 'uploaded_only', sectionIds: [], materialIds: ['material-1', 'material-1', 'material-2'] })).toMatchObject({
+      ok: true,
+      value: { materialIds: ['material-1', 'material-2'] },
+    })
+  })
+
   it('rejects unsupported values and missing fields', () => {
     expect(parseAgentRunRequest({ mode: 'magic', sourcePolicy: 'web_research' })).toMatchObject({ ok: false, status: 400 })
     expect(parseAgentRunRequest({ mode: 'guided' })).toMatchObject({ ok: false, status: 400 })

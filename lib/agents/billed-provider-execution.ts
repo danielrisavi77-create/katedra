@@ -1,6 +1,6 @@
-import { buildBillingConsumeParams, resolveBillingOutcome } from '../ai/billing-contract'
+import { buildBillingConsumeParams, buildBillingPendingParams, resolveBillingOutcome } from '../ai/billing-contract'
 import { AI_MODEL_COST_MULTIPLIERS, estimateChatCharge } from '../ai/cost-policy'
-import { reserveDistributedRequest } from '../ai/rate-limit.js'
+import { releaseRateLimitReservation, reserveDistributedRequest } from '../ai/rate-limit.js'
 import type { AgentInput, AgentProvider, AgentResultV1, UsageRecord } from './contracts'
 import { executeAgentProvider } from './provider-execution'
 
@@ -45,7 +45,8 @@ export async function executeBilledAgentProvider(
     requestId: input.requestId,
     estimatedCharge,
   })
-  if (!reservation.allowed) {
+  const reservationRelease = reservation.release
+  if (!reservation.allowed || typeof reservationRelease !== 'function') {
     throw new AgentBillingReconciliationError(`Agent billing reservation denied: ${reservation.reason}`, 'released')
   }
 
@@ -53,7 +54,17 @@ export async function executeBilledAgentProvider(
     const result = await executeAgentProvider(input.provider, input.agentInput)
     const usage = normalizeUsage(result.usage)
     if (!usage || (usage.inputTokens <= 0 && usage.outputTokens <= 0)) {
-      throw new AgentBillingReconciliationError('Agent billing usage unavailable.', 'released')
+      const pending = await markPendingBilling(db, {
+        requestId: input.requestId,
+        userId: input.userId,
+        projectId: input.projectId,
+        model: input.model,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCharge,
+      })
+      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      throw new AgentBillingReconciliationError('Agent billing usage unavailable.', 'pending_reconciliation')
     }
 
     const charged = Math.round((usage.inputTokens + OUTPUT_WEIGHT * usage.outputTokens) * (AI_MODEL_COST_MULTIPLIERS[input.model] ?? 1))
@@ -69,9 +80,31 @@ export async function executeBilledAgentProvider(
         outputTokens: usage.outputTokens,
       }))
     } catch {
+      const pending = await markPendingBilling(db, {
+        requestId: input.requestId,
+        userId: input.userId,
+        projectId: input.projectId,
+        model: input.model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        charged,
+      })
+      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
       throw new AgentBillingReconciliationError('Agent billing finalization unavailable.', 'pending_reconciliation')
     }
-    if (settled.error) throw new AgentBillingReconciliationError('Agent billing finalization failed.', 'pending_reconciliation')
+    if (settled.error) {
+      const pending = await markPendingBilling(db, {
+        requestId: input.requestId,
+        userId: input.userId,
+        projectId: input.projectId,
+        model: input.model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        charged,
+      })
+      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      throw new AgentBillingReconciliationError('Agent billing finalization failed.', 'pending_reconciliation')
+    }
 
     const status = (settled.data as { status?: unknown } | null)?.status
     const outcome = resolveBillingOutcome({
@@ -80,12 +113,63 @@ export async function executeBilledAgentProvider(
       rpc: status === 'already_settled' ? 'already_settled' : status === 'settled' ? 'settled' : 'unknown',
     })
     if (outcome.state !== 'settled') {
-      throw new AgentBillingReconciliationError(`Agent billing outcome: ${outcome.state}.`, outcome.state)
+      const pending = await markPendingBilling(db, {
+        requestId: input.requestId,
+        userId: input.userId,
+        projectId: input.projectId,
+        model: input.model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        charged,
+      })
+      if (!pending.ok) throw pendingMarkerFailure(input, pending.error)
+      throw new AgentBillingReconciliationError(`Agent billing outcome: ${outcome.state}.`, 'pending_reconciliation')
     }
     return { ...result, usage, billingState: outcome.state }
   } finally {
-    await reservation.release().catch(() => undefined)
+    await releaseReservationWithRetry({ release: reservationRelease }, input)
   }
+}
+
+async function releaseReservationWithRetry(
+  reservation: { release: () => void | Promise<void> },
+  input: { requestId: string; userId: string; projectId: string },
+) {
+  await releaseRateLimitReservation(reservation, (error, attempt) => {
+    console.error(JSON.stringify({
+      eventName: 'agent_rate_limit_release_failed',
+      attempt,
+      requestId: input.requestId,
+      userId: input.userId,
+      projectId: input.projectId,
+      error: error instanceof Error ? error.message : String(error),
+    }))
+  })
+}
+
+async function markPendingBilling(db: BillingDatabase, input: Parameters<typeof buildBillingPendingParams>[0]) {
+  try {
+    const result = await db.rpc('katedra_mark_pending', buildBillingPendingParams(input))
+    if (result?.error) return { ok: false, error: result.error.message || 'Canonical pending marker returned an error.' }
+    const status = result?.data && typeof result.data === 'object' && !Array.isArray(result.data)
+      ? (result.data as Record<string, unknown>).status
+      : undefined
+    if (status !== 'pending_reconciliation') return { ok: false, error: 'Canonical pending marker did not confirm pending_reconciliation.' }
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Canonical pending marker is unavailable.' }
+  }
+}
+
+function pendingMarkerFailure(input: { requestId: string; userId: string; projectId: string }, error: string) {
+  console.error(JSON.stringify({
+    eventName: 'agent_billing_pending_marker_failed',
+    requestId: input.requestId,
+    userId: input.userId,
+    projectId: input.projectId,
+    error,
+  }))
+  return new AgentBillingReconciliationError('Agent billing reconciliation marker unavailable.', 'pending_reconciliation')
 }
 
 function normalizeUsage(value: UsageRecord | undefined): UsageRecord | null {

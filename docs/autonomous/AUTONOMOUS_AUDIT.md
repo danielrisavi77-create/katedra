@@ -3878,3 +3878,484 @@ warning.
 - Production agentic flags remain disabled until the canonical preflight and
   authenticated staging evidence pass.
 - Dependency audit remains blocked by the unavailable npm advisory endpoint.
+
+## Cycle: 2026-08-16a
+
+### Root cause selected
+
+Priority: P1 (temporary material visibility and agent lifecycle contracts were
+not yet aligned across the HTTP routes, canonical Lekta RPCs and release
+checks).
+
+### Fix
+
+- Material listing now reads only active, non-expired canonical manifests via
+  `list_active_agent_payloads`; a stale Storage object cannot resurrect a
+  tombstoned material.
+- Material deletion uses the canonical `tombstone_agent_payload` RPC before
+  removing private Storage objects and validates every returned path against
+  the exact user/project/material namespace.
+- Agent run creation, payload registration, claim, attach, activation and
+  completion now require the exact locked project Pass; lifecycle transitions
+  also reject expired leases and terminal-run resurrection.
+- Billing daily ceilings now count actual settled or pending-reconciliation
+  charges rather than released estimates.
+- Agentic contract preflight and staging browser scripts now use the same
+  required-function and environment checks. A resumed browser E2E run no
+  longer treats a stale intervention banner as success.
+
+### Verification
+
+- Katedra: 164 test files passed, 614 tests passed, 4 skipped; typecheck,
+  lint and production build passed.
+- Lekta: full `npm.cmd run check` passed, including typecheck, Vitest and Vite
+  build.
+- Local browser E2E passed for `/pisi`, agent studio and the complete public
+  route matrix at 390/768/1440 px in light and dark mode.
+- `git diff --check` passed in both repositories.
+
+### Remaining issues
+
+- Canonical migrations/RPCs are not deployed or live-proven in Supabase
+  staging, so agentic, payment and material features remain fail-closed.
+- Authenticated commerce, worker continuation, account deletion authority and
+  npm advisory verification remain external blockers in `BLOCKERS.md`.
+
+## Cycle: 2026-08-16b
+
+### Root causes selected
+
+Priority: P1 (agent verification and citation evidence were weaker than the
+declared contract).
+
+The runtime stored agent-specific verifier names, but the implementation
+actually routed every agent through one generic verifier function. In
+addition, a verified citation locator was accepted whenever it was merely a
+non-empty string, and DOI values from the manuscript were serialized as URLs.
+
+### Fix
+
+- Add an explicit verifier registry with a distinct verifier function for
+  every supported agent; source-bound agents share only the deterministic
+  source-gate helper.
+- Validate verified citation locators as HTTP(S) URLs or DOI strings before
+  they can satisfy claim evidence.
+- Preserve DOI values as `doi` evidence in the provider worker instead of
+  relabeling them as `url` evidence.
+- Harden distributed rate-limit and withdrawal reservation cleanup so a
+  synchronous RPC throw becomes a rejected Promise and cannot escape caller
+  cleanup/finalization paths.
+- Align hybrid browser E2E blocker reporting with the shared agentic preflight,
+  and make the resume journey re-read terminal state after intervention.
+
+### Verification
+
+- TDD focused verifier/provider/reservation tests: PASS (12 agent tests plus
+  reservation regression tests).
+- Full Katedra suite: PASS (164 test files, 620 passed, 4 skipped).
+- Typecheck: PASS.
+- Lint: PASS.
+- Production build: PASS (all current routes).
+- Browser smoke: PASS for `/pisi`, agent studio and the full public route
+  matrix at 390/768/1440 px in light and dark mode.
+- Local HTTP smoke: `GET http://localhost:3000/pisi` returned `200` with title
+  and Katedra content.
+- `git diff --check`: PASS in Katedra and nested Lekta worktrees.
+
+### Remaining issues
+
+- The deployed worker currently has only the text Anthropic adapter. Web
+  research and vision/OCR provider routing remain intentionally unavailable
+  until provider-specific adapters and staging credentials exist; the local
+  feature flags stay fail-closed.
+- Deterministic claim-map validation cannot prove that a provider listed every
+  factual claim; independent semantic verification still requires a separate
+  verifier provider and staging proof.
+- Canonical Lekta deployment, authenticated commerce, account deletion
+  authority and dependency advisory verification remain blocked as listed in
+  `BLOCKERS.md`.
+
+## Cycle: 2026-08-16c
+
+### Root causes selected
+
+Priority: P1 (ownership aliasing, partial material selection and private
+response/error leakage remained possible at route boundaries).
+
+### Fix
+
+- `/api/state` now keeps the server-resolved canonical guest alias once a
+  project exists; a stale client alias cannot overwrite another project's
+  identity mapping.
+- Agent run material selection now uses the Lekta
+  `replace_agent_payloads_for_run` contract. It replaces the complete input
+  set atomically and supports explicit removal of all selected materials,
+  without touching run context or generated-result payloads.
+- Material extraction failures are redacted to safe user-facing warnings;
+  provider URLs, credentials and internal exception details never leave the
+  extractor boundary.
+- Private account, agent-run and material responses now receive
+  `Cache-Control: private, no-store`, including responses wrapped with the
+  shared request-id helper.
+
+### Verification
+
+- TDD regressions: PASS for canonical alias ownership, atomic payload
+  replacement/removal, extractor error redaction and private response caching.
+- Katedra: 165 test files passed, 626 tests passed, 4 skipped; typecheck and
+  lint passed.
+- Lekta: full `npm.cmd run check` passed, including typecheck, Vitest and Vite
+  build; the new migration contract tests passed.
+- Browser smoke: PASS for `/pisi`, agent studio and the complete public route
+  matrix at 390/768/1440 px in light and dark mode.
+- Local HTTP smoke: `GET http://localhost:3000/pisi` returned `200`.
+- `git diff --check`: PASS in Katedra and nested Lekta worktrees.
+
+### Remaining issues
+
+- Migration `0082_replace_agent_payloads_for_run.sql` and the related Lekta
+  contracts are local evidence only until deployed and exercised against the
+  canonical Supabase project with RLS and concurrent-worker tests.
+- Authenticated checkout/webhook, worker continuation, provider web/vision
+  routing, account deletion authority and npm advisory verification remain
+  external blockers listed in `BLOCKERS.md`.
+
+## Cycle: 2026-08-16d
+
+### Root causes selected
+
+Priority: P0/P1 (concurrent material selection, missing billing trace for
+unknown provider usage, unbounded private storage reads and an unnecessary
+post-expiry deletion block).
+
+### Fix
+
+- The Lekta replacement RPC now locks the target run and requested payload
+  rows before eligibility checks, preventing competing runs from attaching
+  the same material based on the same stale read.
+- Added `0083_billing_pending_marker.sql` and wired chat finalization to
+  persist `pending_reconciliation` through `katedra_mark_pending` whenever
+  usage or the consume outcome is not trustworthy. The stream fails closed if
+  the marker itself is unavailable; a reservation release is never presented
+  as a successful settlement.
+- The background agent provider executor now uses the same pending marker for
+  missing usage, RPC errors and unknown consume outcomes; worker results can no
+  longer claim a pending state without attempting a canonical billing trace.
+- Agent pause/resume/cancel/delete control responses now use private,
+  non-cacheable JSON responses.
+- Material, run-context and agent-result storage downloads now use a bounded
+  concurrency mapper instead of unbounded `Promise.all` fan-out.
+- An owner may delete their temporary material after Pass expiry; ownership,
+  canonical path validation and active-run protection remain enforced by the
+  Lekta tombstone RPC.
+
+### Verification
+
+- TDD focused regressions: PASS for payload locking, chat and worker pending
+  billing markers, private agent responses, bounded storage concurrency and
+  post-expiry material deletion.
+- Katedra: 168 test files passed, 633 tests passed, 4 skipped; typecheck,
+  lint and production build passed.
+- Lekta: `npm.cmd run check` passed (typecheck, full Vitest suite and Vite
+  build); the complete check took 208.6 seconds.
+- Browser smoke: `test:e2e:pisi`, `test:e2e:agent-studio-ui` and the full
+  light/dark route matrix at 390/768/1440 px passed.
+- Local HTTP smoke: `GET http://localhost:3000/pisi` returned `200` with the
+  Katedra title.
+- `git diff --check` passed in both repositories.
+
+### Remaining issues
+
+- Lekta migrations `0077`-`0083`, including the new billing marker, are local
+  source evidence only until deployed and concurrency-tested against the
+  canonical Supabase project.
+- Authenticated checkout/webhook, worker continuation, web/vision provider
+  routing, account deletion authority and npm advisory verification remain
+  external blockers listed in `BLOCKERS.md`.
+
+## Cycle: 2026-08-16e
+
+### Root causes selected
+
+Priority: P0 (release preflight could report agentic readiness without the
+canonical billing layer, and production agent runs could be enabled without
+the dispatcher continuation contract).
+
+### Fix
+
+- Expanded the agentic contract preflight to require the canonical billing
+  tables (`katedra_wallets`, `katedra_usage`,
+  `katedra_request_reservations`, `katedra_billing_attempts`) and the billing
+  RPCs (`katedra_reserve_request`, `katedra_release_request`,
+  `katedra_consume`, `katedra_mark_pending`). Missing billing contracts now
+  fail closed before feature activation.
+- Production preflight now requires `KATEDRA_WORKER_APP_URL` and
+  `KATEDRA_AGENT_WORKER_CRON_SECRET` whenever
+  `KATEDRA_AGENT_RUNS_ENABLED=true`, so a run cannot be advertised as
+  enabled without a server-side continuation path.
+- Updated the release preflight documentation with the billing contract
+  inventory and the fail-closed rule.
+
+### Verification
+
+- Focused regressions: PASS (25 tests across project capability, project-mode,
+  deployment preflight and agent contract preflight suites).
+- Katedra: 168 test files passed, 635 tests passed, 4 skipped; typecheck,
+  lint and production build passed.
+- Browser/UI smoke: `AGENT_STUDIO_UI_SMOKE_PASS`.
+- Local HTTP smoke: `GET http://localhost:3000/pisi` returned `200` with the
+  Katedra title; `/racun` returned `200`.
+- `git diff --check`: PASS before this documentation entry; rerun after the
+  entry is required as part of the final handoff.
+
+### Remaining issues
+
+- The billing and agent-run contracts are still local Lekta source evidence;
+  migrations/RPCs/RLS and concurrent-worker behavior have not been deployed
+  and proven against the canonical Supabase project.
+- Authenticated checkout/webhook, worker continuation with staging
+  credentials, web/vision provider routing, account deletion authority and
+  npm advisory verification remain external blockers listed in
+  `BLOCKERS.md`. The feature flags must remain fail-closed until those proofs
+  exist.
+
+## Cycle: 2026-08-16f
+
+### Root causes selected
+
+Priority: P0/P1 (unbounded JSON request bodies, cacheable private responses,
+auth redirect context loss, entitlement shape drift, stale Pass UI state,
+temporary payload namespace trust, invalid Stripe refund success and legacy
+project alias rejection during checkout).
+
+### Fix
+
+- Added a shared streaming JSON body reader with endpoint-specific byte limits.
+  It checks both `Content-Length` and chunked bodies, returns generic malformed
+  input errors and is now used by auth, account, checkout, withdrawal, state,
+  chat, agent-run and worker JSON routes. Anonymous chat still exits before
+  reading the body.
+- Account, admin, auth and related private JSON responses now explicitly use
+  `private, no-store` semantics.
+- Signed-in auth redirects preserve a safe internal pathname, query and hash,
+  including a project-specific `/pisi` destination.
+- Project Pass lookup accepts the explicitly supported legacy null-product row
+  only when its stored work type matches the requested canonical SKU; unknown
+  and mismatched legacy rows remain fail-closed.
+- `/pisi` derives an effective Pass state from the current auth/onboarding
+  context, so logout or onboarding cannot display a stale active/admin Pass and
+  React does not perform a synchronous state update inside an effect.
+- Material and run-result loaders reject storage entries outside the exact
+  user/project/run namespace before downloading private objects.
+- Stripe duplicate-refund handling now requires a non-empty refund ID; an
+  empty provider response cannot be treated as a successful refund.
+- Checkout resolves an owned legacy guest alias to the canonical project UUID
+  before validating the package and writing Stripe metadata. The existing
+  local sync status also recognizes that canonical response as a successful
+  alias migration instead of displaying a false sync failure.
+
+### Verification
+
+- Focused regressions: PASS (after the final changes, including JSON limits,
+  redirect, entitlement, payload scope, refund and checkout alias tests).
+- Katedra: 170 test files passed, 655 tests passed, 4 skipped; typecheck,
+  lint and production build passed.
+- Browser smoke: `test:e2e:pisi`, `test:e2e:agent-studio-ui` and local HTTP
+  checks for `/pisi` and `/racun` passed.
+- `git diff --check`: PASS in both the root Katedra repository and nested
+  Lekta worktree after the documentation entry.
+
+### Remaining issues
+
+- Lekta migrations/RPCs/RLS, project-lock idempotency, billing settlement and
+  worker continuation are still local source evidence until deployed and
+  concurrency-tested against the canonical Supabase project.
+- Authenticated checkout/webhook, staging provider credentials, web/vision
+  adapters, account deletion authority and npm advisory verification remain
+  external blockers listed in `BLOCKERS.md`; agentic and production flags
+  must remain fail-closed until those proofs exist.
+
+## Cycle: 2026-08-16g
+
+### Root causes selected
+
+Priority: P1 request-boundary and private-material handling. The remaining
+local upload boundary still relied on framework `formData()` buffering, and
+the material listing endpoint could return unbounded private manifest content.
+
+### Fix
+
+- Installed Busboy 1.6.0 and added a streaming multipart reader with separate
+  total-body, file, field, part-count and malformed-boundary limits.
+- Replaced `formData()` in both `/api/materials` and `/api/parse-docx`; chunked
+  multipart uploads now fail closed before an oversized file is retained.
+- Added manifest-count, per-manifest, aggregate and public-response limits to
+  material listing. The public list no longer returns extracted academic text;
+  the worker continues to load that text only from the private scoped storage
+  path.
+- Kept the existing project ownership, Pass and distributed upload reservation
+  gates in front of extraction and storage.
+- Re-ran the dependency advisory audit from a network-enabled command:
+  `npm.cmd run audit:dependencies` reports zero high-severity production
+  vulnerabilities. The corresponding stale blocker was removed from
+  `BLOCKERS.md`.
+
+### Verification
+
+- Multipart, materials and DOCX focused regressions: PASS (5 files, 12
+  tests), plus the webhook/agent-run focused suite: PASS (10 files, 37 tests,
+  1 skipped).
+- Katedra: 170 test files passed, 656 tests passed, 4 skipped; typecheck and
+  lint passed; production build passed with 28 routes.
+- Browser smoke: `test:e2e:pisi` and `test:e2e:agent-studio-ui` passed.
+- Local HTTP smoke: `/pisi` and `/racun` returned HTTP 200 with the Katedra
+  title.
+- `git diff --check`: PASS in both the root Katedra repository and nested
+  Lekta worktree; Git reported only normal LF/CRLF conversion warnings.
+
+### Remaining issues
+
+- Canonical Lekta migrations/RPCs/RLS, project-lock idempotency, billing
+  settlement, worker continuation, account-deletion authority and staging
+  provider credentials remain external blockers. Agentic and production flags
+  must remain fail-closed until those proofs exist.
+
+## Cycle: 2026-08-16h
+
+### Root causes selected
+
+Priority: P1 local development access and agent payload integrity. The
+allowlisted local admin could still be stopped by the missing billing RPC, and
+run-result/context loaders had no complete aggregate bounds or strict payload
+shape validation.
+
+### Fix
+
+- Local development admin override can use the configured AI provider without
+  a Lekta billing RPC. It records an explicit local bypass event, never calls a
+  billing RPC, releases the local rate reservation, and remains unavailable in
+  production without billing v2.
+- Agent result loading now bounds manifest count, per-object bytes and total
+  bytes, validates agent/verifier identity, attempts, citation shapes, usage
+  and verification envelopes, and fails closed instead of returning an
+  unbounded or partially trusted result set.
+- Manuscript run context is rejected before JSON parsing when its storage
+  object already exceeds the canonical context limit.
+- A run cannot load more than 100 materials or more than 4 MiB of combined
+  extracted material context.
+
+### Verification
+
+- Focused chat, result-storage and material-context regressions: PASS (29
+  tests).
+- Katedra: **171 test files passed, 4 skipped; 668 tests passed, 4 skipped**;
+  typecheck, lint and production build passed with 28 routes.
+- Browser smoke: `test:e2e:pisi` and `test:e2e:agent-studio-ui` passed.
+- Local HTTP smoke: `/pisi` and `/racun` returned HTTP 200 with the Katedra
+  title.
+- `git diff --check`: PASS in both root Katedra and nested Lekta worktrees.
+
+### Remaining issues
+
+- Canonical Lekta migrations/RPCs/RLS, project-lock idempotency, billing
+  settlement, worker continuation, account-deletion authority and staging
+  provider credentials remain external blockers.
+- Full and production-only `npm audit` now both report zero vulnerabilities.
+
+## Cycle: 2026-08-16i
+
+### Root causes selected
+
+Priority: P0/P1 billing finalization and reservation cleanup. A failed
+distributed release was cached forever, provider-worker billing IDs could
+exceed the canonical RPC limit, and withdrawal cleanup accepted an empty
+release response.
+
+### Fix
+
+- Distributed rate-limit release now clears a rejected promise so a later
+  cleanup attempt can retry the canonical RPC. Chat, materials, DOCX parsing
+  and billed agent execution use the same two-attempt cleanup helper and log
+  both failures with request context.
+- Provider-worker billing request IDs preserve short IDs for compatibility and
+  deterministically hash oversized IDs to the canonical 78-character form
+  `katedra-agent-<sha256>`.
+- Agent billing requires an explicit `pending_reconciliation` response from
+  the canonical pending marker; a missing or malformed marker is surfaced as a
+  reconciliation failure instead of being reported as recorded.
+- Withdrawal reservation release now requires canonical `released` status,
+  retries after a transient failure, and logs a second failure for support
+  reconciliation.
+- Failed agent-run setup cleanup now logs a failed `cancel_agent_run` result
+  instead of silently discarding it.
+
+### Verification
+
+- Focused billing/rate-limit/withdrawal/chat/material/worker regressions: PASS
+  (39 tests in the first focused run; withdrawal additions also pass).
+- Katedra: **171 test files passed, 4 skipped; 675 tests passed, 4 skipped**;
+  typecheck and lint passed.
+- Production build passed with 28 routes.
+- Browser smoke: `test:e2e:pisi` and `test:e2e:agent-studio-ui` passed.
+- Local HTTP smoke: `/pisi` and `/racun` returned HTTP 200 with the Katedra
+  title.
+
+### Remaining issues
+
+- Canonical Lekta migrations/RPCs/RLS, project-lock idempotency, billing
+  settlement, worker continuation, account-deletion authority and staging
+  provider credentials remain external blockers.
+- Web/vision provider adapters are still unavailable in the configured
+  Anthropic text adapter; the related capabilities remain blocked rather than
+  being simulated.
+- Agentic, materials and production project-lock flags must remain fail-closed
+  until the Lekta contracts and staging money-flow are deployed and proven.
+
+## Cycle: 2026-08-16j
+
+### Root causes selected
+
+Priority: local writing workflow correctness and misleading unavailable paths.
+The compact material control still routed every accepted file through the
+disabled shared material backend, project Pass lookup raced first-account
+metadata sync, and the autonomous choice stayed clickable while its canonical
+agent contracts were disabled.
+
+### Fix
+
+- `.txt` and `.md` composer attachments are read locally and persisted per
+  project in bounded browser storage; DOCX uses the temporary parser when
+  available, while PDF and image attachments are shown honestly as metadata
+  until a vision/text extractor is configured. Persisted materials are visible
+  after reload and removable from the chat context.
+- Chat rejects unknown/foreign projects before capability, wallet or provider
+  work, including when a capability is supplied and project-lock enforcement is
+  disabled locally.
+- Pass lookup waits for successful `/api/state` synchronization and uses a
+  returned canonical project ID, preventing a false transient paywall after
+  login.
+- Material and internal worker result responses use explicit private response
+  handling; failed temporary-object cleanup retries and logs both attempts.
+- Duplicate agent material IDs are normalized before attachment.
+- Autonomous mode is disabled in the onboarding UI until the server exposes
+  the project-lock, agent-run and v2 billing contracts.
+
+### Verification
+
+- Focused regressions: **36 tests passed**; chat, materials, composer and
+  onboarding tests are green.
+- Katedra: **172 test files passed, 4 skipped; 687 tests passed, 4 skipped**;
+  typecheck, lint and production build passed (28 routes).
+- Browser smoke: `test:e2e:pisi` passed with upload → reload persistence;
+  `test:e2e:agent-studio-ui` and responsive light/dark `test:e2e:hybrid-ui`
+  passed.
+- Local HTTP smoke: `/`, `/pisi`, `/racun`, auth and legal routes returned
+  HTTP 200; `app/demo` does not exist.
+
+### Remaining issues
+
+- Authenticated agentic workflow E2E remains blocked until staging provides
+  canonical Lekta contracts, worker credentials and provider configuration.
+- PDF/image content is not sent to the text chat without a configured vision
+  or extraction adapter; the UI now labels that limitation instead of implying
+  analysis.

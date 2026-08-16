@@ -24,6 +24,12 @@ describe('ProjectNavigation', () => {
     expect(screen.queryByRole('button', { name: 'Obrana' })).toBeNull()
   })
 
+  it('renders Radionica as the primary agentic destination', () => {
+    render(<ProjectNavigation activeItem="studio" workType="z" onNavigate={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: 'Radionica' }).getAttribute('aria-current')).toBe('page')
+  })
+
   it('forwards the exact item id for every rendered navigation action', async () => {
     const user = userEvent.setup()
     const onNavigate = vi.fn()

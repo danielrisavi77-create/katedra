@@ -52,4 +52,26 @@ describe('product capability matrix', () => {
   it('rejects a capability outside the locked product scope', () => {
     expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'seminarski', hasActivePass: true }, 'defense_simulator')).toMatchObject({ allowed: false, code: 'capability_unavailable' })
   })
+
+  it('allows an explicitly authenticated admin override without inventing a Pass', () => {
+    expect(decideProjectCapability({
+      userId: 'u1',
+      projectId: 'p1',
+      ownedProjectId: 'p1',
+      adminOverride: true,
+    }, 'web_research')).toEqual({
+      allowed: true,
+      tier: 'diplomski',
+      projectId: 'p1',
+      adminOverride: true,
+      unlimited: true,
+    })
+  })
+
+  it('keeps ownership mandatory even for an admin override', () => {
+    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', adminOverride: true }, 'full_generation')).toMatchObject({
+      allowed: false,
+      code: 'project_not_owned',
+    })
+  })
 })

@@ -43,7 +43,7 @@ describe('paid project setup', () => {
     const user = userEvent.setup()
     const onPhaseChange = vi.fn()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ runId: 'run-1' }) }))
-    render(<PaidProjectSetup projectId="project-1" passActive sectionIds={['intro', 'analysis']} manuscript={manuscript} onPhaseChange={onPhaseChange} />)
+    render(<PaidProjectSetup projectId="project-1" passActive sectionIds={['intro', 'analysis']} manuscript={manuscript} webResearchAvailable onPhaseChange={onPhaseChange} />)
     expect(screen.getByRole('heading', { name: /Priprema projekta: Rad/i })).toBeTruthy()
     expect(screen.getByText(/Ovaj projekt: Rad/i)).toBeTruthy()
     expect(screen.getByText(/Opseg Passa: Seminarski rad/i)).toBeTruthy()

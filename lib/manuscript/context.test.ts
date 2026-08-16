@@ -38,12 +38,33 @@ describe('AI manuscript context', () => {
     expect(prompt).not.toContain('Cijeli odlomak ne treba ići u kontekst.')
   })
 
+  it('includes only explicitly attached material context in the prompt', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'z' })
+
+    const messages = buildAiMessages({
+      manuscript,
+      sectionId: manuscript.sections[0].id,
+      action: 'review',
+      materialContext: [{
+        name: 'upute-mentora.pdf',
+        text: 'Mentor traži jasnije istraživačko pitanje.',
+        warnings: [],
+      }],
+    })
+    const prompt = String(messages[0].content)
+
+    expect(prompt).toContain('PRILOŽENI MATERIJALI:')
+    expect(prompt).toContain('upute-mentora.pdf')
+    expect(prompt).toContain('Mentor traži jasnije istraživačko pitanje.')
+  })
+
   it('declares a bounded capability for every editor action', () => {
     expect(capabilityForAction('draft')).toBe('generate_large_sections')
     expect(capabilityForAction('improve')).toBe('generate_large_sections')
     expect(capabilityForAction('review')).toBe('contextual_ai')
     expect(capabilityForAction('coach')).toBe('contextual_ai')
     expect(capabilityForAction('next')).toBe('contextual_ai')
+    expect(capabilityForAction('question')).toBe('contextual_ai')
   })
 })
 

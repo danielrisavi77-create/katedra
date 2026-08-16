@@ -5,12 +5,14 @@ export type ProjectDrawerTab = 'plan' | 'agents' | 'sources' | 'mentor' | 'rules
 export type ProjectNavigationDestination =
   | { kind: 'home' }
   | { kind: 'writing' }
+  | { kind: 'agentic'; phase: 'preparation' }
   | { kind: 'agentic-review' }
   | { kind: 'drawer'; tab: ProjectDrawerTab }
 
 export function projectNavigationDestination(item: ProjectNavItem): ProjectNavigationDestination {
   switch (item) {
     case 'home': return { kind: 'home' }
+    case 'studio': return { kind: 'agentic', phase: 'preparation' }
     case 'writing': return { kind: 'writing' }
     case 'review': return { kind: 'agentic-review' }
     case 'plan': return { kind: 'drawer', tab: 'plan' }

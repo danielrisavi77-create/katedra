@@ -31,3 +31,32 @@ it('keeps the current project when an anonymous user opens login from the worksp
   expect(source).toContain('buildProjectAuthRedirect(manuscript.projectId)')
   expect(source).not.toContain('href="/prijava?redirect=/pisi"')
 })
+
+it('does not expose a manual-assistant escape from autonomous workspace', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
+
+  expect(source).toContain("onOpenAssistant={effectiveProjectMode === 'autonomous' ? undefined : openAssistantForStep}")
+})
+
+it('clears stale Pass state when auth or onboarding context is unavailable', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
+
+  expect(source).toContain("if (!syncProjectId || !syncWorkType || !user || showOnboarding || booting) {")
+  expect(source).toContain('const passContextReady = Boolean(syncProjectId && syncWorkType && user && !showOnboarding && !booting)')
+  expect(source).toContain("const effectivePassStatus = passContextReady ? passStatus : 'idle'")
+})
+
+it('waits for metadata sync before checking the project Pass', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
+
+  expect(source).toContain("if (syncResult.status !== 'synced') {")
+  expect(source).toContain('const balanceProjectId = syncResult.canonicalProjectId || syncProjectId')
+})
+
+it('does not present an admin override as a canonical agentic Pass', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
+
+  expect(source).toContain('const agenticPassActive = hasCanonicalAgenticPass(effectivePassStatus)')
+  expect(source).toContain('passActive={agenticPassActive}')
+  expect(source).toContain("const adminAutonomousOverride = effectivePassStatus === 'admin' && projectMode === 'autonomous'")
+})

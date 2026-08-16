@@ -1,9 +1,12 @@
 'use client'
 
+import type { ProjectMode } from '../../../lib/manuscript/project-mode'
+
 export type ProjectNavItem =
   | 'home'
   | 'plan'
   | 'sources'
+  | 'studio'
   | 'writing'
   | 'mentor'
   | 'review'
@@ -15,6 +18,7 @@ const BASE_ITEMS: Array<[ProjectNavItem, string]> = [
   ['home', 'Početna'],
   ['plan', 'Plan'],
   ['sources', 'Literatura'],
+  ['studio', 'Radionica'],
   ['writing', 'Pisanje'],
   ['mentor', 'Mentor'],
   ['review', 'Revizija'],
@@ -22,14 +26,16 @@ const BASE_ITEMS: Array<[ProjectNavItem, string]> = [
   ['history', 'Povijest'],
 ]
 
-export function ProjectNavigation({ activeItem, workType, onNavigate }: {
+export function ProjectNavigation({ activeItem, workType, projectMode, onNavigate }: {
   activeItem: ProjectNavItem
   workType: 's' | 'z' | 'd'
+  projectMode?: ProjectMode | null
   onNavigate: (item: ProjectNavItem) => void
 }) {
+  const baseItems = projectMode === 'manual' ? BASE_ITEMS.filter(([item]) => !['studio', 'review'].includes(item)) : BASE_ITEMS
   const items = workType === 's'
-    ? BASE_ITEMS
-    : [...BASE_ITEMS.slice(0, 7), ['defense', 'Obrana'] as [ProjectNavItem, string], ...BASE_ITEMS.slice(7)]
+    ? baseItems
+    : [...baseItems.slice(0, 7), ['defense', 'Obrana'] as [ProjectNavItem, string], ...baseItems.slice(7)]
 
   return (
     <nav className="pis-project-nav" aria-label="Projekt">

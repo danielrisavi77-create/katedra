@@ -24,6 +24,7 @@ describe('ProjectHome', () => {
     expect(screen.getByRole('button', { name: 'Nastavi' }).getAttribute('data-primary-action')).toBe('true')
     expect(document.querySelector('.pis-project-stage')?.textContent).toBe('Pisanje')
     expect(screen.getByText(/25 riječi/)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Kako nastaje tvoj rad' })).toBeTruthy()
     expect(screen.queryByText(/%/)).toBeNull()
   })
 

@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { KATEDRA_PASS_PRODUCT_IDS, KATEDRA_PASS_WORK_TYPES, katedraPassAccountFilter } from '@/lib/katedra-pass-catalog.js'
+import { isAdminOverrideUser } from '@/lib/auth/admin-access'
+import { privateJson } from '@/lib/observability/private-response.js'
 
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (!user) return privateJson({ error: 'Prijavi se.' }, { status: 401 })
 
   const [projects, passes, usage] = await Promise.all([
     safeQuery(() => supabase.from('katedra_projects').select('project_id, guest_project_id, topic, unit_id, profile_id, work_type, work_type_canonical, deadline, lekta_score, lekta_checked_at, updated_at').eq('user_id', user.id).order('updated_at', { ascending: false })),
@@ -21,8 +23,9 @@ export async function GET() {
       charged: summary.charged + Number(row.charged || 0),
     }), { requests: 0, inputTokens: 0, outputTokens: 0, charged: 0 })
 
-  return Response.json({
+  return privateJson({
     user: { id: user.id, email: user.email || null },
+    admin: isAdminOverrideUser(user),
     projects: projects.error ? null : (projects.data || []),
     passes: passes.error ? null : normalizePasses(passes.data || []),
     usage: usageSummary,

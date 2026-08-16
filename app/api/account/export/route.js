@@ -4,11 +4,12 @@ import {
   KATEDRA_PASS_WORK_TYPES,
   katedraPassAccountFilter,
 } from '@/lib/katedra-pass-catalog.js'
+import { privateJson } from '@/lib/observability/private-response.js'
 
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (!user) return privateJson({ error: 'Prijavi se.' }, { status: 401 })
 
   const [projects, passes, usage] = await Promise.all([
     safeQuery(() => supabase.from('katedra_projects').select('project_id, guest_project_id, topic, unit_id, profile_id, work_type, work_type_canonical, deadline, lekta_score, lekta_checked_at, updated_at').eq('user_id', user.id)),
@@ -16,9 +17,9 @@ export async function GET() {
     safeQuery(() => supabase.from('katedra_usage').select('input_tokens, output_tokens, charged, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(500)),
   ])
 
-  if (projects.error) return Response.json({ error: 'Izvoz trenutačno nije dostupan.' }, { status: 503 })
+  if (projects.error) return privateJson({ error: 'Izvoz trenutačno nije dostupan.' }, { status: 503 })
 
-  return Response.json({
+  return privateJson({
     exportedAt: new Date().toISOString(),
     user: { id: user.id, email: user.email || null },
     projects: projects.data || [],

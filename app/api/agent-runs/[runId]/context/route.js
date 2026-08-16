@@ -1,16 +1,23 @@
 import { createClient } from '@/lib/supabase/server'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
-import { MAX_AGENT_CONTEXT_BYTES, validateAgentRunContext } from '@/lib/agents/run-context'
+import { validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
-import { attachAgentPayloadsToRun } from '@/lib/agents/backend-contract'
+import { replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
 import { canEditAgentRunContext } from '@/lib/agents/run-context-policy'
+import { privateJson } from '@/lib/observability/private-response.js'
+import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
+import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 
 const ENABLED = process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
 
 export async function POST(req, { params }) {
+  return withRequestId(await handlePost(req, { params }), getRequestId(req))
+}
+
+async function handlePost(req, { params }) {
   if (!ENABLED) return Response.json({ error: 'Agenticni run ugovor još nije aktivan u backendu.' }, { status: 503 })
 
   const supabase = await createClient()
@@ -44,20 +51,9 @@ export async function POST(req, { params }) {
   }
   if (!passLookup.active) return Response.json({ error: 'Aktivan Pass za ovaj projekt je potreban.' }, { status: 402 })
 
-  let rawBody
-  try {
-    rawBody = Buffer.from(await req.arrayBuffer())
-  } catch {
-    return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 })
-  }
-  if (rawBody.byteLength > MAX_AGENT_CONTEXT_BYTES) {
-    return Response.json({ error: 'Kontekst rukopisa je prevelik.' }, { status: 413 })
-  }
-
-  let body
-  try { body = JSON.parse(rawBody.toString('utf8')) } catch {
-    return Response.json({ error: 'Neispravan JSON kontekst.' }, { status: 400 })
-  }
+  const parsedBody = await readJsonBody(req, JSON_BODY_LIMITS.agentRun)
+  if (!parsedBody.ok) return Response.json({ error: parsedBody.error }, { status: parsedBody.status })
+  const body = parsedBody.value
   const validatedContext = validateAgentRunContext({ manuscript: body?.manuscript }, run.project_id)
   if (!validatedContext.ok) {
     const status = validatedContext.reason === 'project_mismatch' ? 403 : validatedContext.reason === 'too_large' ? 413 : 400
@@ -72,8 +68,8 @@ export async function POST(req, { params }) {
   if (!Array.isArray(materialIds) || materialIds.length > 100 || materialIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 200)) {
     return Response.json({ error: 'Popis materijala nije valjan.' }, { status: 400 })
   }
-  if (materialIds.length > 0) {
-    const attached = await attachAgentPayloadsToRun(supabase, {
+  {
+    const attached = await replaceAgentPayloadsForRun(supabase, {
       userId: user.id,
       projectId: run.project_id,
       runId,
@@ -96,7 +92,7 @@ export async function POST(req, { params }) {
   })
   if (!stored.ok) return Response.json({ error: stored.error }, { status: stored.status })
 
-  return Response.json({ runId, manifestId: stored.value.manifestId, expiresAt: stored.value.expiresAt, attachedMaterialIds: [...new Set(materialIds)] })
+  return privateJson({ runId, manifestId: stored.value.manifestId, expiresAt: stored.value.expiresAt, attachedMaterialIds: [...new Set(materialIds)] })
 }
 
 function normalizeProductKey(value) {

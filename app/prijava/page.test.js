@@ -12,5 +12,7 @@ it('uses the shared Katedra auth shell without changing login behavior', () => {
   expect(source).toContain('Od teme do obrane')
   expect(source).not.toContain('Od teme do Katedre')
   expect(source).toContain('getSafeInternalRedirect')
-  expect(source).toContain('signInWithPassword')
+  expect(source).toContain("fetch('/api/auth/login'")
+  expect(source).toContain('window.location.assign(redirect)')
+  expect(source).not.toContain('signInWithPassword')
 })

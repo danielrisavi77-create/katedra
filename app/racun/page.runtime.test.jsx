@@ -70,4 +70,16 @@ describe('Moj račun anonymous state', () => {
     expect(screen.getByRole('heading', { name: 'Pass po projektu' })).toBeTruthy()
     expect(screen.getAllByText('Digitalizacija javne uprave').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('shows the admin workspace only when the server marks the account as admin', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ user: { email: 'danielrisavi77@gmail.com' }, admin: true, projects: [], passes: [], usage: { requests: 0, inputTokens: 0, outputTokens: 0, charged: 0 }, warnings: [] }),
+    }))
+
+    render(<ThemeProvider><RacunPage /></ThemeProvider>)
+
+    await waitFor(() => expect(screen.getByText('danielrisavi77@gmail.com')).toBeTruthy())
+    expect(screen.getByRole('link', { name: /admin pregled/i }).getAttribute('href')).toBe('/admin')
+  })
 })

@@ -22,6 +22,6 @@ describe('agentic workspace accessibility contract', () => {
     expect(await screen.findByText('Potrebna je intervencija')).toBeTruthy()
     expect(document.querySelector('[aria-live="polite"]')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Uredi kontekst i nastavi' })).toBeTruthy()
-    expect(screen.getByText('Izvor nije potvrđen.')).toBeTruthy()
+    expect(screen.getAllByText('Izvor nije potvrđen.').length).toBeGreaterThan(0)
   })
 })

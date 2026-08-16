@@ -17,6 +17,12 @@ describe('workspace view persistence', () => {
     expect(initialWorkspaceView({ needsOnboarding: false, persistedView: 'home' })).toBe('home')
   })
 
+  it('opens the project home when no mode or completed-project preference exists', () => {
+    expect(initialWorkspaceView({ needsOnboarding: false, persistedView: null, projectMode: null })).toBe('home')
+    expect(initialWorkspaceView({ needsOnboarding: false, persistedView: null, projectMode: 'manual' })).toBe('home')
+    expect(initialWorkspaceView({ needsOnboarding: false, persistedView: null, projectMode: 'autonomous' })).toBe('agents')
+  })
+
   it('always starts new or incomplete projects in onboarding', () => {
     const views: WorkspaceViewPreference[] = ['home', 'writing', 'agents']
     views.forEach((persistedView) => {

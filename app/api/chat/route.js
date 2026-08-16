@@ -17,19 +17,20 @@ import { ensureFreeStarterGrant } from '@/lib/katedra-free-starter'
 import { resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 import { lookupActiveProjectPass } from '@/lib/academic-suite/repositories/entitlements'
-import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
+import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { createAnthropicUsageParser } from '@/lib/ai/anthropic-sse'
-import { buildBillingConsumeParams, resolveBillingOutcome } from '@/lib/ai/billing-contract'
+import { buildBillingConsumeParams, buildBillingPendingParams, resolveBillingOutcome } from '@/lib/ai/billing-contract'
 import { authorizeProjectAiRequest } from '@/lib/ai/project-access'
-import { isDistributedRateLimitConfigured, reserveDistributedRequest, reserveUserRequest } from '@/lib/ai/rate-limit'
+import { isAdminOverrideUser } from '@/lib/auth/admin-access'
+import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveDistributedRequest, reserveUserRequest } from '@/lib/ai/rate-limit'
 import { AI_COST_LIMITS, AI_MODEL_COST_MULTIPLIERS, estimateChatCharge, maxAffordableOutputTokens, validateCostCeiling } from '@/lib/ai/cost-policy'
 import { countChatAttachmentChars, countChatInputChars, validateChatRequest } from '@/lib/chat/validation'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
+import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
 const MIN_OUTPUT_TOKENS = 128
-const MAX_CHAT_REQUEST_BYTES = 32 * 1024 * 1024
 const OUTPUT_WEIGHT = 5            // output je ~5× skuplji od inputa (isti omjer za sva tri modela)
 const KATEDRA_BILLING_RPC_CONTRACT = 'v2'
 
@@ -90,11 +91,14 @@ async function handlePOST(req, requestContext = {}) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return json(401, { error: 'Prijavi se za korištenje Katedre.' })
   const userId = user.id
+  const adminOverride = isAdminOverrideUser(user)
+  // The allowlisted local admin account is intentionally free during local
+  // development, where the canonical Lekta billing RPC is not available yet.
+  // Production must still use the real settlement contract below.
+  const localAdminBillingBypass = adminOverride && process.env.NODE_ENV !== 'production'
 
-  const contentLength = Number(req.headers.get('content-length') || 0)
-  if (Number.isFinite(contentLength) && contentLength > MAX_CHAT_REQUEST_BYTES) {
-    return json(413, { error: 'Zahtjev je prevelik.' })
-  }
+  const parsedBody = await readJsonBody(req, JSON_BODY_LIMITS.chat)
+  if (!parsedBody.ok) return json(parsedBody.status, { error: parsedBody.error })
 
   if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
     console.error(JSON.stringify({ eventName: 'project_lock_enforcement_unavailable', userId }))
@@ -102,8 +106,7 @@ async function handlePOST(req, requestContext = {}) {
   }
 
   // ---------- 2. INPUT ----------
-  let body
-  try { body = await req.json() } catch { return json(400, { error: 'Neispravan zahtjev.' }) }
+  const body = parsedBody.value
   const validation = validateChatRequest(body)
   if (!validation.ok) return json(validation.status, { error: validation.error })
   const messages = body.messages
@@ -111,9 +114,26 @@ async function handlePOST(req, requestContext = {}) {
   const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : ''
   if (!projectId) return json(400, { error: 'Nedostaje projekt.' })
 
-  const db = createAdminClient()
+  let db
+  try {
+    db = createAdminClient()
+  } catch (error) {
+    console.error(JSON.stringify({
+      eventName: 'chat_admin_client_unavailable',
+      requestId,
+      userId,
+      error: error instanceof Error ? error.message : 'unknown admin client error',
+    }))
+    return json(503, { error: 'AI pristup trenutno nije konfiguriran za siguran rad.' })
+  }
 
-  const project = await resolveOwnedProject(db, { userId, projectId })
+  const projectResult = await resolveOwnedProjectResult(db, { userId, projectId })
+  if ('error' in projectResult) {
+    console.error(JSON.stringify({ eventName: 'chat_project_lookup_failed', userId, projectId, error: projectResult.error }))
+    return json(503, { error: 'Projekt trenutačno nije moguće provjeriti.' })
+  }
+  const project = projectResult.value
+  if (!project) return json(404, { error: 'Projekt nije pronađen za ovaj račun.' })
   const capability = typeof body?.capability === 'string' ? body.capability.trim() : ''
   const paidCapability = projectCapabilityForChat(capability)
   if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true' && !paidCapability) {
@@ -127,8 +147,6 @@ async function handlePOST(req, requestContext = {}) {
       return json(status, { error: decision.code === 'policy_unverified' ? 'Institucijska pravila za ovu AI mogućnost još nisu verificirana.' : 'Ova AI mogućnost nije otključana za ovaj projekt.', reason: decision.code })
     }
   }
-  if (!project) return json(404, { error: 'Projekt nije pronađen za ovaj račun.' })
-
   const useDistributedRateLimit = isDistributedRateLimitConfigured()
   if (process.env.NODE_ENV === 'production' && !useDistributedRateLimit) {
     console.error(JSON.stringify({ eventName: 'rate_limit_store_unavailable', userId }))
@@ -176,28 +194,29 @@ async function handlePOST(req, requestContext = {}) {
     })
   }
   const releaseReservation = async () => {
-    try {
-      await reservation.release()
-    } catch (error) {
-      console.error(JSON.stringify({ eventName: 'rate_limit_release_failed', requestId, billingRequestId, userId, error: error?.message }))
-    }
+    await releaseRateLimitReservation(reservation, (error, attempt) => {
+      console.error(JSON.stringify({ eventName: 'rate_limit_release_failed', attempt, requestId, billingRequestId, userId, error: error?.message }))
+    })
   }
 
   // ---------- 4. PASS ENTITLEMENT (primarni gate) ----------
   const canonicalProjectId = project.projectId
-  const passLookup = await lookupActiveProjectPass(db, { userId, projectId: canonicalProjectId })
-  if (!passLookup.ok) {
-    console.error(JSON.stringify({ eventName: 'project_pass_lookup_unavailable', requestId, userId, projectId: canonicalProjectId, error: passLookup.error }))
-    await releaseReservation()
-    return json(503, { error: 'Status Passa trenutno nije moguće provjeriti.' })
+  let hasPass = false
+  if (!adminOverride) {
+    const passLookup = await lookupActiveProjectPass(db, { userId, projectId: canonicalProjectId })
+    if (!passLookup.ok) {
+      console.error(JSON.stringify({ eventName: 'project_pass_lookup_unavailable', requestId, userId, projectId: canonicalProjectId, error: passLookup.error }))
+      await releaseReservation()
+      return json(503, { error: 'Status Passa trenutno nije moguće provjeriti.' })
+    }
+    hasPass = passLookup.active
   }
-  const hasPass = passLookup.active
   let projectAccess = null
 
   // A user-global wallet cannot authorize a no-Pass project. Once the v2
   // billing contract is enabled, the Lekta-side project access RPC becomes
   // the authority for the project-scoped starter grant and remaining budget.
-  if (!hasPass && billingContractEnabled) {
+  if (!adminOverride && !hasPass && billingContractEnabled) {
     projectAccess = await authorizeProjectAiRequest(db, {
       userId,
       projectId: canonicalProjectId,
@@ -241,7 +260,7 @@ async function handlePOST(req, requestContext = {}) {
   // global wallet as the secondary spend guard.
   let wallet = null
   let walletError = null
-  if (!projectAccess?.allowed) {
+  if (!adminOverride && !projectAccess?.allowed) {
     ({ data: wallet, error: walletError } = await db
       .from('katedra_wallets')
       .select('balance')
@@ -253,7 +272,7 @@ async function handlePOST(req, requestContext = {}) {
     await releaseReservation()
     return json(503, { error: 'Stanje walleta trenutno nije dostupno.' })
   }
-  const balance = projectAccess?.balance ?? wallet?.balance ?? 0
+  const balance = adminOverride ? Number.MAX_SAFE_INTEGER : projectAccess?.balance ?? wallet?.balance ?? 0
   const requestMaxOutputTokens = maxAffordableOutputTokens({
     balance,
     minimumBalance: MIN_BALANCE,
@@ -285,7 +304,7 @@ async function handlePOST(req, requestContext = {}) {
     inputChars,
     attachmentChars,
   })
-  if (!costPolicy.ok || requestMaxOutputTokens < MIN_OUTPUT_TOKENS) {
+  if (!adminOverride && (!costPolicy.ok || requestMaxOutputTokens < MIN_OUTPUT_TOKENS)) {
     await releaseReservation()
     const rejectionStatus = requestMaxOutputTokens < MIN_OUTPUT_TOKENS ? 402 : costPolicy.status
     return json(rejectionStatus, {
@@ -301,7 +320,7 @@ async function handlePOST(req, requestContext = {}) {
     })
   }
 
-  if (balance < MIN_BALANCE) {
+  if (!adminOverride && balance < MIN_BALANCE) {
     if (!hasPass) {
       // Bez Passa i bez (preostalog) free-tier budžeta — usmjeri na kupnju
       // Passa za OVAJ projekt, ne na generičko "dokupi kredite".
@@ -326,7 +345,7 @@ async function handlePOST(req, requestContext = {}) {
   // KATEDRA_SYSTEM_BOUNDARY pattern above (server authority, not just
   // client-side prompt shaping — server-side capability remains authoritative.
   let policyBlocked = false
-  if (projectId) {
+  if (projectId && !adminOverride) {
     let row = null
     try {
       const byProject = await db
@@ -372,7 +391,7 @@ async function handlePOST(req, requestContext = {}) {
 
   // A legacy RPC cannot prove idempotent settlement. Fail closed before
   // calling the provider until the Lekta-side contract is deployed.
-  if (!billingContractEnabled) {
+  if (!billingContractEnabled && !localAdminBillingBypass) {
     console.error(JSON.stringify({
       eventName: 'billing_contract_unavailable', requestId, billingRequestId, userId, projectId: canonicalProjectId,
     }))
@@ -421,15 +440,41 @@ async function handlePOST(req, requestContext = {}) {
   const consume = async () => {
     if (finalizationPromise) return finalizationPromise
     finalizationPromise = (async () => {
+      if (localAdminBillingBypass) {
+        console.log(JSON.stringify({
+          eventName: 'billing_local_admin_bypass', requestId, billingRequestId, userId, projectId: canonicalProjectId,
+        }))
+        return
+      }
       const { inputTokens, outputTokens } = usageParser.usage()
       if (inputTokens <= 0 && outputTokens <= 0) {
         console.error(JSON.stringify({
           eventName: 'billing_usage_unavailable', requestId, billingRequestId, userId, projectId: canonicalProjectId,
         }))
+        let pending
+        try {
+          pending = await db.rpc('katedra_mark_pending', buildBillingPendingParams({
+            requestId: billingRequestId,
+            userId,
+            projectId: canonicalProjectId,
+            model,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCharge: reservationEstimatedCharge,
+          }))
+        } catch (pendingError) {
+          pending = { error: pendingError }
+        }
+        if (pending?.error || pending?.data?.status !== 'pending_reconciliation') {
+          console.error(JSON.stringify({
+            eventName: 'billing_pending_marker_failed', requestId, billingRequestId, userId, projectId: canonicalProjectId,
+            error: pending?.error?.message || 'unknown pending marker result',
+          }))
+        }
         throw new Error('Billing usage unavailable')
       }
       const weighted = inputTokens + OUTPUT_WEIGHT * outputTokens
-      const charged = Math.round(weighted * (MODEL_COST_MULTIPLIER[model] ?? 1))
+      const charged = adminOverride ? 0 : Math.round(weighted * (MODEL_COST_MULTIPLIER[model] ?? 1))
       let data
       let error
       try {
@@ -446,9 +491,24 @@ async function handlePOST(req, requestContext = {}) {
         error = rpcError
       }
       if (error) {
+        let pending
+        try {
+          pending = await db.rpc('katedra_mark_pending', buildBillingPendingParams({
+            requestId: billingRequestId,
+            userId,
+            projectId: canonicalProjectId,
+            charged,
+            model,
+            inputTokens,
+            outputTokens,
+          }))
+        } catch (pendingError) {
+          pending = { error: pendingError }
+        }
         console.error(JSON.stringify({
           eventName: 'billing_pending_reconciliation', requestId, billingRequestId, userId, projectId: canonicalProjectId,
           inputTokens, outputTokens, error: error.message,
+          markerError: pending?.error?.message,
         }))
         throw new Error('Billing finalization failed')
       }
@@ -458,9 +518,23 @@ async function handlePOST(req, requestContext = {}) {
         rpc: data?.status === 'already_settled' ? 'already_settled' : data?.status === 'settled' ? 'settled' : 'unknown',
       })
       if (outcome.state !== 'settled') {
+        let pending
+        try {
+          pending = await db.rpc('katedra_mark_pending', buildBillingPendingParams({
+            requestId: billingRequestId,
+            userId,
+            projectId: canonicalProjectId,
+            charged,
+            model,
+            inputTokens,
+            outputTokens,
+          }))
+        } catch (pendingError) {
+          pending = { error: pendingError }
+        }
         console.error(JSON.stringify({
           eventName: 'billing_pending_reconciliation', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-          inputTokens, outputTokens, reason: outcome.reason,
+          inputTokens, outputTokens, reason: outcome.reason, markerError: pending?.error?.message,
         }))
         throw new Error('Billing finalization pending reconciliation')
       }
@@ -516,7 +590,7 @@ async function handlePOST(req, requestContext = {}) {
     headers: {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache',
-      'x-katedra-balance-before': String(balance),
+      'x-katedra-balance-before': adminOverride ? 'unlimited' : String(balance),
       // Klijent nikad ne šalje model (v. MODELS default gore) — ovo mu javlja
       // koji je STVARNO odgovorio, za lokalni AI ledger, umjesto da
       // klijent pogađa/pretpostavlja vrijednost koju server odluči promijeniti.

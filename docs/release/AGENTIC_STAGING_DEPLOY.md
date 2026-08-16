@@ -47,10 +47,14 @@ KATEDRA_BILLING_RPC_CONTRACT=v2
 KATEDRA_RATE_LIMIT_STORE=supabase
 ```
 
-`KATEDRA_MATERIAL_DELETE_RPC_CONTRACT` se namjerno ne postavlja u ovoj fazi.
-Postavlja se tek nakon što Lekta deploya i staging-testira canonical
-deletion-tombstone RPC; bez njega `DELETE /api/materials/:materialId` mora
-ostati na kontroliranom `503`.
+`KATEDRA_MATERIAL_DELETE_RPC_CONTRACT` se namjerno ne postavlja prije deploya
+migracija `0077_agent_payload_tombstone.sql` do
+`0082_replace_agent_payloads_for_run.sql` and
+`0083_billing_pending_marker.sql`, `0084_revoke_legacy_agent_payload_attach.sql`
+i `0085_guard_locked_project_mutations.sql`. Nakon što Lekta deploya i
+staging-testira canonical deletion-tombstone RPC, može se postaviti na `v1`.
+Bez toga `DELETE /api/materials/:materialId` mora ostati na kontroliranom
+`503`.
 
 Uz to moraju postojati postojeći Supabase, Anthropic, Stripe, Resend i app
 URL secrets iz [staging money-flow runbooka](./STAGING_MONEY_FLOW.md).
@@ -64,6 +68,12 @@ npm.cmd run preflight:agentic
 
 Oba preflighta moraju proći u deployment environmentu. Vrijednosti tajni se
 ne ispisuju.
+
+Za redoslijed deploya, cron tick, secret boundary, rollback i provjeru
+`cron.job_run_details` koristi [Agent worker staging runbook](./AGENT_WORKER_RUNBOOK.md).
+Scheduler šalje samo `KATEDRA_AGENT_WORKER_CRON_SECRET` Lekta funkciji; Lekta
+funkcija Katedri šalje `KATEDRA_AGENT_WORKER_TOKEN`, a service-role ključ nikad
+ne napušta Lekta okruženje.
 
 ## 4. GitHub manualni release gate
 

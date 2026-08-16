@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { verifyAgentResult } from './verifier'
+import { verifyAgentResult, verifierForAgent } from './verifier'
 
 describe('agent verifier', () => {
+  it('routes every agent through its own verifier function', () => {
+    const verifiers = ['intake', 'sources', 'structure', 'planning', 'writing', 'citation', 'review', 'export'].map(verifierForAgent)
+
+    expect(new Set(verifiers).size).toBe(8)
+    expect(verifierForAgent('writing')({
+      agent: 'writing',
+      output: 'Tekst bez dokaza.',
+      citations: [],
+    })).toMatchObject({ status: 'blocked' })
+    expect(verifierForAgent('structure')({
+      agent: 'structure',
+      output: 'Plan strukture.',
+      citations: [],
+    })).toMatchObject({ status: 'verified' })
+  })
+
   it('blocks a result containing factual claims without verified evidence', () => {
     expect(verifyAgentResult({
       agent: 'writing',
@@ -31,12 +47,33 @@ describe('agent verifier', () => {
     })
   })
 
+  it('does not treat an empty claim map as verified evidence for citation-bound output', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tekst s mogućom činjeničnom tvrdnjom.',
+      claims: [],
+      citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }],
+    })).toMatchObject({
+      status: 'blocked',
+      issues: [{ code: 'missing_claim_evidence' }],
+    })
+  })
+
   it('returns needs_revision for missing bibliographic metadata', () => {
     expect(verifyAgentResult({
       agent: 'sources',
       output: 'Izvor za daljnju provjeru.',
       citations: [{ id: 'source-1', verified: true }],
     })).toMatchObject({ status: 'needs_revision' })
+  })
+
+  it('does not treat an unsafe locator as verified source evidence', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s nesigurnim lokatorom.',
+      claims: [{ id: 'claim-1', text: 'Tvrdnja s nesigurnim lokatorom.', citationIds: ['source-1'] }],
+      citations: [{ id: 'source-1', url: 'javascript:alert(1)', verified: true }],
+    })).toMatchObject({ status: 'needs_revision', issues: [{ code: 'incomplete_source' }] })
   })
 
   it('does not require citations for structural planning results', () => {

@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict'
+import { evaluateAgenticStagingEnvironment } from '../lib/deployment/agentic-preflight.mjs'
 
 const KATEDRA_URL = String(process.env.KATEDRA_INTEGRATION_URL || '').replace(/\/$/, '')
 const EMAIL = String(process.env.KATEDRA_AUTH_E2E_EMAIL || '')
 const PASSWORD = String(process.env.KATEDRA_AUTH_E2E_PASSWORD || '')
 const TIMEOUT_MS = Number(process.env.KATEDRA_AGENT_E2E_TIMEOUT_MS || 180_000)
+const REQUIRE_EXTERNAL_CONFIG = process.env.KATEDRA_E2E_REQUIRE_CONFIG === '1'
 
-if (!KATEDRA_URL) throw new Error('KATEDRA_INTEGRATION_URL is required')
-if (!EMAIL || !PASSWORD) throw new Error('KATEDRA_AUTH_E2E_EMAIL and KATEDRA_AUTH_E2E_PASSWORD are required')
+const staging = evaluateAgenticStagingEnvironment(process.env)
+const missingExternal = [
+  ['KATEDRA_INTEGRATION_URL', KATEDRA_URL],
+  ['KATEDRA_AUTH_E2E_EMAIL', EMAIL],
+  ['KATEDRA_AUTH_E2E_PASSWORD', PASSWORD],
+].filter(([, value]) => !value).map(([name]) => name)
+const externalProblems = [...new Set([...missingExternal, ...staging.missing, ...staging.invalid])]
+if (externalProblems.length) {
+  console.log(`BLOCKED_EXTERNAL: authenticated agentic workflow is not run without canonical staging contracts: ${externalProblems.join(', ')}`)
+  process.exit(REQUIRE_EXTERNAL_CONFIG ? 1 : 0)
+}
 
 const { chromium } = await import('playwright')
 const browser = await chromium.launch({ headless: true })
@@ -38,8 +49,12 @@ async function completeOnboarding() {
   await newWork.click()
   await page.getByLabel(/Fakultet ili ustanova/i).fill('FPZG')
   await page.getByRole('button', { name: /Dalje/i }).click()
+  await page.getByRole('button', { name: /Dalje/i }).click()
   await page.getByLabel(/Tema rada/i).fill('Agentic staging workflow')
-  await page.getByRole('button', { name: /Otvori rukopis/i }).click()
+  await page.getByRole('button', { name: /Dalje/i }).click()
+  await page.getByRole('button', { name: /Otvori projekt/i }).click()
+  await page.getByRole('button', { name: /Nastavi u projektu/i }).click()
+  await page.getByRole('button', { name: /Nastavi pisati →/i }).click()
 }
 
 async function waitForTerminalRun() {
@@ -47,7 +62,8 @@ async function waitForTerminalRun() {
   while (Date.now() < deadline) {
     const run = page.locator('.pis-agentic-dashboard')
     const text = await run.textContent().catch(() => '')
-    if (/Potrebna je intervencija|Tijek je završen|Tijek je otkazan|Tijek je zaustavljen/i.test(text || '')) return text || ''
+    if (/Tijek je otkazan/i.test(text || '')) throw new Error('Agent run je otkazan.')
+    if (/Potrebna je intervencija|Tijek je završen|Tijek je zaustavljen/i.test(text || '')) return text || ''
     if (/Tijek je završen|Potrebna je tvoja odluka|Tijek je zaustavljen/i.test(text || '')) return text || ''
     await page.waitForTimeout(1000)
   }
@@ -75,12 +91,19 @@ try {
   await pass.waitFor({ state: 'visible', timeout: 30_000 })
   await page.getByRole('button', { name: /Pokreni (autonomni )?tijek/i }).click()
 
-  const terminalText = await waitForTerminalRun()
+  let terminalText = await waitForTerminalRun()
   if (/Potrebna je intervencija/i.test(terminalText)) {
     await page.getByRole('button', { name: 'Uredi kontekst i nastavi' }).click()
+    const resumeResponse = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/resume') && response.status() === 200, { timeout: TIMEOUT_MS })
     await page.getByRole('button', { name: 'Spremi kontekst i nastavi' }).click()
-    await page.locator('.pis-agentic-dashboard').waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+    await resumeResponse
+    await page.waitForFunction(() => {
+      const text = document.querySelector('.pis-agentic-dashboard')?.textContent || ''
+      return !/Potrebna je intervencija/i.test(text)
+    }, null, { timeout: TIMEOUT_MS })
+    terminalText = await waitForTerminalRun()
   }
+  assert.match(terminalText, /Tijek je završen/i, 'agent run must complete successfully')
   assert.doesNotMatch(terminalText, /Tijek je zaustavljen/i, 'agent run must not fail')
   assert.ok(apiResponses.some((response) => response.pathname === '/api/agent-runs' && response.status === 200), 'run creation must succeed')
   assert.ok(runRequests.some((request) => request.hasManuscript), 'run creation must include a manuscript context snapshot')

@@ -21,6 +21,15 @@ function query(data, error = null) {
 afterEach(() => vi.clearAllMocks())
 
 describe('GET /api/account/export', () => {
+  it('rejects anonymous requests without a cacheable response', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) } })
+
+    const response = await GET()
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+
   it('exports owned project metadata, Passes and usage without manuscript text', async () => {
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1', email: 'user@example.com' } } }) },

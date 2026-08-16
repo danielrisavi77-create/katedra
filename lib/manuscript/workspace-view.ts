@@ -5,9 +5,9 @@ export function parseWorkspaceView(value: unknown): WorkspaceViewPreference | nu
   return value === 'home' || value === 'writing' || value === 'agents' ? value : null
 }
 
-export function initialWorkspaceView(input: { needsOnboarding: boolean; persistedView?: unknown }): WorkspaceViewPreference {
+export function initialWorkspaceView(input: { needsOnboarding: boolean; persistedView?: unknown; projectMode?: 'manual' | 'autonomous' | null }): WorkspaceViewPreference {
   if (input.needsOnboarding) return 'home'
-  return parseWorkspaceView(input.persistedView) || 'home'
+  return parseWorkspaceView(input.persistedView) || (input.projectMode === 'autonomous' ? 'agents' : 'home')
 }
 
 export function parseAgenticWorkspacePhase(value: unknown): AgenticWorkspacePhase | null {

@@ -25,6 +25,7 @@ jobs:
       KATEDRA_BILLING_RPC_CONTRACT: 'v2'
       KATEDRA_RATE_LIMIT_STORE: 'supabase'
       KATEDRA_AUTH_E2E_CHECKOUT: '1'
+      KATEDRA_E2E_REQUIRE_CONFIG: '1'
     steps:
       - uses: actions/checkout@v4
 

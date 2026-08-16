@@ -6,6 +6,7 @@ import { countDocumentWords } from '../../../lib/manuscript/model'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 import { NextActionCard } from './next-action-card'
 import { ProjectTimeline, type ProjectTimelineItem } from './project-timeline'
+import { AgenticProcessPreview } from './agentic-process-preview'
 
 export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: { manuscript: ManuscriptV1; passActive: boolean; syncStatus: string; onNavigate: (destination: NextAction['destination']) => void }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
@@ -49,6 +50,8 @@ export function ProjectHome({ manuscript, passActive, syncStatus, onNavigate }: 
         <NextActionCard action={action} onNavigate={onNavigate} />
         <ProjectTimeline items={timelineItems(stage)} totalWords={totalWords} />
       </div>
+
+      <AgenticProcessPreview mode="guided" sourcePolicy="uploaded_only" />
 
       <section className="pis-project-home-summary" aria-label="Sažetak projekta">
         <div><span>Materijali</span><b>{hasMaterials ? `${materials.length} ${materials.length === 1 ? 'zapis' : 'zapisa'}` : 'Nisu dodani'}</b></div>

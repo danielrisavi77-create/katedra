@@ -21,3 +21,10 @@ it('provides one accessible global scroll-to-top control', () => {
   expect(layout).toContain('data-scroll-behavior="smooth"')
   expect(globals).toContain('.global-scroll-top')
 })
+
+it('raises the control above the fixed mobile workspace navigation', () => {
+  const globals = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8')
+
+  expect(globals).toContain("body:has(.pis-workspace) .global-scroll-top")
+  expect(globals).toContain('bottom: calc(52px + env(safe-area-inset-bottom) + 14px)')
+})

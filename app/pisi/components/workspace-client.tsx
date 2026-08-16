@@ -9,11 +9,13 @@ import { useAuth } from '../../../lib/hooks/useAuth'
 import { createTextDeltaParser } from '../../../lib/manuscript/client-sse'
 import { mergeVerifiedAgenticSections } from '../../../lib/manuscript/agentic-merge'
 import { createCompletionScan } from '../../../lib/project/completion-scan'
+import { hasCanonicalAgenticPass } from '../../../lib/product/workflow-access'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import { shouldShowManuscriptOnboarding } from '../../../lib/manuscript/onboarding-state'
-import { buildAiMessages, capabilityForAction, type ManuscriptAiAction } from '../../../lib/manuscript/context'
+import { buildAiMessages, capabilityForAction, type ManuscriptAiAction, type ManuscriptMaterialContext } from '../../../lib/manuscript/context'
 import { exportManuscriptDocx } from '../../../lib/manuscript/export-docx'
 import { migrateLegacyProject } from '../../../lib/manuscript/migration'
+import { serverStateToManifest } from '../../../lib/manuscript/server-project'
 import { appendPlainText, countDocumentWords, createSection, moveSection, plainTextDocument, removeSection } from '../../../lib/manuscript/model'
 import { createAutosaveController } from '../../../lib/manuscript/autosave'
 import { validateImportedText, validateTextImport } from '../../../lib/manuscript/import-validation'
@@ -22,7 +24,9 @@ import { createAiProposal, proposalApplyTarget } from '../../../lib/manuscript/p
 import { canApplyProposal, isCurrentAiRequest } from '../../../lib/manuscript/proposal-guards'
 import { createManuscriptStore } from '../../../lib/manuscript/storage'
 import { getBrowserStorage, readStorage, writeStorage } from '../../../lib/manuscript/browser-storage'
+import { createUnreadableMaterial, isDocxFile, readLocalTextMaterial, readStoredComposerMaterials, writeStoredComposerMaterials, type ComposerMaterialV1 } from '../../../lib/manuscript/composer-materials'
 import { syncMetadata, type SyncStatus } from '../../../lib/manuscript/sync-status'
+import { parseProjectMode, projectModeAllowsNavigation, projectModeStorageKey, projectModeWorkspaceView, restoreProjectMode, type ProjectMode } from '../../../lib/manuscript/project-mode'
 import { initialAgenticWorkspacePhase, initialWorkspaceView, nextAgenticWorkspacePhase, parseWorkspaceView, type AgenticWorkspacePhase, type WorkspaceViewPreference } from '../../../lib/manuscript/workspace-view'
 import { selectWorkspaceProject } from '../../../lib/manuscript/workspace-project'
 import type {
@@ -34,6 +38,7 @@ import type {
   TiptapNode,
 } from '../../../lib/manuscript/types'
 import { AssistantPanel } from './assistant-panel'
+import { AgentStudioShell } from './agent-studio-shell'
 import { ManuscriptEditor, type EditorApplyRequest, type EditorSelection } from './manuscript-editor'
 import { OnboardingFlow, type OnboardingInitialValues, type OnboardingResult } from './onboarding-flow'
 import { OutlinePanel } from './outline-panel'
@@ -41,7 +46,9 @@ import { PassDialog } from './pass-dialog'
 import { PaidProjectSetup } from './paid-project-setup'
 import { FreeProjectPlan } from './free-project-plan'
 import { ProjectHome } from './project-home'
+import { ProjectModeOnboarding } from './project-mode-onboarding'
 import { ProjectDrawer } from './project-drawer'
+import { WritingComposer } from './writing-composer'
 import type { ProjectNavItem } from './project-navigation'
 import { projectNavigationDestination, type ProjectDrawerTab } from './project-navigation-routing'
 import { normalizeMobileView, normalizeWorkspaceResumeState, WorkspaceShell, type MobileView, type SaveStatus, type WorkspaceView } from './workspace-shell'
@@ -49,12 +56,12 @@ import { normalizeMobileView, normalizeWorkspaceResumeState, WorkspaceShell, typ
 const READY_PREFIX = 'katedra_manuscript_ready:'
 const PROJECT_SETUP_PREFIX = 'katedra_project_setup_v1:'
 const MENTOR_PREFIX = 'katedra_mentor_tasks:'
-const WORKSPACE_VIEW_PREFIX = 'katedra_workspace_view_v1:'
+const WORKSPACE_VIEW_PREFIX = 'katedra_workspace_view_v2:'
 const MOBILE_VIEW_PREFIX = 'katedra_mobile_workspace_view_v1:'
 const AGENTIC_PHASE_PREFIX = 'katedra_agentic_workspace_phase_v1:'
 
 type MentorTask = { id: string; text: string; done: boolean; sectionId?: string }
-type PassStatus = 'idle' | 'checking' | 'active' | 'needed' | 'error'
+type PassStatus = 'idle' | 'checking' | 'active' | 'admin' | 'needed' | 'error'
 export type LektaWorkspaceSummary = {
   score: number | null
   checkedAt: string
@@ -62,9 +69,12 @@ export type LektaWorkspaceSummary = {
   issues: Array<{ id: string; label?: string; severity?: string; status?: string }>
 }
 
-export default function WorkspaceClient() {
+export default function WorkspaceClient({ agenticAvailable = false, webResearchAvailable = false }: { agenticAvailable?: boolean; webResearchAvailable?: boolean }) {
   const { user, loading: authLoading } = useAuth()
   const storeRef = useRef<ReturnType<typeof createManuscriptStore> | null>(null)
+  const composerMaterialsHydratedRef = useRef(false)
+  const localManuscriptFoundRef = useRef(false)
+  const serverProjectHydratedRef = useRef<string | null>(null)
   const aiRequestRef = useRef<{ id: string; sectionId: string; controller: AbortController } | null>(null)
   const activeSectionIdRef = useRef<string | null>(null)
   const manuscriptRef = useRef<ManuscriptV1 | null>(null)
@@ -84,12 +94,15 @@ export default function WorkspaceClient() {
   const [mobileView, setMobileView] = useState<MobileView>('editor')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerTab, setDrawerTab] = useState<ProjectDrawerTab>('plan')
+  const [projectMode, setProjectMode] = useState<ProjectMode | null>(null)
+  const [focusMode, setFocusMode] = useState(false)
   const [agenticMode, setAgenticMode] = useState(false)
   const [agenticView, setAgenticView] = useState<AgenticWorkspacePhase>('preparation')
   const [selection, setSelection] = useState<EditorSelection | null>(null)
   const [proposal, setProposal] = useState<AiProposalV1 | null>(null)
   const [assistantBusy, setAssistantBusy] = useState(false)
   const [assistantError, setAssistantError] = useState('')
+  const [composerMaterials, setComposerMaterials] = useState<ManuscriptMaterialContext[]>([])
   const [applyRequest, setApplyRequest] = useState<EditorApplyRequest | null>(null)
   const [acceptedFlash, setAcceptedFlash] = useState(false)
   const [mentorTasks, setMentorTasks] = useState<MentorTask[]>([])
@@ -152,30 +165,41 @@ export default function WorkspaceClient() {
       }
       if (cancelled) return
       const storage = getBrowserStorage()
+      setComposerMaterials(readStoredComposerMaterials(storage, migrated.projectId))
+      composerMaterialsHydratedRef.current = true
       const projectSetupConfirmed = readStorage(storage, `${PROJECT_SETUP_PREFIX}${migrated.projectId}`) === '1'
       const persistedMobileView = normalizeMobileView(readStorage(storage, `${MOBILE_VIEW_PREFIX}${migrated.projectId}`))
       const restoredManuscript = stored || migrated
+      localManuscriptFoundRef.current = Boolean(stored)
       const persistedView = parseWorkspaceView(readStorage(storage, `${WORKSPACE_VIEW_PREFIX}${migrated.projectId}`))
       const persistedAgenticPhase = initialAgenticWorkspacePhase(readStorage(storage, `${AGENTIC_PHASE_PREFIX}${migrated.projectId}`))
+      const persistedProjectMode = parseProjectMode(readStorage(storage, projectModeStorageKey(migrated.projectId)))
       const needsOnboarding = shouldShowManuscriptOnboarding({
         hasStoredManuscript: Boolean(stored),
         hasWorkspaceReadyMarker: readStorage(storage, `${READY_PREFIX}${migrated.projectId}`) === '1',
         hasLegacyOnboardingMarker: readStorage(storage, 'rp_onb') === '1',
         hasProjectSetupConfirmed: projectSetupConfirmed,
       })
-      const restoredView = initialWorkspaceView({ needsOnboarding, persistedView })
+      const unavailableAutonomousMode = persistedProjectMode === 'autonomous' && !agenticAvailable
+      const restoredProjectMode = restoreProjectMode(persistedProjectMode, needsOnboarding, agenticAvailable)
+      if (unavailableAutonomousMode) {
+        setBootError('Autonomni workspace trenutno nije dostupan jer sigurni server-side agent ugovori nisu aktivni. Odaberi radionicu rukopisa ili pričekaj aktivaciju ugovora.')
+      }
+      const restoredView = initialWorkspaceView({ needsOnboarding, persistedView, projectMode: restoredProjectMode })
       setManuscript(restoredManuscript)
       setLegacyChecks(legacyState?.checks || {})
       setLektaSummary(readLektaSummary(manifest))
       setMentorTasks(readJson<MentorTask[]>(`${MENTOR_PREFIX}${migrated.projectId}`) || legacyState?.mentorTasks || [])
+      setProjectMode(restoredProjectMode)
       setShowOnboarding(needsOnboarding)
-      const shouldResumeAgentic = !needsOnboarding && restoredView === 'agents'
-      const shouldResumeHome = !needsOnboarding && !shouldResumeAgentic && (restoredView === 'home' || persistedMobileView === 'overview')
+      const modeView = restoredProjectMode ? projectModeWorkspaceView(restoredProjectMode) : null
+      const shouldResumeAgentic = !needsOnboarding && restoredProjectMode === 'autonomous'
+      const shouldResumeHome = !needsOnboarding && !modeView && !shouldResumeAgentic && (restoredView === 'home' || persistedMobileView === 'overview')
       const resumeState = normalizeWorkspaceResumeState({ projectHome: shouldResumeHome, mobileView: persistedMobileView })
-      setMobileView(resumeState.mobileView)
-      setProjectHome(resumeState.projectHome)
+      setMobileView(restoredProjectMode === 'autonomous' ? 'overview' : restoredProjectMode === 'manual' ? 'editor' : resumeState.mobileView)
+      setProjectHome(restoredProjectMode ? false : resumeState.projectHome)
       if (resumeState.projectHome) writeStorage(storage, `${MOBILE_VIEW_PREFIX}${migrated.projectId}`, 'overview')
-      setAgenticMode(shouldResumeAgentic)
+      setAgenticMode(restoredProjectMode === 'autonomous' || shouldResumeAgentic)
       setAgenticView(shouldResumeAgentic ? persistedAgenticPhase : 'preparation')
       setBooting(false)
     }
@@ -194,7 +218,37 @@ export default function WorkspaceClient() {
       aiRequestRef.current = null
       void flushCurrentManuscript().catch(() => undefined).finally(() => storeRef.current?.close())
     }
-  }, [flushCurrentManuscript])
+  }, [agenticAvailable, flushCurrentManuscript])
+
+  useEffect(() => {
+    const projectId = manuscript?.projectId
+    if (booting || authLoading || !user || !projectId || localManuscriptFoundRef.current || serverProjectHydratedRef.current === projectId) return
+    serverProjectHydratedRef.current = projectId
+    let cancelled = false
+    const hydrate = async () => {
+      try {
+        const response = await fetch(`/api/state?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+        if (!response.ok) return
+        const state = await response.json().catch(() => null)
+        const manifest = serverStateToManifest(projectId, state)
+        if (!manifest || cancelled) return
+        const current = manuscriptRef.current
+        if (!current || current.projectId !== projectId) return
+        const hydrated = migrateLegacyProject({ manifest })
+        const storage = getBrowserStorage()
+        writeStorage(storage, `${READY_PREFIX}${projectId}`, '1')
+        writeStorage(storage, `${PROJECT_SETUP_PREFIX}${projectId}`, '1')
+        persistManifest(hydrated)
+        setManuscript(hydrated)
+        setShowOnboarding(false)
+        setProjectHome(true)
+      } catch {
+        // The local-first workspace remains usable when server metadata is unavailable.
+      }
+    }
+    void hydrate()
+    return () => { cancelled = true }
+  }, [authLoading, booting, manuscript?.projectId, user])
 
   useEffect(() => {
     const autosave = autosaveRef.current
@@ -219,9 +273,25 @@ export default function WorkspaceClient() {
   const syncDeadline = manuscript?.meta.deadline || ''
   const syncProfileId = manuscript?.meta.profileId || ''
   const syncUnitId = manuscript?.meta.unitId || ''
+  const passContextReady = Boolean(syncProjectId && syncWorkType && user && !showOnboarding && !booting)
+  const effectivePassStatus = passContextReady ? passStatus : 'idle'
+  const passActive = effectivePassStatus === 'active' || effectivePassStatus === 'admin'
+  const agenticPassActive = hasCanonicalAgenticPass(effectivePassStatus)
+  const adminAutonomousOverride = effectivePassStatus === 'admin' && projectMode === 'autonomous'
+  const effectiveProjectMode = adminAutonomousOverride ? null : projectMode
+  const effectiveAgenticMode = adminAutonomousOverride ? false : agenticMode
 
   useEffect(() => {
-    if (!syncProjectId || !syncWorkType || !user || showOnboarding || booting) return
+    if (!adminAutonomousOverride || !manuscript) return
+    const storage = getBrowserStorage()
+    storage?.removeItem(projectModeStorageKey(manuscript.projectId))
+    persistWorkspaceView(manuscript.projectId, 'writing')
+  }, [adminAutonomousOverride, manuscript])
+
+  useEffect(() => {
+    if (!syncProjectId || !syncWorkType || !user || showOnboarding || booting) {
+      return
+    }
     let cancelled = false
     const refresh = async () => {
       setPassStatus('checking')
@@ -232,12 +302,18 @@ export default function WorkspaceClient() {
         title: syncTitle,
         meta: { deadline: syncDeadline, profileId: syncProfileId, unitId: syncUnitId },
       }, true)
-      if (!cancelled) setSyncStatus(syncResult.status)
+      if (cancelled) return
+      setSyncStatus(syncResult.status)
+      if (syncResult.status !== 'synced') {
+        setPassStatus('error')
+        return
+      }
       try {
-        const response = await fetch(`/api/balance?projectId=${encodeURIComponent(syncProjectId)}`, { cache: 'no-store' })
+        const balanceProjectId = syncResult.canonicalProjectId || syncProjectId
+        const response = await fetch(`/api/balance?projectId=${encodeURIComponent(balanceProjectId)}`, { cache: 'no-store' })
         if (!response.ok) throw new Error('Pass check failed')
         const body = await response.json()
-        if (!cancelled) setPassStatus(body.hasPass ? 'active' : 'needed')
+        if (!cancelled) setPassStatus(body.adminOverride ? 'admin' : body.hasPass ? 'active' : 'needed')
       } catch {
         if (!cancelled) setPassStatus('error')
       }
@@ -251,6 +327,12 @@ export default function WorkspaceClient() {
     if (!current || booting || showOnboarding) return
     persistManifest(current)
   }, [booting, manuscript?.meta.citationStyle, manuscript?.meta.deadline, manuscript?.meta.institution, manuscript?.meta.mentor, manuscript?.meta.profileId, manuscript?.meta.program, manuscript?.meta.unitId, manuscript?.title, showOnboarding])
+
+  useEffect(() => {
+    const projectId = manuscript?.projectId
+    if (!projectId || booting || !composerMaterialsHydratedRef.current) return
+    writeStoredComposerMaterials(getBrowserStorage(), projectId, composerMaterials)
+  }, [booting, composerMaterials, manuscript?.projectId])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -349,6 +431,21 @@ export default function WorkspaceClient() {
     void syncMetadata(next, Boolean(user)).then((result) => setSyncStatus(result.status))
   }
 
+  const completeProjectMode = (mode: ProjectMode) => {
+    if (!manuscript || !agenticPassActive) return
+    const storage = getBrowserStorage()
+    writeStorage(storage, projectModeStorageKey(manuscript.projectId), mode)
+    setProjectMode(mode)
+    setCompletionScan(null)
+    setDrawerOpen(false)
+    setProjectHome(false)
+    setAgenticMode(mode === 'autonomous')
+    setAgenticView('preparation')
+    setMobileView(mode === 'autonomous' ? 'overview' : 'editor')
+    persistWorkspaceView(manuscript.projectId, projectModeWorkspaceView(mode))
+    persistAgenticWorkspacePhase(manuscript.projectId, 'preparation')
+  }
+
   const updateSectionContent = (content: TiptapNode) => {
     if (!activeSection) return
     updateManuscript((current) => ({
@@ -410,7 +507,7 @@ export default function WorkspaceClient() {
         headers: { 'content-type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          messages: buildAiMessages({ manuscript, sectionId: requestSectionId, action, selectionText: selection?.text, instruction }),
+          messages: buildAiMessages({ manuscript, sectionId: requestSectionId, action, selectionText: selection?.text, instruction, materialContext: composerMaterials }),
           projectId: manuscript.projectId,
           capability: capabilityForAction(action),
         }),
@@ -526,12 +623,67 @@ export default function WorkspaceClient() {
     }
   }
 
+  const uploadComposerMaterial = async (file: File) => {
+    if (!manuscript) return
+    if (/\.(txt|md)$/i.test(file.name)) {
+      const material = await readLocalTextMaterial(file)
+      setComposerMaterials((current) => [...current.filter((entry) => entry.name !== material.name), material])
+      return material
+    }
+    if (isDocxFile(file)) {
+      const form = new FormData()
+      form.set('file', file)
+      const response = await fetch('/api/parse-docx', { method: 'POST', body: form }).catch(() => null)
+      const body = await response?.json().catch(() => ({})) as Record<string, unknown> | undefined
+      if (!response) throw new Error('DOCX trenutačno nije moguće pročitati zbog mrežne greške.')
+      let material: ComposerMaterialV1
+      if (response.ok && typeof body?.text === 'string') {
+        material = {
+          name: file.name,
+          text: body.text,
+          warnings: body.truncated === true ? ['Sadržaj je skraćen na 250.000 znakova za razgovor.'] : [],
+          addedAt: new Date().toISOString(),
+        }
+      } else if (response.status === 401 || response.status === 503) {
+        material = {
+          ...createUnreadableMaterial(file),
+          warnings: ['DOCX je dodan kao privitak, ali čitanje DOCX-a zahtijeva prijavu i aktivan analizator.'],
+        }
+      } else {
+        throw new Error(typeof body?.error === 'string' ? body.error : 'DOCX nije moguće pročitati.')
+      }
+      setComposerMaterials((current) => [...current.filter((entry) => entry.name !== material.name), material])
+      return material
+    }
+    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name) || file.type.startsWith('image/')) {
+      const material = createUnreadableMaterial(file)
+      setComposerMaterials((current) => [...current.filter((entry) => entry.name !== material.name), material])
+      return material
+    }
+    const form = new FormData()
+    form.set('projectId', manuscript.projectId)
+    form.set('kind', 'notes')
+    form.set('file', file)
+    const response = await fetch('/api/materials', { method: 'POST', body: form }).catch(() => null)
+    const body = await response?.json().catch(() => ({})) as Record<string, unknown> | undefined
+    if (!response) throw new Error('Materijal trenutačno nije moguće učitati zbog mrežne greške.')
+    if (!response.ok) throw new Error(typeof body?.error === 'string' ? body.error : 'Materijal nije moguće učitati.')
+    const asset = body?.asset && typeof body.asset === 'object' ? body.asset as Record<string, unknown> : null
+    const extractedText = typeof asset?.extractedText === 'string' ? asset.extractedText : undefined
+    const warnings = Array.isArray(asset?.warnings) ? asset.warnings.filter((warning): warning is string => typeof warning === 'string') : []
+    setComposerMaterials((current) => [
+      ...current.filter((material) => material.name !== file.name),
+      { name: typeof asset?.name === 'string' ? asset.name : file.name, text: extractedText, warnings },
+    ])
+  }
+
   if (booting || !manuscript) return <div className="pis-boot"><span className="pis-brand-mark">K</span><p>Otvaram tvoj rukopis…</p></div>
   if (showOnboarding) return <OnboardingFlow initialTip={initialTip} initialValues={onboardingInitialValues} scanMode={scanMode} onComplete={completeOnboarding} />
   if (completionScan) return <FreeProjectPlan projectId={manuscript.projectId} title={manuscript.title} scan={completionScan} authenticated={Boolean(user)} onContinue={() => setCompletionScan(null)} />
+  if (agenticPassActive && !effectiveProjectMode) return <main className="pis-mode-gate"><ProjectModeOnboarding autonomousAvailable={agenticAvailable} onComplete={completeProjectMode} /></main>
   if (!activeSection) return null
 
-  const workspaceView: WorkspaceView = projectHome ? 'home' : agenticMode ? agenticView : 'writing'
+  const workspaceView: WorkspaceView = projectHome ? 'home' : effectiveAgenticMode ? agenticView : 'writing'
   const drawerNavItem: ProjectNavItem = drawerTab === 'sources' || drawerTab === 'mentor' || drawerTab === 'lekta' || drawerTab === 'history' || drawerTab === 'defense'
     ? drawerTab
     : 'plan'
@@ -539,14 +691,11 @@ export default function WorkspaceClient() {
     ? drawerNavItem
     : workspaceView === 'home'
     ? 'home'
-    : workspaceView === 'preparation'
-      ? 'plan'
-      : workspaceView === 'review'
-        ? 'review'
-      : workspaceView === 'writing'
-        ? 'writing'
-        : 'mentor'
+    : effectiveAgenticMode
+      ? 'studio'
+      : 'writing'
   const selectAgenticPhase = (requestedPhase: AgenticWorkspacePhase) => {
+    if (effectiveProjectMode === 'manual') return
     const nextPhase = nextAgenticWorkspacePhase(agenticView, requestedPhase)
     setDrawerOpen(false)
     setProjectHome(false)
@@ -556,6 +705,7 @@ export default function WorkspaceClient() {
     persistAgenticWorkspacePhase(manuscript.projectId, nextPhase)
   }
   const navigateProject = (item: ProjectNavItem) => {
+    if (effectiveProjectMode && !projectModeAllowsNavigation(effectiveProjectMode, item)) return
     const destination = projectNavigationDestination(item)
     if (destination.kind === 'home') {
       enterProjectOverview(manuscript.projectId)
@@ -567,6 +717,10 @@ export default function WorkspaceClient() {
       setAgenticMode(false)
       changeMobileView('editor')
       persistWorkspaceView(manuscript.projectId, 'writing')
+      return
+    }
+    if (destination.kind === 'agentic') {
+      selectAgenticPhase(destination.phase)
       return
     }
     if (destination.kind === 'agentic-review') {
@@ -582,7 +736,7 @@ export default function WorkspaceClient() {
       return
     }
     if (destination === 'preparation') {
-      if (passStatus !== 'active') {
+      if (!agenticPassActive) {
         setPassOpen(true)
         return
       }
@@ -611,6 +765,21 @@ export default function WorkspaceClient() {
     persistWorkspaceView(manuscript.projectId, 'writing')
   }
 
+  const openManuscriptSection = (sectionId: string) => {
+    if (!manuscript.sections.some((section) => section.id === sectionId)) return
+    clearAiContext()
+    updateManuscript((current) => ({ ...current, activeSectionId: sectionId }))
+    changeMobileView('editor')
+  }
+
+  const openAssistantForStep = (sectionId?: string) => {
+    if (sectionId && manuscript.sections.some((section) => section.id === sectionId)) {
+      clearAiContext()
+      updateManuscript((current) => ({ ...current, activeSectionId: sectionId }))
+    }
+    changeMobileView('assistant')
+  }
+
   return (
     <>
       {bootError && <div className="pis-storage-warning" role="status">{bootError}</div>}
@@ -621,19 +790,21 @@ export default function WorkspaceClient() {
         activeMobileView={mobileView}
         onMobileViewChange={changeMobileView}
         onExport={() => void exportDocx()}
-        onOpenTools={() => setDrawerOpen(true)}
+         onOpenTools={effectiveProjectMode === 'autonomous' ? undefined : () => setDrawerOpen(true)}
         activeNavItem={activeNavItem}
         onNavigate={navigateProject}
         workType={manuscript.workType}
         view={workspaceView}
-        projectLocked={agenticMode && passStatus === 'active'}
-        agenticContent={agenticMode ? <PaidProjectSetup projectId={manuscript.projectId} passActive={passStatus === 'active'} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} requestedPhase={agenticView} onPhaseChange={selectAgenticPhase} onAcceptDraft={acceptAgenticDraft} /> : undefined}
-        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passStatus === 'active'} syncStatus={syncStatus} onNavigate={navigateNextAction} /> : undefined}
+         projectLocked={effectiveAgenticMode && agenticPassActive}
+         projectMode={effectiveProjectMode}
+         focusMode={focusMode}
+        agenticContent={effectiveAgenticMode ? <AgentStudioShell manuscript={manuscript} passActive={agenticPassActive} phase={agenticView} onOpenWriting={effectiveProjectMode === 'autonomous' ? undefined : () => navigateProject('writing')}><PaidProjectSetup projectId={manuscript.projectId} passActive={agenticPassActive} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} requestedPhase={agenticView} onPhaseChange={selectAgenticPhase} onContextUpdated={(nextManuscript) => updateManuscript(() => nextManuscript)} onAcceptDraft={acceptAgenticDraft} onOpenSection={openManuscriptSection} onOpenAssistant={effectiveProjectMode === 'autonomous' ? undefined : openAssistantForStep} lockedMode={effectiveProjectMode === 'autonomous' ? 'autonomous' : undefined} webResearchAvailable={webResearchAvailable} /></AgentStudioShell> : undefined}
+        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passActive} syncStatus={syncStatus} onNavigate={navigateNextAction} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>
-            <button type="button" className="pis-pass-status" data-state={passStatus} disabled={passStatus === 'active' || passStatus === 'checking'} onClick={() => setPassOpen(true)}>
-              {passStatus === 'active' ? 'Pass aktivan' : passStatus === 'checking' ? 'Provjera Passa…' : 'Aktiviraj Pass'}
+            <button type="button" className="pis-pass-status" data-state={effectivePassStatus} disabled={passActive || effectivePassStatus === 'checking'} onClick={() => setPassOpen(true)}>
+              {effectivePassStatus === 'admin' ? 'Admin pristup' : effectivePassStatus === 'active' ? 'Pass aktivan' : effectivePassStatus === 'checking' ? 'Provjera Passa…' : 'Aktiviraj Pass'}
             </button>
           </div>
         ) : <a className="pis-account" href={`/prijava?redirect=${encodeURIComponent(buildProjectAuthRedirect(manuscript.projectId))}`}>Prijava</a>}
@@ -648,8 +819,11 @@ export default function WorkspaceClient() {
             onStatus={(sectionId, status: ManuscriptSectionStatus) => updateManuscript((current) => ({ ...current, sections: current.sections.map((section) => section.id === sectionId ? { ...section, status } : section) }))}
           />
         }
-        editor={<ManuscriptEditor section={activeSection} acceptedFlash={acceptedFlash} onChange={updateSectionContent} onSelectionChange={setSelection} applyRequest={applyRequest} onApplied={onApplied} />}
-         assistant={<AssistantPanel sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} error={assistantError} onRun={(action, instruction) => void runAi(action, instruction)} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />}
+        editor={<>
+          <WritingComposer sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} materials={composerMaterials} onRun={(action, instruction) => void runAi(action, instruction)} onUpload={uploadComposerMaterial} onRemoveUpload={(name) => setComposerMaterials((current) => current.filter((material) => material.name !== name))} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />
+          <ManuscriptEditor section={activeSection} acceptedFlash={acceptedFlash} onChange={updateSectionContent} onSelectionChange={setSelection} applyRequest={applyRequest} onApplied={onApplied} />
+        </>}
+         assistant={<AssistantPanel sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} error={assistantError} initialTab="helpers" showProposal={false} showPrompt={false} onToggleFocus={() => setFocusMode((current) => !current)} onRun={(action, instruction) => void runAi(action, instruction)} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />}
       />
       <ProjectDrawer
         open={drawerOpen}
@@ -657,7 +831,7 @@ export default function WorkspaceClient() {
         legacyChecks={legacyChecks}
         mentorTasks={mentorTasks}
         lektaSummary={lektaSummary}
-        passActive={passStatus === 'active'}
+        passActive={agenticPassActive}
         onClose={() => setDrawerOpen(false)}
         onMetaChange={(field, value) => updateManuscript((current) => ({ ...current, meta: { ...current.meta, [field]: value } }))}
         onAddSource={(source: ManuscriptSourceV1) => updateManuscript((current) => ({ ...current, sources: [...current.sources, source] }))}

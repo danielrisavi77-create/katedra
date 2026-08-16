@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { countDocumentWords } from '../../../lib/manuscript/model'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 import type { SyncStatus } from '../../../lib/manuscript/sync-status'
+import type { ProjectMode } from '../../../lib/manuscript/project-mode'
 import { MobileWorkspaceNav } from './mobile-workspace-nav'
 import { ProjectNavigation, type ProjectNavItem } from './project-navigation'
 import { WorkspaceNavigation, type SaveStatus } from './workspace-navigation'
@@ -51,6 +52,8 @@ export function WorkspaceShell({
   activeNavItem,
   onNavigate,
   workType,
+  projectMode,
+  focusMode,
 }: {
   manuscript: ManuscriptV1
   saveStatus: SaveStatus
@@ -75,12 +78,14 @@ export function WorkspaceShell({
   activeNavItem?: ProjectNavItem
   onNavigate?: (item: ProjectNavItem) => void
   workType?: 's' | 'z' | 'd'
+  projectMode?: ProjectMode | null
+  focusMode?: boolean
 }) {
   const totalWords = manuscript.sections.reduce((sum, section) => sum + countDocumentWords(section.content), 0)
   const effectiveMobileView = normalizeWorkspaceResumeState({ projectHome: view === 'home', mobileView: activeMobileView }).mobileView
 
   return (
-    <div className="pis-workspace" data-testid="pis-workspace-root" data-workspace-view={view} data-project-locked={projectLocked ? 'true' : 'false'}>
+    <div className={`pis-workspace${focusMode ? ' is-focus' : ''}`} data-testid="pis-workspace-root" data-workspace-view={view} data-project-locked={projectLocked ? 'true' : 'false'}>
       <WorkspaceNavigation
         projectTitle={manuscript.title}
         saveStatus={saveStatus}
@@ -92,7 +97,7 @@ export function WorkspaceShell({
       />
 
       <div className="pis-workspace-frame">
-        {activeNavItem && onNavigate && workType && <ProjectNavigation activeItem={activeNavItem} onNavigate={onNavigate} workType={workType} />}
+        {projectMode !== 'autonomous' && activeNavItem && onNavigate && workType && <ProjectNavigation activeItem={activeNavItem} onNavigate={onNavigate} workType={workType} projectMode={projectMode} />}
         <div className="pis-workspace-content">
       {view === 'home' && projectHome
         ? <main className="pis-project-home-main" aria-label="Projektna početna">{projectHome}</main>
@@ -108,7 +113,7 @@ export function WorkspaceShell({
         </div>
       </div>
 
-      <MobileWorkspaceNav activeMobileView={effectiveMobileView} onMobileViewChange={onMobileViewChange} />
+      {projectMode !== 'autonomous' && <MobileWorkspaceNav activeMobileView={effectiveMobileView} onMobileViewChange={onMobileViewChange} />}
     </div>
   )
 }

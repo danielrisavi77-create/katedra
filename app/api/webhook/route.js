@@ -48,6 +48,7 @@ import { refundDuplicateProjectPass } from '../../../lib/stripe/duplicate-refund
 import { katedraPassProductFilter, katedraPassProductId } from '../../../lib/katedra-pass-catalog.js'
 import { lockPaidProject, readProjectLock } from '../../../lib/academic-suite/project-lock'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
+import { JSON_BODY_LIMITS, readTextBody } from '@/lib/http/json-body.js'
 
 // purchaseWindowDays: koliko dugo Pass vrijedi za trošenje slota, po tipu
 // rada — diplomski/zavrsni radovi traju dulje od seminarskih, pa dulji
@@ -67,9 +68,11 @@ async function handlePOST(req) {
   const stripe = getStripe()
 
   let event
+  const rawBody = await readTextBody(req, JSON_BODY_LIMITS.webhook)
+  if (!rawBody.ok) return new Response(rawBody.status === 413 ? 'payload too large' : 'bad payload', { status: rawBody.status })
   try {
     event = stripe.webhooks.constructEvent(
-      await req.text(),
+      rawBody.value,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET,
     )
@@ -77,7 +80,9 @@ async function handlePOST(req) {
     return new Response('bad signature', { status: 400 })
   }
 
-  if (event.type === 'checkout.session.completed') {
+  const isPaidCheckoutEvent = event.type === 'checkout.session.completed'
+    || event.type === 'checkout.session.async_payment_succeeded'
+  if (isPaidCheckoutEvent) {
     const s = event.data.object
     if (s.mode === 'payment') {
       const projectLocksEnabled = process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true'
@@ -97,13 +102,23 @@ async function handlePOST(req) {
 
        if (s.payment_status !== 'paid') return new Response('ignored')
        const pkg = getKatedraPackage(productKey)
-       if (!userId || !projectId || !pkg || tokens !== pkg.tokens || amount !== pkg.eur) {
+       if (!userId || !projectId || !pkg || s.metadata?.product_id !== pkg.productId || tokens !== pkg.tokens || amount !== pkg.eur) {
          console.error('invalid paid session metadata', { sessionId: s.id, productKey })
          return new Response('invalid metadata', { status: 400 })
        }
 
        if (userId && projectId && pkg && tokens === pkg.tokens && amount === pkg.eur && s.payment_status === 'paid') {
-         const db = createAdminClient()
+         let db
+         try {
+           db = createAdminClient()
+         } catch (error) {
+           console.error(JSON.stringify({
+             eventName: 'webhook_admin_client_unavailable',
+             sessionId: s.id,
+             error: error instanceof Error ? error.message : 'unknown admin client error',
+           }))
+           return new Response('billing storage unavailable', { status: 503 })
+         }
 
          if (!UUID_RE.test(projectId)) {
            console.error('invalid canonical project id in paid session', { projectId, sessionId: s.id })
@@ -118,13 +133,23 @@ async function handlePOST(req) {
 
          const { data: project, error: projectError } = await db
            .from('katedra_projects')
-           .select('user_id, project_id, topic')
+           .select('user_id, project_id, work_type_canonical, topic')
            .eq('user_id', userId)
            .eq('project_id', projectId)
            .maybeSingle()
          if (projectError || !project) {
            console.error('paid session project ownership mismatch', { sessionId: s.id, userId, projectId })
            return new Response('invalid project', { status: 400 })
+         }
+         if (project.work_type_canonical !== pkg.workType) {
+           console.error('paid session project product mismatch', {
+             sessionId: s.id,
+             userId,
+             projectId,
+             projectWorkType: project.work_type_canonical,
+             productWorkType: pkg.workType,
+           })
+           return new Response('invalid project product', { status: 400 })
          }
 
          if (projectLocksEnabled) {

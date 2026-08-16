@@ -2,15 +2,13 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSearchParams } from 'next/navigation'
 import { getSafeInternalRedirect } from '@/lib/auth/redirect'
 import { buildProjectAuthRedirect } from '@/lib/auth/project-redirect'
 import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 function PrijavaForm() {
-  const router = useRouter()
   const params = useSearchParams()
   const requestedRedirect = getSafeInternalRedirect(params.get('redirect'))
   const [redirect] = useState(() => {
@@ -36,10 +34,16 @@ function PrijavaForm() {
     setError('')
     setLoading(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) { setError('Neispravna e-mail adresa ili lozinka.'); return }
-      router.push(redirect)
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: JSON.stringify({ email, password }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) { setError(body.error || 'Prijava trenutno nije dostupna.'); return }
+      window.location.assign(redirect)
     } catch {
       setError('Prijava trenutno nije dostupna.')
     } finally {

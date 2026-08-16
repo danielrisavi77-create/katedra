@@ -19,7 +19,10 @@ import { createClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
 import { KATEDRA_PACKAGES } from '@/lib/stripe/catalog'
 import { validateCheckoutConfirmation, validateCheckoutProject } from '@/lib/stripe/checkout-validation'
+import { isAdminOverrideUser } from '@/lib/auth/admin-access'
+import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { katedraPassProductFilter } from '../../../lib/katedra-pass-catalog.js'
+import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 
 // tokens = obračunski tokeni (input + 5×output) za interni wallet hard cap,
@@ -39,6 +42,9 @@ async function handlePOST(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+  if (isAdminOverrideUser(user)) {
+    return Response.json({ error: 'Ovaj račun ima aktivan admin pristup; plaćanje nije potrebno.', adminOverride: true }, { status: 409 })
+  }
   if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
     console.error(JSON.stringify({ eventName: 'checkout_project_lock_contract_unavailable' }))
     return Response.json({ error: 'Plaćanje trenutno nije dostupno dok server-side zaključavanje projekta nije aktivno.' }, { status: 503 })
@@ -48,30 +54,36 @@ async function handlePOST(req) {
     return Response.json({ error: 'Plaćanje trenutno nije dostupno dok server-side billing ugovor nije aktivan.' }, { status: 503 })
   }
 
+  const parsed = await readJsonBody(req, JSON_BODY_LIMITS.checkout)
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: parsed.status })
   let pkgKey, projectId, topic, lockConfirmation
-  try {
-    ;({ package: pkgKey, projectId, topic, lockConfirmation } = await req.json())
-  } catch {
-    return Response.json({ error: 'Neispravan zahtjev.' }, { status: 400 })
-  }
+  ;({ package: pkgKey, projectId, topic, lockConfirmation } = parsed.value || {})
   const pkg = KATEDRA_PACKAGES[pkgKey]
   if (!pkg) return Response.json({ error: 'Nepoznat paket.' }, { status: 400 })
   projectId = typeof projectId === 'string' ? projectId.trim() : ''
   if (!projectId) return Response.json({ error: 'Nedostaje projekt. Spremi radni prostor prije kupnje.' }, { status: 400 })
 
-  // Server-side ownership + work-type check — isti izvor istine kao
-  // app/api/state/route.js GET (katedra_projects po user_id), ali ovdje
-  // tražimo TOČNO onaj project_id koji klijent šalje, ne samo najnoviji.
+  // Server-side ownership + work-type check — resolveOwnedProject accepts the
+  // legacy guest alias during migration, but every commercial operation below
+  // continues with the canonical UUID only.
+  const ownedProjectResult = await resolveOwnedProjectResult(supabase, { userId: user.id, projectId })
+  if ('error' in ownedProjectResult) {
+    console.error(JSON.stringify({ eventName: 'checkout_project_lookup_failed', userId: user.id, projectId, error: ownedProjectResult.error }))
+    return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
+  }
+  const ownedProject = ownedProjectResult.value
+  if (!ownedProject) return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
+  const canonicalProjectId = ownedProject.projectId
   const { data: project, error: projectError } = await supabase
     .from('katedra_projects')
     .select('project_id, work_type_canonical, topic')
     .eq('user_id', user.id)
-    .eq('project_id', projectId)
+    .eq('project_id', canonicalProjectId)
     .maybeSingle()
   if (projectError) return Response.json({ error: 'Provjera projekta nije uspjela.' }, { status: 500 })
   if (!project) return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
   const validation = validateCheckoutProject({
-    projectId: project.project_id,
+    projectId: canonicalProjectId,
     workTypeCanonical: project.work_type_canonical,
   }, pkgKey)
   if (!validation.ok) return Response.json({ error: validation.error }, { status: validation.status })
@@ -87,11 +99,16 @@ async function handlePOST(req) {
     .or(katedraPassProductFilter())
     .eq('status', 'active')
     .gt('purchase_expires_at', new Date().toISOString())
+    .limit(1)
     .maybeSingle()
   if (existingError) return Response.json({ error: 'Provjera postojećeg Passa nije uspjela.' }, { status: 500 })
   if (existing) return Response.json({ error: 'Ovaj projekt već ima aktivan Pass.' }, { status: 409 })
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!appUrl || !/^https?:\/\//i.test(appUrl)) {
+    console.error(JSON.stringify({ eventName: 'checkout_app_url_unavailable', userId: user.id, projectId: project.project_id }))
+    return Response.json({ error: 'Plaćanje trenutno nije konfigurirano.' }, { status: 503 })
+  }
 
   try {
     const stripe = getStripe()

@@ -8,9 +8,11 @@ const source = fs.readFileSync(path.join(process.cwd(), 'app/api/agent-runs/[run
 describe('agent run context route contract', () => {
   it('validates and stores the local manuscript as a private run payload', () => {
     expect(source).toContain('storeAgentRunContext')
-    expect(source).toContain('MAX_AGENT_CONTEXT_BYTES')
-    expect(source).toContain('arrayBuffer')
-    expect(source).toContain('attachAgentPayloadsToRun')
+    expect(source).toContain('validateAgentRunContext')
+    expect(source).toContain('readJsonBody')
+    expect(source).toContain('JSON_BODY_LIMITS.agentRun')
+    expect(source).not.toContain('req.arrayBuffer()')
+    expect(source).toContain('replaceAgentPayloadsForRun')
     expect(source).toContain('materialIds')
   })
 

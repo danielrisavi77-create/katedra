@@ -3,6 +3,7 @@ import type { AgentEvent, AgentInput, AgentProvider, UsageRecord } from './contr
 const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
 const ANTHROPIC_VERSION = '2023-06-01'
+const DEFAULT_TIMEOUT_MS = 90_000
 
 type AnthropicMessage = {
   role: 'user' | 'assistant'
@@ -99,11 +100,13 @@ export function createAnthropicAgentProvider({
   fetchImpl = fetch,
   model = DEFAULT_MODEL,
   endpoint = DEFAULT_ENDPOINT,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 }: {
   apiKey: string
   fetchImpl?: FetchImplementation
   model?: string
   endpoint?: string
+  timeoutMs?: number
 }): AgentProvider {
   return {
     id: 'anthropic',
@@ -120,58 +123,60 @@ export function createAnthropicAgentProvider({
       }
 
       const { messages, system, signal, maxTokens } = parsed.value
-      let response: Response
+      const requestTimeout = createRequestTimeout(signal, timeoutMs)
       try {
-        response = await fetchImpl(endpoint, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': ANTHROPIC_VERSION,
-          },
-          body: JSON.stringify({
-            model,
-            stream: true,
-            max_tokens: maxTokens ?? 4096,
-            ...(system ? { system } : {}),
-            messages,
-          }),
-          signal,
-        })
-      } catch (error) {
-        yield errorEvent(requestFailureMessage(error))
-        return
-      }
-
-      if (!response.ok) {
-        yield errorEvent(statusMessage(response.status), response.status === 429 || response.status >= 500)
-        return
-      }
-      if (!response.body) {
-        yield errorEvent('AI usluga vratila je neispravan odgovor.', true)
-        return
-      }
-
-      const decoder = new TextDecoder()
-      const reader = response.body.getReader()
-      let pending = ''
-      let output = ''
-      let inputTokens = 0
-      let outputTokens = 0
-
-      const applyEvent = (data: string) => {
-        const parsedEvent = parseSseEvent(data)
-        if (!parsedEvent) return null
-        if (parsedEvent.usage?.inputTokens !== undefined) inputTokens = Math.max(inputTokens, parsedEvent.usage.inputTokens)
-        if (parsedEvent.usage?.outputTokens !== undefined) outputTokens = Math.max(outputTokens, parsedEvent.usage.outputTokens)
-        if (parsedEvent.text) {
-          output += parsedEvent.text
-          return { type: 'delta' as const, value: parsedEvent.text }
+        let response: Response
+        try {
+          response = await fetchImpl(endpoint, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-api-key': apiKey,
+              'anthropic-version': ANTHROPIC_VERSION,
+            },
+            body: JSON.stringify({
+              model,
+              stream: true,
+              max_tokens: maxTokens ?? 4096,
+              ...(system ? { system } : {}),
+              messages,
+            }),
+            signal: requestTimeout.signal,
+          })
+        } catch (error) {
+          yield errorEvent(requestTimeout.didTimeout() ? 'AI zahtjev traje predugo.' : requestFailureMessage(error), requestTimeout.didTimeout())
+          return
         }
-        return null
-      }
 
-      try {
+        if (!response.ok) {
+          yield errorEvent(statusMessage(response.status), response.status === 429 || response.status >= 500)
+          return
+        }
+        if (!response.body) {
+          yield errorEvent('AI usluga vratila je neispravan odgovor.', true)
+          return
+        }
+
+        const decoder = new TextDecoder()
+        const reader = response.body.getReader()
+        let pending = ''
+        let output = ''
+        let inputTokens = 0
+        let outputTokens = 0
+
+        const applyEvent = (data: string) => {
+          const parsedEvent = parseSseEvent(data)
+          if (!parsedEvent) return null
+          if (parsedEvent.usage?.inputTokens !== undefined) inputTokens = Math.max(inputTokens, parsedEvent.usage.inputTokens)
+          if (parsedEvent.usage?.outputTokens !== undefined) outputTokens = Math.max(outputTokens, parsedEvent.usage.outputTokens)
+          if (parsedEvent.text) {
+            output += parsedEvent.text
+            return { type: 'delta' as const, value: parsedEvent.text }
+          }
+          return null
+        }
+
+        try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -193,16 +198,40 @@ export function createAnthropicAgentProvider({
             if (event) yield event
           }
         }
-      } catch (error) {
-        const malformed = error instanceof Error && error.message === 'malformed-sse'
-        const aborted = error instanceof DOMException && error.name === 'AbortError'
-        yield errorEvent(malformed ? 'AI usluga vratila je neispravan odgovor.' : requestFailureMessage(error), !aborted)
-        return
-      } finally {
-        reader.releaseLock()
-      }
+        } catch (error) {
+          const malformed = error instanceof Error && error.message === 'malformed-sse'
+          const aborted = error instanceof DOMException && error.name === 'AbortError'
+          yield errorEvent(requestTimeout.didTimeout() ? 'AI zahtjev traje predugo.' : malformed ? 'AI usluga vratila je neispravan odgovor.' : requestFailureMessage(error), requestTimeout.didTimeout() || !aborted)
+          return
+        } finally {
+          reader.releaseLock()
+        }
 
-      yield { type: 'completed', value: { output, usage: { inputTokens, outputTokens } } }
+        yield { type: 'completed', value: { output, usage: { inputTokens, outputTokens } } }
+      } finally {
+        requestTimeout.dispose()
+      }
+    },
+  }
+}
+
+function createRequestTimeout(externalSignal: AbortSignal | undefined, timeoutMs: number) {
+  const controller = new AbortController()
+  let timedOut = false
+  const onExternalAbort = () => controller.abort()
+  if (externalSignal?.aborted) controller.abort()
+  else externalSignal?.addEventListener('abort', onExternalAbort, { once: true })
+  const duration = Number.isFinite(timeoutMs) ? Math.max(1, Math.floor(timeoutMs)) : DEFAULT_TIMEOUT_MS
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, duration)
+  return {
+    signal: controller.signal,
+    didTimeout: () => timedOut,
+    dispose: () => {
+      clearTimeout(timer)
+      externalSignal?.removeEventListener('abort', onExternalAbort)
     },
   }
 }

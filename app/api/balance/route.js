@@ -18,8 +18,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { MIN_BALANCE } from '@/lib/limits'
 import { ensureFreeStarterGrant } from '@/lib/katedra-free-starter'
 import { authorizeProjectAiRequest } from '@/lib/ai/project-access'
-import { lookupActiveProjectPass } from '@/lib/academic-suite/repositories/entitlements'
-import { resolveOwnedProject } from '@/lib/academic-suite/repositories/projects'
+import { lookupActiveProjectPass, lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
+import { readProjectLock } from '@/lib/academic-suite/project-lock'
+import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
+import { isAdminOverrideUser } from '@/lib/auth/admin-access'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
 
 export async function GET(req) {
@@ -37,19 +39,60 @@ async function handleGET(req) {
     console.error(JSON.stringify({ eventName: 'balance_project_contract_unavailable', userId: user.id }))
     return Response.json({ error: 'Stanje AI pristupa još nije konfigurirano za siguran projektni rad.' }, { status: 503 })
   }
-  const db = createAdminClient()
+  let db
+  try {
+    db = createAdminClient()
+  } catch (error) {
+    console.error(JSON.stringify({
+      eventName: 'balance_admin_client_unavailable',
+      userId: user.id,
+      error: error instanceof Error ? error.message : 'unknown admin client error',
+    }))
+    return Response.json({ error: 'Stanje AI pristupa trenutno nije dostupno.' }, { status: 503 })
+  }
 
   const projectId = new URL(req.url).searchParams.get('projectId')?.trim() || ''
-  const project = projectId
-    ? await resolveOwnedProject(db, { userId: user.id, projectId })
-    : null
+  const projectResult = projectId
+    ? await resolveOwnedProjectResult(db, { userId: user.id, projectId })
+    : { ok: true, value: null }
+  if ('error' in projectResult) {
+    console.error(JSON.stringify({ eventName: 'balance_project_lookup_failed', userId: user.id, projectId, error: projectResult.error }))
+    return Response.json({ error: 'Projekt trenutačno nije moguće provjeriti.' }, { status: 503 })
+  }
+  const project = projectResult.value
   if (projectId && !project) {
     return Response.json({ error: 'Projekt nije pronađen za ovaj račun.' }, { status: 404 })
   }
 
-  const passLookup = project
-    ? await lookupActiveProjectPass(db, { userId: user.id, projectId: project.projectId })
-    : { ok: true, active: false }
+  // This is an explicit account override, not a synthetic Stripe Pass. Keep
+  // the project ownership check above and avoid reading entitlement/wallet
+  // state for the allowlisted account.
+  if (project && isAdminOverrideUser(user)) {
+    return Response.json({ hasPass: false, adminOverride: true, unlimited: true, balance: null, low: false })
+  }
+
+  let passLookup = { ok: true, active: false }
+  if (project) {
+    if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true') {
+      const lockResult = await readProjectLock(db, { userId: user.id, projectId: project.projectId })
+      if (!lockResult.ok) {
+        console.error(JSON.stringify({ eventName: 'project_lock_lookup_unavailable', userId: user.id, projectId: project.projectId, error: lockResult.error }))
+        return Response.json({ error: 'Zaključavanje projekta trenutno nije moguće provjeriti.' }, { status: 503 })
+      }
+      if (lockResult.lock) {
+        passLookup = await lookupActiveProjectPassForProduct(db, {
+          userId: user.id,
+          projectId: project.projectId,
+          productId: `katedra_pass_${lockResult.lock.productKey}`,
+        })
+      }
+    } else {
+      // Local/legacy development can still inspect the pre-lock entitlement
+      // shape. Production with project locks enabled always takes the exact
+      // locked-tier branch above.
+      passLookup = await lookupActiveProjectPass(db, { userId: user.id, projectId: project.projectId })
+    }
+  }
   if (!passLookup.ok) {
     console.error(JSON.stringify({ eventName: 'project_pass_lookup_unavailable', userId: user.id, projectId: project?.projectId, error: passLookup.error }))
     return Response.json({ error: 'Stanje Passa trenutno nije moguće provjeriti.' }, { status: 503 })

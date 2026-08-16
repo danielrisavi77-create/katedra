@@ -27,6 +27,22 @@ describe('GET /api/account', () => {
     const response = await GET()
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+  })
+
+  it('marks only the configured confirmed account as an admin without exposing the allowlist', async () => {
+    vi.stubEnv('KATEDRA_ADMIN_OVERRIDE_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_ADMIN_EMAILS', 'danielrisavi77@gmail.com')
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-daniel', email: 'danielrisavi77@gmail.com', email_confirmed_at: '2026-08-15T10:00:00.000Z' } } }) },
+      from() { return query([]) },
+    })
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(body.admin).toBe(true)
+    expect(JSON.stringify(body)).not.toContain('KATEDRA_ADMIN_EMAILS')
   })
 
   it('returns an ownership-scoped AI usage summary without document text', async () => {

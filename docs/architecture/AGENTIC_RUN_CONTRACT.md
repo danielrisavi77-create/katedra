@@ -30,7 +30,7 @@ Worker rezultat nije canonical rukopis niti nova tablica u Katedri. Worker ga sp
 
 ## Required functions
 
-Implementirati atomic `lock_paid_project`, `create_agent_run`, `claim_agent_step`, `complete_agent_step`, `attach_agent_payloads_to_run` i idempotent cleanup funkciju u Lekta migration historyju. Katedra ih može uključiti tek nakon staging provjere i postavljanja `KATEDRA_PROJECT_LOCKS_ENABLED=true` i `KATEDRA_AGENT_RUNS_ENABLED=true`.
+Implementirati atomic `lock_paid_project`, `create_agent_run`, `claim_agent_step`, `complete_agent_step`, `attach_agent_payloads_to_run`, `replace_agent_payloads_for_run` i idempotent cleanup funkciju u Lekta migration historyju. Katedra ih može uključiti tek nakon staging provjere i postavljanja `KATEDRA_PROJECT_LOCKS_ENABLED=true` i `KATEDRA_AGENT_RUNS_ENABLED=true`.
 
 Katedra poziva RPC-e ovim parametrima:
 
@@ -44,6 +44,7 @@ Katedra poziva RPC-e ovim parametrima:
 - `complete_agent_step(p_run_id, p_step_id, p_status, p_attempt, p_provider, p_usage, p_verification, p_requeue)` — jedini način promjene rezultata koraka; `p_requeue=true` vraća neuspjeli pokušaj u red do maksimalno tri pokušaja.
 - `cleanup_expired_agent_payloads(p_now)` — idempotentno uklanja samo temporary payload manifeste kojima je istekao TTL.
 - `attach_agent_payloads_to_run(p_user_id, p_project_id, p_run_id, p_material_ids)` — veže samo žive, još nedodijeljene materijale vlasnika uz aktivni run.
+- `replace_agent_payloads_for_run(p_user_id, p_project_id, p_run_id, p_material_ids)` — atomski odvaja prethodno odabrane ulazne materijale i veže novu cjelinu; ne dira run-context ni generirane rezultate.
 
 Katedrin adapteri u `lib/academic-suite/project-lock.ts` i `lib/agents/backend-contract.ts` namjerno fail-closed ako RPC nije dostupan. Nema direktnog production fallback upisa u lock/run/step tablice.
 
@@ -59,6 +60,11 @@ Lekta Edge funkcija `katedra-agent-worker` periodično dohvaća samo `pending` i
 `KATEDRA_AGENT_WORKER_CRON_SECRET`; service-role ključ se ne šalje Katedra
 endpointu. Ako callback ne uspije, funkcija vraća 502 kako bi cron ponovio
 poziv, dok lease/claim zaštita sprječava dvostruku obradu istog koraka.
+
+Staging scheduler pokreće funkciju jednom u minuti. Operativni deploy order,
+secret ownership, rollback i provjere `cron.job_run_details` definirani su u
+[Agent worker staging runbooku](../release/AGENT_WORKER_RUNBOOK.md). Lokalni
+endpoint bez aktivnog canonical ugovora ostaje na kontroliranom 503.
 
 ## Run-context payload
 

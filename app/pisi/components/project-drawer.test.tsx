@@ -16,6 +16,37 @@ vi.mock('./paid-project-setup', () => ({
 afterEach(() => cleanup())
 
 describe('ProjectDrawer agentic entry point', () => {
+  it('uses student-goal drawer tabs and keeps agent status out of primary navigation', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'z' })
+    render(
+      <ProjectDrawer
+        open
+        manuscript={manuscript}
+        legacyChecks={{}}
+        mentorTasks={[]}
+        lektaSummary={{ score: null, checkedAt: '', fixedTotal: 0, issues: [] }}
+        passActive
+        onClose={vi.fn()}
+        onMetaChange={vi.fn()}
+        onAddSource={vi.fn()}
+        onRemoveSource={vi.fn()}
+        onAddMentorTask={vi.fn()}
+        onToggleMentorTask={vi.fn()}
+        onBackup={vi.fn()}
+        onRestore={vi.fn()}
+        onImportText={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Plan' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Literatura' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Mentor' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pravila' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Lekta' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pomo\u0107' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Agenti' })).toBeNull()
+  })
+
   it('opens the requested local history and defense surfaces', () => {
     const manuscript = createManuscript({ projectId: 'project-1', workType: 'z' })
     const props = {
@@ -65,10 +96,10 @@ describe('ProjectDrawer agentic entry point', () => {
         onRestore={vi.fn()}
         onImportText={vi.fn()}
         onAcceptDraft={vi.fn().mockResolvedValue(undefined)}
+        requestedTab="agents"
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Agenti' }))
     expect(screen.getByTestId('paid-project-setup').getAttribute('data-has-accept')).toBe('true')
   })
 })

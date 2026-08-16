@@ -1,11 +1,16 @@
 import { registerAgentPayload } from './backend-contract'
-import type { AgentResultV1, CitationEvidence, ClaimEvidence, UsageRecord, VerificationResultV1 } from './contracts'
+import { isAgentId, type AgentResultV1, type CitationEvidence, type ClaimEvidence, type UsageRecord, type VerificationResultV1 } from './contracts'
 import type { AgentStepRecord } from './run-state'
 import type { RunPayloadManifest, RunPayloadManifestStore, RunPayloadStorage } from './run-context-loader'
+import { mapWithConcurrency } from '../async/map-limited'
+import { isScopedAgentPayload } from './payload-scope'
 
 const DEFAULT_BUCKET = 'katedra-temporary-materials'
 const RESULT_TTL_MS = 72 * 60 * 60 * 1000
 const MAX_RESULT_BYTES = 1_500_000
+const MAX_RESULT_MANIFEST_BYTES = 2 * 1024 * 1024
+const MAX_RESULT_ENTRIES = 512
+const MAX_TOTAL_RESULT_BYTES = 32 * 1024 * 1024
 const RESULT_PREFIX = 'agent-result:'
 
 export interface AgentStepResultPayloadV1 {
@@ -58,6 +63,12 @@ export async function storeAgentStepResult(
   },
 ): Promise<StoreAgentStepResult> {
   if (!db.storage) return { ok: false, error: 'Privatna pohrana rezultata nije dostupna.' }
+  if (![1, 2, 3].includes(input.step.attempt)) {
+    return { ok: false, error: 'Pokusaj agenta nije valjan.' }
+  }
+  if (input.result.sectionId !== input.step.sectionId) {
+    return { ok: false, error: 'Rezultat agenta ne pripada claimanoj sekciji.' }
+  }
   const output = typeof input.result.output === 'string' ? input.result.output : JSON.stringify(input.result.output ?? '')
   const now = (input.now || Date.now)()
   const createdAt = new Date(now).toISOString()
@@ -120,25 +131,33 @@ export async function storeAgentStepResult(
 export async function loadAgentRunResults(
   manifests: RunPayloadManifestStore,
   storage: RunPayloadStorage,
-  input: { runId: string; projectId: string; now?: number },
+  input: { runId: string; projectId: string; userId?: string; bucket?: string; now?: number },
 ): Promise<AgentStepResultPayloadV1[]> {
+  if (!input.userId || !input.bucket) return []
   const entries = await manifests.list(input.runId, input.projectId)
-  const results = await Promise.all(entries.filter((entry) => entry.materialId.startsWith(RESULT_PREFIX)).map(async (entry) => {
+  const resultEntries = entries.filter((entry) => entry.materialId.startsWith(RESULT_PREFIX)
+    && isScopedAgentPayload(entry, { userId: input.userId, projectId: input.projectId, runId: input.runId, bucket: input.bucket }))
+  if (resultEntries.length > MAX_RESULT_ENTRIES) throw new Error('Popis rezultata agenta je prevelik za sigurno učitavanje.')
+  const budget = { totalBytes: 0 }
+  const results = await mapWithConcurrency(resultEntries, 8, async (entry) => {
     try {
-      const manifest = await parseJson(storage, entry.manifestPath)
+      const manifest = await parseJson(storage, entry.manifestPath, MAX_RESULT_MANIFEST_BYTES, budget)
       if (manifest.kind !== 'agent-step-result' || manifest.materialId !== entry.materialId || manifest.projectId !== input.projectId || manifest.runId !== input.runId) return null
-      const payload = await parseJson(storage, entry.storagePath)
+      const payload = await parseJson(storage, entry.storagePath, MAX_RESULT_BYTES, budget)
       return validatePayload(payload, entry, input.now ?? Date.now())
     } catch {
-      return null
+      throw new Error('Rezultat agenta je prevelik ili nije valjan.')
     }
-  }))
+  })
   return results.filter((value): value is AgentStepResultPayloadV1 => Boolean(value)).sort((left, right) => left.createdAt.localeCompare(right.createdAt))
 }
 
-async function parseJson(storage: RunPayloadStorage, path: string): Promise<Record<string, unknown>> {
+async function parseJson(storage: RunPayloadStorage, path: string, maxBytes: number, budget: { totalBytes: number }): Promise<Record<string, unknown>> {
   const raw = await storage.download(path)
   const bytes = typeof raw === 'string' ? new TextEncoder().encode(raw) : raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw
+  if (bytes.byteLength > maxBytes) throw new Error('Agent payload exceeds its size limit.')
+  budget.totalBytes += bytes.byteLength
+  if (budget.totalBytes > MAX_TOTAL_RESULT_BYTES) throw new Error('Agent result response exceeds its size limit.')
   const parsed = JSON.parse(new TextDecoder().decode(bytes)) as unknown
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid result payload.')
   return parsed as Record<string, unknown>
@@ -147,13 +166,43 @@ async function parseJson(storage: RunPayloadStorage, path: string): Promise<Reco
 function validatePayload(value: Record<string, unknown>, entry: RunPayloadManifest, now: number): AgentStepResultPayloadV1 | null {
   if (value.schemaVersion !== 1 || value.kind !== 'agent-step-result') return null
   if (value.materialId !== entry.materialId || value.projectId !== entry.projectId || value.runId !== entry.runId) return null
-  if (typeof value.stepId !== 'string' || typeof value.agent !== 'string' || typeof value.verifier !== 'string' || typeof value.output !== 'string') return null
-  if (!Array.isArray(value.citations) || !value.verification || typeof value.verification !== 'object') return null
+  if (typeof value.stepId !== 'string' || !value.stepId.trim() || !isAgentId(value.agent) || value.verifier !== `${value.agent}_verifier` || typeof value.output !== 'string') return null
+  const attempt = typeof value.attempt === 'number' ? value.attempt : NaN
+  if (!Number.isInteger(attempt) || attempt < 1 || attempt > 3) return null
+  if (`${RESULT_PREFIX}${safeSegment(value.stepId)}:${attempt}` !== entry.materialId) return null
+  if (!Array.isArray(value.citations) || !value.citations.every(isCitationEvidence) || !isVerificationResult(value.verification)) return null
   if (value.claims !== undefined && (!Array.isArray(value.claims) || !value.claims.every(isClaimEvidence))) return null
-  if (typeof value.provider !== 'string' || !value.usage || typeof value.usage !== 'object') return null
+  if (typeof value.provider !== 'string' || !value.provider.trim() || !isUsageRecord(value.usage)) return null
   if (value.billingState !== undefined && !['settled', 'released', 'pending_reconciliation'].includes(String(value.billingState))) return null
   if (typeof value.createdAt !== 'string' || !isActiveTemporaryPayload(value.expiresAt, now)) return null
   return value as unknown as AgentStepResultPayloadV1
+}
+
+function isCitationEvidence(value: unknown): value is CitationEvidence {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const citation = value as Record<string, unknown>
+  return typeof citation.id === 'string'
+    && citation.id.trim().length > 0
+    && typeof citation.verified === 'boolean'
+    && (citation.title === undefined || typeof citation.title === 'string')
+    && (citation.url === undefined || typeof citation.url === 'string')
+    && (citation.doi === undefined || typeof citation.doi === 'string')
+}
+
+function isUsageRecord(value: unknown): value is UsageRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const usage = value as Record<string, unknown>
+  return Number.isFinite(usage.inputTokens) && Number.isFinite(usage.outputTokens)
+    && Number(usage.inputTokens) >= 0 && Number(usage.outputTokens) >= 0
+}
+
+function isVerificationResult(value: unknown): value is VerificationResultV1 {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const verification = value as Record<string, unknown>
+  return ['verified', 'needs_revision', 'blocked', 'failed'].includes(String(verification.status))
+    && Array.isArray(verification.issues)
+    && Array.isArray(verification.evidence)
+    && verification.evidence.every(isCitationEvidence)
 }
 
 function isClaimEvidence(value: unknown): value is ClaimEvidence {

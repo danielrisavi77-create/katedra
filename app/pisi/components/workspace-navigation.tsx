@@ -71,7 +71,7 @@ function WorkspaceOverflowMenu({ account, onOpenTools, onExport }: Pick<Workspac
       {open && (
         <div className="pis-overflow-menu" id="pis-mobile-overflow-menu" role="menu" aria-label="Dodatne radnje">
           <div className="pis-overflow-account">{account}</div>
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onOpenTools?.() }}>Projekt</button>
+          {onOpenTools && <button type="button" role="menuitem" onClick={() => { setOpen(false); onOpenTools() }}>Projekt</button>}
           <button type="button" role="menuitem" onClick={() => { setOpen(false); onExport() }}>Izvezi DOCX <span aria-hidden="true">↓</span></button>
         </div>
       )}

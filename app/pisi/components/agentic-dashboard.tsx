@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createAgenticDraft, upsertSectionRevision, type AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
+import { buildRunStudioEvents, currentRunStudioStatus, type RunStudioEvent } from '../../../lib/agents/run-studio'
 import { plainTextDocument } from '../../../lib/manuscript/model'
+import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from './agentic-timeline'
 import { AgenticReview, type AgenticReviewDraft, type AgenticReviewEvidence } from './agentic-review'
+import { AgenticEventFeed } from './agentic-event-feed'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 
 type RunStatus = 'pending' | 'running' | 'paused' | 'completed' | 'blocked' | 'failed' | 'cancelled'
@@ -23,12 +26,13 @@ type LocalDraftOverride = {
 
 const DRAFT_STORAGE_PREFIX = 'katedra_agent_draft_v1:'
 
-export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean> }) {
+export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase, onReset, onIntervention, onAcceptDraft, onOpenSection, onOpenAssistant }: { runId: string; projectId: string; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onReset?: () => void; onIntervention?: () => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean>; onOpenSection?: (sectionId: string) => void; onOpenAssistant?: (sectionId?: string) => void }) {
   const [run, setRun] = useState<AgenticRun | null>(null)
   const [draft, setDraft] = useState<AgenticReviewDraft | null>(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [retryable, setRetryable] = useState(false)
+  const [runResults, setRunResults] = useState<Record<string, unknown>[]>([])
   const resultSignature = useRef('')
   const localOverridesRef = useRef<Record<string, LocalDraftOverride>>({})
 
@@ -56,6 +60,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       const body = await response.json().catch(() => ({}))
       if (!body.run) return
       setRun(normalizeRun(body))
+      setRunResults(Array.isArray(body.results) ? body.results.filter((value: unknown): value is Record<string, unknown> => isRecord(value)) : [])
       const mergedDraft = mergeDraftOverrides(normalizeDraft(body, manuscript, projectId, runId), localOverridesRef.current)
       localOverridesRef.current = mergedDraft.overrides
       persistDraftOverrides(projectId, runId, mergedDraft.overrides)
@@ -104,6 +109,13 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
 
   const activeStep = useMemo(() => run?.steps.find((step) => ['running', 'retrying'].includes(step.status)) || run?.steps.find((step) => step.status === 'pending'), [run?.steps])
   const activeSummary = useMemo(() => activeStep ? projectAgentStatus(activeStep) : null, [activeStep])
+  const studioEvents = useMemo<RunStudioEvent[]>(() => buildRunStudioEvents({
+    run: run ? { status: run.status, mode: run.mode } : undefined,
+    steps: run?.steps || [],
+    results: runResults,
+    sections: manuscript.sections.map((section) => ({ id: section.id, title: section.title })),
+  }), [manuscript.sections, run, runResults])
+  const studioStatus = useMemo(() => currentRunStudioStatus(studioEvents), [studioEvents])
   const blocked = run?.status === 'blocked'
   const editDraft = (sectionId: string, content: TiptapNode) => {
     setDraft((current) => current ? {
@@ -179,7 +191,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
 
   return <section className="pis-agentic-dashboard" aria-live="polite" aria-busy={loading}>
     <header className="pis-agentic-dashboard-heading">
-      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Proces izrade rada'}</p><h2>Tijek izrade rada</h2><p>{activeSummary ? activeSummaryCopy(activeSummary) : run ? runDescription(run.status) : loading ? 'Učitavam zadnji checkpoint…' : 'Tijek nije moguće učitati.'}</p></div>
+      <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Radionica rada'}</p><h2>Tijek izrade rada</h2><p>{run ? studioStatus.label : activeSummary ? activeSummaryCopy(activeSummary) : loading ? 'Učitavam zadnji checkpoint…' : 'Tijek nije moguće učitati.'}</p><span className="pis-agentic-live-summary">{run ? studioStatus.summary : 'Katedra će prikazati svaki provjereni korak čim proces započne.'}</span></div>
       {run && <span className="pis-agent-run-mode">{modeLabel(run.mode)}</span>}
     </header>
     {run && <div className="pis-agentic-dashboard-actions">
@@ -190,9 +202,15 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       {blocked && <button type="button" className="is-primary" onClick={() => onIntervention?.()}>Uredi kontekst i nastavi</button>}
     </div>}
     {blocked && <p className="pis-agentic-blocked" role="alert"><strong><span>Potrebna je intervencija</span> — tvoja odluka</strong> Uredi materijale ili plan, zatim nastavi od zadnjeg checkpointa.</p>}
-    <div className="pis-agentic-dashboard-grid">
-      <AgenticTimeline steps={run?.steps || []} />
-      <ReadOnlyManuscriptPreview manuscript={manuscript} />
+    <div className="pis-agentic-studio-grid">
+      <div className="pis-agentic-studio-primary">
+        <AgenticEventFeed events={studioEvents} onOpenSection={onOpenSection} />
+        <AgenticTimeline steps={run?.steps || []} />
+      </div>
+      <aside className="pis-agentic-studio-context" aria-label="Kontekst procesa">
+        <div className="pis-agentic-current-step"><p className="pis-kicker">Sljedeća radnja</p><strong>{run ? studioStatus.nextAction : 'Pokreni tijek za prikaz procesa.'}</strong>{studioStatus.attempt && <span>Pokušaj {studioStatus.attempt}/3</span>}{onOpenAssistant && <button type="button" className="pis-agentic-ask-button" onClick={() => onOpenAssistant(studioStatus.sectionId || activeStep?.sectionId)}>Pitaj Katedru o ovom koraku</button>}</div>
+        <ReadOnlyManuscriptPreview manuscript={manuscript} />
+      </aside>
     </div>
     {draft && draft.sections.length > 0 && <AgenticReview manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
     {message && <><p className="pis-agent-message" role="alert">{message}</p>{retryable && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
@@ -245,7 +263,8 @@ function normalizeEvidence(result: Record<string, unknown>, verification: Record
     const item = value as Record<string, unknown>
     const id = typeof item.id === 'string' ? item.id : ''
     const title = typeof item.title === 'string' ? item.title : undefined
-    const url = typeof item.url === 'string' ? item.url : undefined
+    const candidateUrl = typeof item.url === 'string' ? item.url : ''
+    const url = isSafeManuscriptHref(candidateUrl) ? candidateUrl : undefined
     const doi = typeof item.doi === 'string' ? item.doi : undefined
     const key = id || url || doi || title || ''
     if (!key || seen.has(key)) return []
@@ -313,7 +332,7 @@ function normalizeRun(body: Record<string, unknown>): AgenticRun {
     steps: steps.map((value) => {
       const step = value as Record<string, unknown>
       const verification = step.last_verification || step.lastVerification
-      return { id: String(step.step_id || step.id || ''), agent: String(step.agent || ''), verifier: String(step.verifier || ''), status: String(step.status || 'pending'), attempt: Number(step.attempt || 1), provider: typeof step.provider === 'string' ? step.provider : undefined, usage: step.usage as AgenticTimelineStep['usage'], lastVerification: verification as AgenticTimelineStep['lastVerification'] }
+      return { id: String(step.step_id || step.id || ''), sectionId: typeof step.section_id === 'string' ? step.section_id : typeof step.sectionId === 'string' ? step.sectionId : undefined, agent: String(step.agent || ''), verifier: String(step.verifier || ''), status: String(step.status || 'pending'), attempt: Number(step.attempt || 1), provider: typeof step.provider === 'string' ? step.provider : undefined, usage: step.usage as AgenticTimelineStep['usage'], lastVerification: verification as AgenticTimelineStep['lastVerification'] }
     }),
   }
 }

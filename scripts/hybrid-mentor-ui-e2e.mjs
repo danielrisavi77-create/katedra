@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { evaluateAgenticStagingEnvironment } from '../lib/deployment/agentic-preflight.mjs'
 
 const baseUrl = String(process.env.KATEDRA_INTEGRATION_URL || 'http://localhost:3000').replace(/\/$/u, '')
 const routes = ['/', '/pisi', '/racun', '/prijava', '/registracija', '/privatnost', '/uvjeti']
@@ -281,7 +282,7 @@ async function verifyRouteMatrix() {
         await assertPageContract(label)
         if (route === '/pisi' && width >= 901) {
           const projectNav = page.getByRole('navigation', { name: 'Projekt' })
-          assert.equal(await projectNav.getByRole('button').count(), 9, `${label}: neočekivan broj projektnih ciljeva`)
+          assert.equal(await projectNav.getByRole('button').count(), 10, `${label}: neočekivan broj projektnih ciljeva`)
         }
       }
     }
@@ -289,19 +290,15 @@ async function verifyRouteMatrix() {
 }
 
 function reportExternalGate() {
+  const staging = evaluateAgenticStagingEnvironment(process.env)
   const externalVariables = [
     'KATEDRA_INTEGRATION_URL',
     'KATEDRA_AUTH_E2E_EMAIL',
     'KATEDRA_AUTH_E2E_PASSWORD',
-    'KATEDRA_WORKER_APP_URL',
-    'KATEDRA_AGENT_MODEL',
-    'KATEDRA_AGENT_RUNS_ENABLED',
-    'KATEDRA_PROJECT_LOCKS_ENABLED',
-    'KATEDRA_BILLING_RPC_CONTRACT',
-    'KATEDRA_RATE_LIMIT_STORE',
   ]
-  const missing = externalVariables.filter((name) => !String(process.env[name] || '').trim())
-  console.log(`BLOCKED_EXTERNAL: authenticated checkout/webhook/worker/provider journey is not claimed by local UI QA; missing configuration: ${missing.length ? missing.join(', ') : 'canonical staging proof is still required'}`)
+  const missingCredentials = externalVariables.filter((name) => !String(process.env[name] || '').trim())
+  const problems = [...new Set([...missingCredentials, ...staging.missing, ...staging.invalid])]
+  console.log(`BLOCKED_EXTERNAL: authenticated checkout/webhook/worker/provider journey is not claimed by local UI QA; configuration issues: ${problems.length ? problems.join(', ') : 'canonical staging proof is still required'}`)
 }
 
 try {

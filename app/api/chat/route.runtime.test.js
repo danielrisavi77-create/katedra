@@ -5,11 +5,21 @@ const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   createAdminClient: vi.fn(),
   resolveOwnedProject: vi.fn(),
+  resolveOwnedProjectResult: vi.fn(async (...args) => ({ ok: true, value: await mocks.resolveOwnedProject(...args) })),
   resolveProjectCapability: vi.fn(),
   validateChatRequest: vi.fn(),
   countChatInputChars: vi.fn(),
   countChatAttachmentChars: vi.fn(),
   isDistributedRateLimitConfigured: vi.fn(),
+  releaseRateLimitReservation: vi.fn(async (reservation, onError) => {
+    try {
+      await reservation.release()
+      return true
+    } catch (error) {
+      onError?.(error, 1)
+      return false
+    }
+  }),
   reserveDistributedRequest: vi.fn(),
   reserveUserRequest: vi.fn(),
   ensureFreeStarterGrant: vi.fn(),
@@ -20,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   buildBillingConsumeParams: vi.fn(),
   resolveBillingOutcome: vi.fn(),
   authorizeProjectAiRequest: vi.fn(),
+  isAdminOverrideUser: vi.fn(),
   validateCostCeiling: vi.fn(),
   estimateChatCharge: vi.fn(),
   maxAffordableOutputTokens: vi.fn(),
@@ -29,7 +40,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
-vi.mock('@/lib/academic-suite/repositories/projects', () => ({ resolveOwnedProject: mocks.resolveOwnedProject }))
+vi.mock('@/lib/academic-suite/repositories/projects', () => ({ resolveOwnedProject: mocks.resolveOwnedProject, resolveOwnedProjectResult: mocks.resolveOwnedProjectResult }))
 vi.mock('@/lib/product/server-capabilities', () => ({ resolveProjectCapability: mocks.resolveProjectCapability }))
 vi.mock('@/lib/chat/validation', () => ({
   validateChatRequest: mocks.validateChatRequest,
@@ -38,6 +49,7 @@ vi.mock('@/lib/chat/validation', () => ({
 }))
 vi.mock('@/lib/ai/rate-limit', () => ({
   isDistributedRateLimitConfigured: mocks.isDistributedRateLimitConfigured,
+  releaseRateLimitReservation: mocks.releaseRateLimitReservation,
   reserveDistributedRequest: mocks.reserveDistributedRequest,
   reserveUserRequest: mocks.reserveUserRequest,
 }))
@@ -49,6 +61,7 @@ vi.mock('@/lib/academic-suite/repositories/entitlements', () => ({ lookupActiveP
 vi.mock('@/lib/ai/anthropic-sse', () => ({ createAnthropicUsageParser: mocks.createAnthropicUsageParser }))
 vi.mock('@/lib/ai/billing-contract', () => ({ buildBillingConsumeParams: mocks.buildBillingConsumeParams, resolveBillingOutcome: mocks.resolveBillingOutcome }))
 vi.mock('@/lib/ai/project-access', () => ({ authorizeProjectAiRequest: mocks.authorizeProjectAiRequest }))
+vi.mock('@/lib/auth/admin-access', () => ({ isAdminOverrideUser: mocks.isAdminOverrideUser }))
 vi.mock('@/lib/ai/cost-policy', () => ({
   AI_COST_LIMITS: mocks.AI_COST_LIMITS,
   AI_MODEL_COST_MULTIPLIERS: mocks.AI_MODEL_COST_MULTIPLIERS,
@@ -76,6 +89,8 @@ afterEach(() => {
 })
 
 beforeEach(() => {
+  mocks.resolveOwnedProjectResult.mockImplementation(async (...args) => ({ ok: true, value: await mocks.resolveOwnedProject(...args) }))
+  mocks.isAdminOverrideUser.mockReturnValue(false)
   mocks.estimateChatCharge.mockReturnValue(1_000)
   mocks.maxAffordableOutputTokens.mockReturnValue(8_192)
   mocks.countChatAttachmentChars.mockReturnValue(0)
@@ -83,6 +98,29 @@ beforeEach(() => {
 })
 
 describe('POST /api/chat runtime guards', () => {
+  it('returns a temporary failure when the project ownership lookup is unavailable', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProjectResult.mockResolvedValue({ ok: false, error: 'projects unavailable' })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({ error: 'Projekt trenutačno nije moguće provjeriti.' })
+  })
+
+  it('fails closed with a controlled response when the admin client is unavailable', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.createAdminClient.mockImplementation(() => { throw new Error('missing service role') })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({ error: 'AI pristup trenutno nije konfiguriran za siguran rad.' })
+  })
+
   it('rejects a missing chat capability when project locks are enabled', async () => {
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
@@ -242,6 +280,80 @@ describe('POST /api/chat runtime guards', () => {
     expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
   })
 
+  it('lets the explicit admin override stream without Pass or wallet gates and records zero user charge', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const rpc = vi.fn().mockResolvedValue({ data: { status: 'settled' }, error: null })
+    const db = {
+      rpc,
+      from() { throw new Error('admin override must not read the user wallet or policy rows') },
+    }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: {
+      id: 'user-daniel', email: 'danielrisavi77@gmail.com', email_confirmed_at: '2026-08-15T10:00:00.000Z',
+    } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.resolveProjectCapability.mockResolvedValue({ allowed: true, tier: 'diplomski', projectId: project.projectId, adminOverride: true, unlimited: true })
+    mocks.isAdminOverrideUser.mockReturnValue(true)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.createAnthropicUsageParser.mockReturnValue({ push: vi.fn(), finish: vi.fn(), usage: () => ({ inputTokens: 12, outputTokens: 4 }) })
+    mocks.buildBillingConsumeParams.mockImplementation((input) => ({
+      p_user: input.userId, p_project_id: input.projectId, p_request_id: input.requestId,
+      p_charged: input.charged, p_model: input.model, p_in: input.inputTokens, p_out: input.outputTokens,
+    }))
+    mocks.resolveBillingOutcome.mockReturnValue({ state: 'settled', retry: false })
+    const encoder = new TextEncoder()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) { controller.enqueue(encoder.encode('data: {"type":"message_delta"}\n\n')); controller.close() },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
+
+    const response = await POST(request({ projectId: project.projectId, capability: 'generate_large_sections', messages: [{ role: 'user', content: 'Napiši tekst.' }] }))
+    await response.text()
+
+    expect(response.status).toBe(200)
+    expect(mocks.lookupActiveProjectPass).not.toHaveBeenCalled()
+    expect(mocks.authorizeProjectAiRequest).not.toHaveBeenCalled()
+    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_charged: 0, p_project_id: project.projectId }))
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets the local admin override stream without a billing contract and does not call billing RPCs', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', '')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const rpc = vi.fn()
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: {
+      id: 'user-daniel', email: 'danielrisavi77@gmail.com', email_confirmed_at: '2026-08-15T10:00:00.000Z',
+    } } }) } })
+    mocks.createAdminClient.mockReturnValue({ rpc })
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.isAdminOverrideUser.mockReturnValue(true)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(false)
+    mocks.reserveUserRequest.mockReturnValue({ allowed: true, release })
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
+    mocks.maxAffordableOutputTokens.mockReturnValue(8_192)
+    mocks.estimateChatCharge.mockReturnValue(1_000)
+    mocks.createAnthropicUsageParser.mockReturnValue({ push: vi.fn(), finish: vi.fn(), usage: () => ({ inputTokens: 12, outputTokens: 4 }) })
+    const encoder = new TextEncoder()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) { controller.enqueue(encoder.encode('data: {"type":"message_delta"}\n\n')); controller.close() },
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } })))
+
+    const response = await POST(request({ projectId: project.projectId, capability: 'generate_large_sections', messages: [{ role: 'user', content: 'Napiši tekst.' }] }))
+    await response.text()
+
+    expect(response.status).toBe(200)
+    expect(rpc).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects an oversized request body before JSON parsing', async () => {
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
 
@@ -322,6 +434,22 @@ describe('POST /api/chat runtime guards', () => {
     mocks.validateChatRequest.mockReturnValue({ ok: true })
 
     const response = await POST(request())
+
+    expect(response.status).toBe(404)
+    expect(mocks.isDistributedRateLimitConfigured).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown project with a capability before touching project access state', async () => {
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) } })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProject.mockResolvedValue(null)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+
+    const response = await POST(request({
+      projectId: 'other-project',
+      capability: 'contextual_ai',
+      messages: [{ role: 'user', content: 'Bok' }],
+    }))
 
     expect(response.status).toBe(404)
     expect(mocks.isDistributedRateLimitConfigured).not.toHaveBeenCalled()

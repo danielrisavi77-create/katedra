@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, cleanupStaleInitializingAgentRun, completeAgentStep, createAgentRun, pauseAgentRun, registerAgentPayload, resumeAgentRun } from './backend-contract'
+import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, cleanupStaleInitializingAgentRun, completeAgentStep, createAgentRun, pauseAgentRun, registerAgentPayload, replaceAgentPayloadsForRun, resumeAgentRun } from './backend-contract'
 
 describe('canonical agent backend contract', () => {
   it('creates a run through the Lekta RPC and normalizes its id', async () => {
@@ -27,6 +27,16 @@ describe('canonical agent backend contract', () => {
   it('fails closed when the claim RPC is unavailable', async () => {
     const rpc = vi.fn().mockRejectedValue(new Error('function unavailable'))
     await expect(claimAgentStep({ rpc }, { runId: 'run-1', workerId: 'worker-1' })).resolves.toMatchObject({ ok: false })
+  })
+
+  it('fails closed when the canonical claim returns an invalid step shape', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ step_id: '', agent: 'unknown-agent', verifier: 'intake_verifier', step_order: 0, attempt: 1, status: 'running' }],
+      error: null,
+    })
+
+    await expect(claimAgentStep({ rpc }, { runId: 'run-1', workerId: 'worker-1' }))
+      .resolves.toEqual({ ok: false, error: 'Lekta claim_agent_step vratio je neispravan korak.' })
   })
 
   it('completes a step with verification and usage metadata', async () => {
@@ -60,6 +70,16 @@ describe('canonical agent backend contract', () => {
     })).resolves.toEqual({ ok: true, value: { materialIds: ['material-1', 'material-2'] } })
     expect(rpc).toHaveBeenCalledWith('attach_agent_payloads_to_run', {
       p_user_id: 'user-1', p_project_id: 'project-1', p_run_id: 'run-1', p_material_ids: ['material-1', 'material-2'],
+    })
+  })
+
+  it('replaces the selected run materials atomically through the canonical RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [{ material_id: 'material-2' }], error: null })
+    await expect(replaceAgentPayloadsForRun({ rpc }, {
+      userId: 'user-1', projectId: 'project-1', runId: 'run-1', materialIds: ['material-2'],
+    })).resolves.toEqual({ ok: true, value: { materialIds: ['material-2'] } })
+    expect(rpc).toHaveBeenCalledWith('replace_agent_payloads_for_run', {
+      p_user_id: 'user-1', p_project_id: 'project-1', p_run_id: 'run-1', p_material_ids: ['material-2'],
     })
   })
 

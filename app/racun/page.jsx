@@ -88,6 +88,7 @@ export default function RacunPage() {
             <p className="pis-kicker">Projektni račun</p>
             <h2 id="account-overview-title">Identitet računa</h2>
             <p className="account-email">{account.user.email || 'E-mail nije dostupan'}</p>
+            {account.admin === true && <p className="account-admin-link"><Link href="/admin">Otvori admin pregled</Link></p>}
             {Array.isArray(account.warnings) && account.warnings.length > 0 && (
               <div className="account-data-warnings" role="status">
                 {account.warnings.map((warning) => <p key={warning}>{warning}</p>)}
