@@ -38,9 +38,12 @@ describe('provider-backed worker context', () => {
       id: 'fake',
       capabilities: ['text'],
       async *run(input) {
-        expect(JSON.stringify(input.payload)).toContain('Teza.')
-        expect(JSON.stringify(input.payload)).toContain('https://example.com')
-        expect(JSON.stringify(input.payload)).toContain('Jasnija teza.')
+        const payload = JSON.stringify(input.payload)
+        expect(payload).toContain('Teza.')
+        expect(payload).toContain('https://example.com')
+        expect(payload).toContain('Jasnija teza.')
+        expect(payload).toContain('sourceCandidates')
+        expect(payload).not.toContain('verifiedSources')
         yield { type: 'completed', value: { output: 'Nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
       },
     }

@@ -15,7 +15,7 @@ export default function UvjetiPage() {
             <div className="logo-badge">K</div>
             <div>
               <strong className="legal-brand-title">Katedra</strong>
-              <span className="legal-brand-subtitle">Od teme do Katedre</span>
+              <span className="legal-brand-subtitle">Od teme do obrane</span>
             </div>
           </Link>
           <div className="legal-header-actions"><ThemeToggle /><Link href="/pisi" className="legal-header-action">Otvori aplikaciju</Link></div>

@@ -154,8 +154,8 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
   const scopedSection = activeSection
     ? { id: activeSection.id, title: activeSection.title, status: activeSection.status, text: clipText(documentText(activeSection.content), MAX_SECTION_CONTEXT_CHARS) }
     : undefined
-  const verifiedSources = manuscript.sources
-    .filter((source) => source.verified && Boolean(source.urlOrDoi))
+  const sourceCandidates = manuscript.sources
+    .filter((source) => Boolean(source.urlOrDoi))
     .map((source) => ({ id: source.id, title: source.title, authors: source.authors, year: source.year, urlOrDoi: source.urlOrDoi }))
   let materialChars = 0
   const materialContext = materials.flatMap((material) => {
@@ -187,7 +187,7 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
   }))
 
   return {
-    system: 'Radi samo s priloženim kontekstom. Ne izmišljaj izvore. Tvrdnje bez provjerenog izvora označi za provjeru.',
+    system: 'Radi samo s priloženim kontekstom. Ne izmišljaj izvore. Stavke u sourceCandidates su samo kandidati i nisu dokaz. Samo citati u verifiedAgentArtifacts smiju se tretirati kao prethodno verificirani. Tvrdnje bez provjerenog izvora označi za provjeru.',
     messages: [{
       role: 'user' as const,
       content: JSON.stringify({
@@ -196,7 +196,7 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
         project: { title: manuscript.title, workType: manuscript.workType, meta: manuscript.meta },
         outline,
         section: scopedSection,
-        verifiedSources,
+        sourceCandidates,
         materials: materialContext,
         verifiedAgentArtifacts: artifactContext,
       }),
