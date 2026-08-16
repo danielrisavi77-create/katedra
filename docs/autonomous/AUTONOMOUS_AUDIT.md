@@ -4594,3 +4594,44 @@ unable to honestly claim independent provider coverage for verification.
   credentials in this environment.
 - A real second-provider run must still prove bounded output, usage accounting,
   failure semantics and the three-attempt quality gate before activation.
+
+## Cycle: 2026-08-16q — billing independent passage verification
+
+### Root cause selected
+
+The independent passage verifier could produce a result outside the normal
+agent-provider billing lifecycle. That created a production risk: a verifier
+call could consume provider capacity without a matching reservation, consume,
+release or reconciliation record.
+
+### Fix
+
+- Extracted a generic `executeBilledOperation` helper from the primary agent
+  provider executor.
+- Routed passage verification through the same atomic reservation, provider
+  call, usage validation, consume/release and pending-reconciliation lifecycle.
+- Assigned passage checks a distinct request ID with the `:passage` suffix so
+  retries and reconciliation remain idempotent and auditable.
+- Missing usage or an unknown consume result now becomes
+  `pending_reconciliation`; the worker cannot mark that step verified.
+- Kept telemetry allowlisted: verifier prompts, claims, manuscript text,
+  provider output and citation bodies are not written to operational logs.
+
+### Verification
+
+- Billing, passage verification and provider-worker regressions: **24 passed**.
+- Internal worker route and runtime regressions: **11 passed**.
+- Full Katedra suite: **198 test files passed, 4 skipped; 842 tests passed,
+  4 skipped**.
+- Typecheck: PASS. Lint: PASS. Production build: PASS with 28 routes.
+- Browser agent-studio smoke test and GitHub Foundation/Academic browser gates:
+  PASS on commit `b67803a`.
+
+### Remaining issues
+
+- Canonical Lekta/Supabase deployment, authenticated checkout/webhook/project
+  lock, real provider credentials, worker resume and production log shipping
+  remain external release gates.
+- The local implementation proves the billing contract and fail-closed
+  behavior; it does not prove a deployed canonical RPC or real provider
+  semantic entailment.

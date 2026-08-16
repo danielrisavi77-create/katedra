@@ -6,7 +6,7 @@ podatke.
 
 ## Prošlo lokalno
 
-Na Katedra repozitoriju, commit `e443239`, prošli su:
+Na Katedra repozitoriju, commit `b67803a`, prošli su:
 
 ```text
 npm.cmd run typecheck
@@ -23,29 +23,31 @@ npm.cmd run test:e2e:agent-studio-ui
 Rezultati:
 
 - TypeScript provjera, lint i production build prolaze.
-- Vitest: `198 passed files`, `837 passed tests`, `4 skipped`.
+- Vitest: `198 passed files`, `842 passed tests`, `4 skipped`.
 - Dependency audit: `0 vulnerabilities` prema `npm audit --omit=dev --audit-level=high`.
 - `/pisi` workspace, agent worker contract i light/dark mentor UI smoke testovi
   prolaze lokalno.
 - Hybrid UI test namjerno označava authenticated checkout/webhook/worker/provider
   put kao `BLOCKED_EXTERNAL` kada staging konfiguracija nije prisutna.
 
-Na Lekta repozitoriju, commit `d2c04c7`, prošla je puna lokalna provjera:
+Na Lekta repozitoriju, commit `d2c04c7`, TypeScript provjera je prošla kao dio
+pokrenutog checka, ali puna lokalna provjera nije završila unutar 180 sekundi.
+Zato se `npm run check` ne računa kao dovršeni pass u ovom ciklusu:
 
 ```text
 npm run check
 ```
 
-To uključuje TypeScript provjeru, Vitest i Vite build. To je dokaz izvornog
-repozitorija, ne dokaz da je isti ugovor deployan u canonical Supabase projektu.
+To je dokaz izvornog repozitorija samo za završene dijelove provjere, ne dokaz
+da je isti ugovor deployan u canonical Supabase projektu.
 
 ## Udaljeni master gateovi
 
-Commit `e443239` je objavljen na udaljeni `master` i oba gatea su završila
+Commit `b67803a` je objavljen na udaljeni `master` i oba gatea su završila
 uspješno:
 
-- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31969461023)
-- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31969461046)
+- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31971139189)
+- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31971139201)
 
 Ovo potvrđuje CI i javne/browser regresije na GitHubu. Ne zamjenjuje staging
 dokaz za authenticated commerce, canonical Lekta RPC/RLS, providere ili worker.
@@ -64,6 +66,8 @@ dokaz za authenticated commerce, canonical Lekta RPC/RLS, providere ili worker.
   promptove, rukopis, output ili citate;
 - retry je ograničen na tri pokušaja;
 - billing reservation/consume/reconciliation put ima lokalne failure testove;
+  neovisni passage verifier koristi zaseban request ID i isti reserve/consume/
+  release lifecycle, a nedostajući usage završava u pending reconciliation;
 - workspace, account, paywall, malformed state i local manuscript persistence imaju
   unit/component/browser regresije;
 - legacy string-rendered `/pisi` engine više nije runtime dependency.
