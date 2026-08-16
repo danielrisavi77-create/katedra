@@ -4665,6 +4665,31 @@ release evidence, increasing the chance of accidental secret disclosure.
 - This protects the evidence parser only; it does not create canonical Lekta,
   Supabase, Stripe or provider evidence. Those release blockers remain.
 
+## Cycle: 2026-08-16t — UTF-8 SSE regression coverage
+
+### Root cause selected
+
+The SSE usage parser already used a streaming `TextDecoder`, but the regression
+suite did not prove behavior when a multibyte UTF-8 character is split between
+network chunks.
+
+### Fix
+
+- Added a chunk-boundary test using a split UTF-8 code point in an Anthropic SSE
+  event.
+- Kept the parser contract unchanged: usage is read only from complete decoded
+  SSE lines and the highest observed token counts are retained.
+
+### Verification
+
+- Anthropic SSE parser tests: **4 passed**.
+- Foundation and Academic browser CI gates passed for commit `eea5368`.
+
+### Remaining issues
+
+- The parser tests cannot prove Anthropic's production response contract or
+  canonical billing RPC behavior; those still require authenticated staging.
+
 ## Cycle: 2026-08-16r — explicit upstream artifact chain
 
 ### Root cause selected
