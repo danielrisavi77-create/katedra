@@ -56,4 +56,16 @@ describe('verified agent artifact chain', () => {
 
     expect(artifacts).toEqual([expect.objectContaining({ stepId: 'valid-step', output: 'Smije ući' })])
   })
+
+  it('passes only the declared upstream agents to a later agent', () => {
+    const artifacts = selectVerifiedAgentArtifacts([
+      result({ materialId: 'agent-result:intake:1', stepId: 'intake-step', stepOrder: 0, agent: 'intake', output: 'Ulazni sažetak' }),
+      result({ materialId: 'agent-result:sources:1', stepId: 'sources-step', stepOrder: 1, agent: 'sources', verifier: 'sources_verifier', output: 'Verificirani izvori' }),
+      result({ materialId: 'agent-result:structure:1', stepId: 'structure-step', stepOrder: 2, agent: 'structure', verifier: 'structure_verifier', output: 'Verificirana struktura' }),
+      result({ materialId: 'agent-result:planning:1', stepId: 'planning-step', stepOrder: 3, agent: 'planning', verifier: 'planning_verifier', output: 'Verificirani plan' }),
+    ], { order: 4, agent: 'writing' })
+
+    expect(artifacts.map((artifact) => artifact.agent)).toEqual(['sources', 'structure', 'planning'])
+    expect(artifacts.map((artifact) => artifact.output)).not.toContain('Ulazni sažetak')
+  })
 })

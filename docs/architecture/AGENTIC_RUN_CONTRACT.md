@@ -40,6 +40,26 @@ reservation/consume/release lifecycle kao agent, a nedostajući usage ili
 nepoznat consume ishod prelazi u `pending_reconciliation` i ne može dovršiti
 korak kao verificiran.
 
+## Verified artifact dependencies
+
+Sekvencijalni redoslijed sam po sebi nije dovoljan dokaz agent-to-agent
+suradnje. Katedrin worker zato u prompt sljedećeg koraka uključuje samo
+verificirane artefakte iz istog projekta i runa koji pripadaju eksplicitnoj
+upstream matrici:
+
+- `sources` dobiva `intake`;
+- `structure` dobiva `intake` i `sources`;
+- `planning` dobiva `sources` i `structure`;
+- `writing` dobiva `sources`, `structure` i `planning`;
+- `citation` dobiva `sources`, `planning` i `writing`;
+- `review` dobiva prethodne sadržajne i citation artefakte;
+- `export` dobiva `writing`, `citation` i `review`.
+
+Rezultati sa statusom `needs_revision`, `blocked` ili `failed`, budući koraci,
+drugi projekt ili drugi run nikada ne ulaze u kontekst. Provider dobiva samo
+ograničeni artefact projection; billing, promptovi i sirovi rukopis ostaju izvan
+te projekcije.
+
 ## Required functions
 
 Implementirati atomic `lock_paid_project`, `create_agent_run`, `claim_agent_step`, `complete_agent_step`, `attach_agent_payloads_to_run`, `replace_agent_payloads_for_run` i idempotent cleanup funkciju u Lekta migration historyju. Katedra ih može uključiti tek nakon staging provjere i postavljanja `KATEDRA_PROJECT_LOCKS_ENABLED=true` i `KATEDRA_AGENT_RUNS_ENABLED=true`.

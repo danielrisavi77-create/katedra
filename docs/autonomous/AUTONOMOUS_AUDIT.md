@@ -4639,3 +4639,35 @@ release or reconciliation record.
 - The local implementation proves the billing contract and fail-closed
   behavior; it does not prove a deployed canonical RPC or real provider
   semantic entailment.
+
+## Cycle: 2026-08-16r — explicit upstream artifact chain
+
+### Root cause selected
+
+Verified results were already isolated by project, run and step order, but a
+later agent could still receive every earlier verified agent result. That made
+the chain broader than the intended academic workflow and increased the risk
+of irrelevant or stale context influencing a provider.
+
+### Fix
+
+- Added an explicit upstream-agent matrix for `sources`, `structure`,
+  `planning`, `writing`, `citation`, `review` and `export`.
+- The worker now projects only verified artifacts from the declared upstream
+  agents for the current step; rejected, future, cross-project and cross-run
+  artifacts remain excluded.
+- Added a regression proving a writing step receives source, structure and
+  planning artifacts but not the raw intake artifact.
+
+### Verification
+
+- Artifact-chain and provider-worker regressions: **2 test files, 17 tests
+  passed**.
+- The full Katedra suite now passes **198 test files, 4 skipped; 843 tests
+  passed, 4 skipped** after this change.
+
+### Remaining issues
+
+- The dependency matrix proves local context selection, not semantic truth of
+  provider output. Real source entailment and deployed Lekta worker behavior
+  still require canonical staging credentials and evidence.

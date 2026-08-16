@@ -22,14 +22,27 @@ export interface VerifiedAgentArtifactContext {
   claims?: ClaimEvidence[]
 }
 
+const UPSTREAM_AGENTS: Record<AgentId, readonly AgentId[]> = {
+  intake: [],
+  sources: ['intake'],
+  structure: ['intake', 'sources'],
+  planning: ['sources', 'structure'],
+  writing: ['sources', 'structure', 'planning'],
+  citation: ['sources', 'planning', 'writing'],
+  review: ['sources', 'structure', 'planning', 'writing', 'citation'],
+  export: ['writing', 'citation', 'review'],
+}
+
 export function selectVerifiedAgentArtifacts(
   results: AgentStepResultPayloadV1[],
-  currentStep: { order: number; projectId?: string; runId?: string },
+  currentStep: { order: number; agent?: AgentId; projectId?: string; runId?: string },
 ): VerifiedAgentArtifactContext[] {
   const latestByStep = new Map<string, AgentStepResultPayloadV1>()
+  const upstreamAgents = currentStep.agent ? UPSTREAM_AGENTS[currentStep.agent] : undefined
 
   for (const result of results) {
     if (result.verification.status !== 'verified') continue
+    if (upstreamAgents && !upstreamAgents.includes(result.agent)) continue
     if (currentStep.projectId && result.projectId !== currentStep.projectId) continue
     if (currentStep.runId && result.runId !== currentStep.runId) continue
     if (!Number.isInteger(result.stepOrder) || result.stepOrder >= currentStep.order) continue
