@@ -1,4 +1,4 @@
-import type { ClaimEvidence, ClaimSupport, CitationEvidence } from './contracts'
+import type { ClaimEvidence, ClaimSupport, ClaimSupportVerification, CitationEvidence } from './contracts'
 
 export type EvidenceGraphClaimStatus = 'ready_for_review' | 'needs_passage' | 'blocked'
 export type EvidenceGraphStatus = 'ready_for_review' | 'needs_passage' | 'blocked' | 'empty'
@@ -22,6 +22,7 @@ interface EvidenceGraphInput {
 
 export interface BuildEvidenceGraphOptions {
   requireIndependentSourceVerification?: boolean
+  requireIndependentPassageVerification?: boolean
 }
 
 const MAX_CLAIMS = 200
@@ -75,6 +76,19 @@ function buildClaimNode(
     return { claimId: claim.id, status: 'needs_passage', citationIds, support: [] }
   }
 
+  const unsupported = supports.some((support) => support.verification?.status === 'blocked' || support.verification?.claimSupported === 'contradicted')
+  if (unsupported) {
+    return { claimId: claim.id, status: 'blocked', citationIds, support: supports }
+  }
+
+  if (options.requireIndependentPassageVerification && !supports.some((support) => (
+    support.verification?.status === 'verified'
+      && support.verification.claimSupported === 'supported'
+      && (support.verification.method === 'independent_gateway' || support.verification.method === 'deterministic_excerpt')
+  ))) {
+    return { claimId: claim.id, status: 'needs_passage', citationIds, support: supports }
+  }
+
   return { claimId: claim.id, status: 'ready_for_review', citationIds, support: supports }
 }
 
@@ -95,8 +109,34 @@ function normalizeSupports(value: ClaimSupport[] | undefined): ClaimSupport[] {
     const quote = typeof support.quote === 'string' ? support.quote.trim() : ''
     const locator = typeof support.locator === 'string' ? support.locator.trim().slice(0, MAX_LOCATOR_CHARS) : ''
     if (!citationId || !quote || quote.length > MAX_QUOTE_CHARS) return []
-    return [{ citationId, quote, ...(locator ? { locator } : {}) }]
+    const verification = normalizeSupportVerification(support.verification)
+    return [{ citationId, quote, ...(locator ? { locator } : {}), ...(verification ? { verification } : {}) }]
   })
+}
+
+function normalizeSupportVerification(value: unknown): ClaimSupportVerification | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const candidate = value as Record<string, unknown>
+  const status = candidate.status
+  const method = candidate.method
+  const checkedAt = candidate.checkedAt
+  if ((status !== 'verified' && status !== 'needs_review' && status !== 'blocked')
+    || (method !== 'independent_gateway' && method !== 'deterministic_excerpt')
+    || typeof checkedAt !== 'string'
+    || !checkedAt.trim()) return undefined
+  const claimSupported = candidate.claimSupported
+  const confidence = typeof candidate.confidence === 'number' && Number.isFinite(candidate.confidence)
+    ? Math.max(0, Math.min(1, candidate.confidence))
+    : undefined
+  const evidenceUrl = typeof candidate.evidenceUrl === 'string' && isHttpUrl(candidate.evidenceUrl) ? candidate.evidenceUrl.trim() : undefined
+  return {
+    status,
+    method,
+    checkedAt: checkedAt.slice(0, 80),
+    ...(claimSupported === 'supported' || claimSupported === 'unclear' || claimSupported === 'contradicted' ? { claimSupported } : {}),
+    ...(confidence !== undefined ? { confidence } : {}),
+    ...(evidenceUrl ? { evidenceUrl } : {}),
+  }
 }
 
 function uniqueStrings(values: string[]): string[] {

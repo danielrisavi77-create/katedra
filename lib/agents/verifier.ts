@@ -5,6 +5,7 @@ export type AgentVerifier = (result: Pick<AgentResultV1, 'agent' | 'output' | 'c
 
 export interface VerifyAgentResultOptions {
   requireIndependentSourceVerification?: boolean
+  requireIndependentPassageVerification?: boolean
 }
 
 const AGENT_VERIFIERS: Record<AgentId, AgentVerifier> = {
@@ -137,8 +138,10 @@ function verifyCitationBoundResult(result: Parameters<AgentVerifier>[0], options
         issues: graph.claims
           .filter((claim) => claim.status === 'needs_passage')
           .map((claim) => ({
-            code: 'missing_passage_evidence' as const,
-            message: 'Tvrdnja ima verificiran identitet izvora, ali nema vezani odlomak za ručnu provjeru.',
+            code: options.requireIndependentPassageVerification ? 'unverified_passage_evidence' as const : 'missing_passage_evidence' as const,
+            message: options.requireIndependentPassageVerification
+              ? 'Odlomak postoji, ali još nije prošao neovisnu provjeru veze s tvrdnjom.'
+              : 'Tvrdnja ima verificiran identitet izvora, ali nema vezani odlomak za ručnu provjeru.',
             citationId: claim.citationIds[0],
           })),
         evidence: citations,

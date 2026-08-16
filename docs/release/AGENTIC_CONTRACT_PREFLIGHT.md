@@ -16,7 +16,9 @@ Za operativni redoslijed koristi [Agent worker staging runbook](./AGENT_WORKER_R
 `npm.cmd run preflight:agentic` requires an HTTPS `KATEDRA_WORKER_APP_URL`,
 worker token and cron secret, approved agent model, both agentic flags set to
 `true`, `KATEDRA_BILLING_RPC_CONTRACT=v2`, and
-`KATEDRA_RATE_LIMIT_STORE=supabase`. If `KATEDRA_MATERIALS_ENABLED=true`, it
+`KATEDRA_RATE_LIMIT_STORE=supabase`, plus an approved HTTPS independent
+passage-verifier gateway (`KATEDRA_VERIFIER_PROVIDER_URL`, key, model and
+`KATEDRA_VERIFIER_POLICY_APPROVED=true`). If `KATEDRA_MATERIALS_ENABLED=true`, it
 also requires `KATEDRA_MATERIAL_DELETE_RPC_CONTRACT=v1`. The command reports only variable names;
 it never prints secret values. Keep the feature flags disabled locally until
 the canonical staging evidence below is complete.

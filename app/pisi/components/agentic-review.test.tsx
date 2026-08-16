@@ -117,7 +117,7 @@ describe('AgenticReview', () => {
         status: 'verified',
         updatedAt: '2026-08-16T10:01:00.000Z',
         evidence: [{ id: 'source-1', title: 'Izvještaj o digitalnoj upravi', url: 'https://example.test/source', verified: true }],
-        claims: [{ id: 'claim-1', text: 'Digitalne usluge mijenjaju odnos građana i institucija.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Građani sve više koriste digitalne kanale.', locator: 'str. 4' }] }],
+        claims: [{ id: 'claim-1', text: 'Digitalne usluge mijenjaju odnos građana i institucija.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Građani sve više koriste digitalne kanale.', locator: 'str. 4', verification: { status: 'verified', method: 'independent_gateway', claimSupported: 'supported' } }] }],
       }],
     }
 
@@ -132,6 +132,6 @@ describe('AgenticReview', () => {
     expect(matrixView.getByText('Digitalne usluge mijenjaju odnos građana i institucija.')).toBeTruthy()
     expect(matrixView.getByText('Izvještaj o digitalnoj upravi')).toBeTruthy()
     expect(matrixView.getByText('str. 4')).toBeTruthy()
-    expect(matrixView.getByText('Identitet provjeren · odlomak priložen')).toBeTruthy()
+    expect(matrixView.getByText('Izvor i odlomak neovisno provjereni')).toBeTruthy()
   })
 })

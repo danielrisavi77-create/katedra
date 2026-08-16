@@ -69,6 +69,20 @@ export interface ClaimSupport {
   citationId: string
   quote: string
   locator?: string
+  verification?: ClaimSupportVerification
+}
+
+export type ClaimSupportVerificationStatus = 'verified' | 'needs_review' | 'blocked'
+export type ClaimSupportVerificationMethod = 'independent_gateway' | 'deterministic_excerpt'
+export type ClaimSupportAssessment = 'supported' | 'unclear' | 'contradicted'
+
+export interface ClaimSupportVerification {
+  status: ClaimSupportVerificationStatus
+  method: ClaimSupportVerificationMethod
+  checkedAt: string
+  claimSupported?: ClaimSupportAssessment
+  confidence?: number
+  evidenceUrl?: string
 }
 
 export interface ClaimEvidence {
@@ -97,7 +111,7 @@ export interface AgentResultV1 {
 }
 
 export interface VerificationIssue {
-  code: 'missing_source' | 'missing_claim_evidence' | 'missing_passage_evidence' | 'unsupported_passage_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending'
+  code: 'missing_source' | 'missing_claim_evidence' | 'missing_passage_evidence' | 'unverified_passage_evidence' | 'unsupported_passage_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending'
   message: string
   citationId?: string
 }

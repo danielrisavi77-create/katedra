@@ -254,6 +254,52 @@ describe('provider-backed worker context', () => {
     expect(verifyCitations).toHaveBeenCalled()
   })
 
+  it('runs claim passages through the independent verifier before returning the result', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run() {
+        yield {
+          type: 'completed',
+          value: {
+            output: JSON.stringify({
+              output: 'Nacrt s dokazom.',
+              citations: [{ id: 'source-1', doi: '10.1000/example', verified: false }],
+              claims: [{ id: 'claim-1', text: 'Tvrdnja.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Odlomak.', locator: 'p. 4' }] }],
+            }),
+            usage: { inputTokens: 10, outputTokens: 4 },
+          },
+        }
+      },
+    }
+    const verifyCitations = vi.fn(async (citations) => citations.map((citation) => ({
+      ...citation,
+      verified: true,
+      verification: { status: 'verified', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z' },
+    })))
+    const verifyPassages = vi.fn(async ({ claims }) => claims.map((claim) => ({
+      ...claim,
+      support: claim.support?.map((support) => ({
+        ...support,
+        verification: { status: 'verified' as const, method: 'independent_gateway' as const, checkedAt: '2026-08-16T12:00:00.000Z', claimSupported: 'supported' as const },
+      })),
+    })))
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      verifyCitations,
+      verifyPassages,
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+      claims: [{ support: [{ verification: { status: 'verified', claimSupported: 'supported' } }] }],
+    })
+    expect(verifyPassages).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', runId: 'run-1' }))
+  })
+
   it('keeps scan images as provider-native attachments instead of embedding base64 in text context', async () => {
     const provider: AgentProvider = {
       id: 'vision',

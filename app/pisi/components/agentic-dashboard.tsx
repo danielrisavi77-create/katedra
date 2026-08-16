@@ -9,7 +9,7 @@ import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from './agentic-timeline'
-import { AgenticReview, type AgenticReviewClaim, type AgenticReviewDraft, type AgenticReviewEvidence } from './agentic-review'
+import { AgenticReview, type AgenticReviewClaim, type AgenticReviewDraft, type AgenticReviewEvidence, type AgenticReviewSupport } from './agentic-review'
 import { AgenticEventFeed } from './agentic-event-feed'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 import { AiUsageLedger } from './ai-usage-ledger'
@@ -339,7 +339,20 @@ function normalizeClaims(result: Record<string, unknown>): AgenticReviewClaim[] 
       const quote = typeof item.quote === 'string' ? item.quote.trim().slice(0, 2_000) : ''
       const locator = typeof item.locator === 'string' ? item.locator.trim().slice(0, 200) : ''
       if (!citationId || !quote) return []
-      return [{ citationId, quote, ...(locator ? { locator } : {}) }]
+      const verificationValue = item.verification && typeof item.verification === 'object' ? item.verification as Record<string, unknown> : undefined
+      const verificationStatus = verificationValue?.status
+      const verificationMethod = verificationValue?.method
+      const claimSupported = verificationValue?.claimSupported
+      const verification: AgenticReviewSupport['verification'] = (verificationStatus === 'verified' || verificationStatus === 'needs_review' || verificationStatus === 'blocked')
+        && (verificationMethod === 'independent_gateway' || verificationMethod === 'deterministic_excerpt')
+        ? {
+          status: verificationStatus,
+          method: verificationMethod,
+          ...(claimSupported === 'supported' || claimSupported === 'unclear' || claimSupported === 'contradicted' ? { claimSupported } : {}),
+          ...(typeof verificationValue?.confidence === 'number' && Number.isFinite(verificationValue.confidence) ? { confidence: Math.max(0, Math.min(1, verificationValue.confidence)) } : {}),
+        }
+        : undefined
+      return [{ citationId, quote, ...(locator ? { locator } : {}), ...(verification ? { verification } : {}) }]
     }) : []
     return [{ id, text, citationIds, ...(support.length ? { support } : {}) }]
   })

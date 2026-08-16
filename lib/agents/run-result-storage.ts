@@ -1,5 +1,5 @@
 import { registerAgentPayload } from './backend-contract'
-import { isAgentId, type AgentResultV1, type CitationEvidence, type ClaimEvidence, type UsageRecord, type VerificationResultV1 } from './contracts'
+import { isAgentId, type AgentResultV1, type CitationEvidence, type ClaimEvidence, type ClaimSupportVerification, type UsageRecord, type VerificationResultV1 } from './contracts'
 import type { AgentStepRecord } from './run-state'
 import type { RunPayloadManifest, RunPayloadManifestStore, RunPayloadStorage } from './run-context-loader'
 import { mapWithConcurrency } from '../async/map-limited'
@@ -299,6 +299,28 @@ function isClaimSupport(value: unknown): boolean {
     && support.quote.trim().length > 0
     && support.quote.length <= 2_000
     && (support.locator === undefined || (typeof support.locator === 'string' && support.locator.length <= 200))
+    && (support.verification === undefined || isClaimSupportVerification(support.verification))
+}
+
+function isClaimSupportVerification(value: unknown): value is ClaimSupportVerification {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const verification = value as Record<string, unknown>
+  return ['verified', 'needs_review', 'blocked'].includes(String(verification.status))
+    && ['independent_gateway', 'deterministic_excerpt'].includes(String(verification.method))
+    && typeof verification.checkedAt === 'string'
+    && (verification.claimSupported === undefined || ['supported', 'unclear', 'contradicted'].includes(String(verification.claimSupported)))
+    && (verification.confidence === undefined || (typeof verification.confidence === 'number' && Number.isFinite(verification.confidence) && verification.confidence >= 0 && verification.confidence <= 1))
+    && (verification.evidenceUrl === undefined || isHttpUrl(verification.evidenceUrl))
+}
+
+function isHttpUrl(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && Boolean(url.hostname)
+  } catch {
+    return false
+  }
 }
 
 function isActiveTemporaryPayload(value: unknown, now: number): boolean {

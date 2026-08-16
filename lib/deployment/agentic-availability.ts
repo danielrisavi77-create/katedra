@@ -30,10 +30,20 @@ export function isAgenticWorkspaceAvailable(env: RuntimeEnvironment = process.en
   if (REQUIRED_CONFIG.some((key) => !isConfigured(env[key]))) return false
 
   try {
-    return new URL(String(env.KATEDRA_WORKER_APP_URL)).protocol === 'https:'
+    if (new URL(String(env.KATEDRA_WORKER_APP_URL)).protocol !== 'https:') return false
   } catch {
     return false
   }
+
+  // The worker now fails closed unless every claim passage has been assessed
+  // by the separately configured verifier. Do not advertise a run that can
+  // only reach a blocked checkpoint in production.
+  return isApprovedGatewayConfigured(env, {
+    approvalKey: 'KATEDRA_VERIFIER_POLICY_APPROVED',
+    urlKey: 'KATEDRA_VERIFIER_PROVIDER_URL',
+    keyKey: 'KATEDRA_VERIFIER_PROVIDER_KEY',
+    modelKey: 'KATEDRA_VERIFIER_PROVIDER_MODEL',
+  })
 }
 
 /**
@@ -51,13 +61,11 @@ export function isAgentWebResearchAvailable(env: RuntimeEnvironment = process.en
 }
 
 /**
- * An independent verifier adapter is optional, but it must never become
- * available merely because the primary text provider is configured. Keeping
- * this separate makes provider diversity an explicit release decision rather
- * than an accidental routing side effect.
+ * The independent verifier adapter is required for an active agentic run, but
+ * remains separately exposed so the worker can decide its routing explicitly.
  */
 export function isAgentVerifierProviderAvailable(env: RuntimeEnvironment = process.env): boolean {
-  return isApprovedGatewayAvailable(env, {
+  return isAgenticWorkspaceAvailable(env) && isApprovedGatewayConfigured(env, {
     approvalKey: 'KATEDRA_VERIFIER_POLICY_APPROVED',
     urlKey: 'KATEDRA_VERIFIER_PROVIDER_URL',
     keyKey: 'KATEDRA_VERIFIER_PROVIDER_KEY',
@@ -70,6 +78,13 @@ function isApprovedGatewayAvailable(
   config: { approvalKey: string, urlKey: string, keyKey: string, modelKey: string },
 ): boolean {
   if (!isAgenticWorkspaceAvailable(env)) return false
+  return isApprovedGatewayConfigured(env, config)
+}
+
+function isApprovedGatewayConfigured(
+  env: RuntimeEnvironment,
+  config: { approvalKey: string, urlKey: string, keyKey: string, modelKey: string },
+): boolean {
   if (env[config.approvalKey] !== 'true') return false
   if (!isConfigured(env[config.keyKey]) || !isConfigured(env[config.modelKey])) return false
   try {

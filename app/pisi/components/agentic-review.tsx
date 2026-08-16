@@ -8,7 +8,17 @@ import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 
 export type AgenticReviewEvidence = { id: string; title?: string; authors?: string; url?: string; doi?: string; verified?: boolean; status?: string }
-export type AgenticReviewSupport = { citationId: string; quote: string; locator?: string }
+export type AgenticReviewSupport = {
+  citationId: string
+  quote: string
+  locator?: string
+  verification?: {
+    status: 'verified' | 'needs_review' | 'blocked'
+    method: 'independent_gateway' | 'deterministic_excerpt'
+    claimSupported?: 'supported' | 'unclear' | 'contradicted'
+    confidence?: number
+  }
+}
 export type AgenticReviewClaim = { id: string; text: string; citationIds: string[]; support?: AgenticReviewSupport[] }
 export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[]; claims?: AgenticReviewClaim[] }
 export type AgenticReviewDraft = Omit<AgenticDraftV1, 'sections'> & { sections: AgenticReviewRevision[] }
@@ -58,7 +68,7 @@ export function AgenticReview({ manuscript, draft, automatic = false, onAccept, 
           <ol>{revision.claims.map((claim) => <li key={claim.id}>
             <p className="pis-review-claim-text">{claim.text}</p>
             <small>Izvor: {claim.citationIds.join(', ') || 'nije povezan'}</small>
-            {claim.support && claim.support.length > 0 ? <ul className="pis-review-support-list">{claim.support.map((support, index) => <li key={`${support.citationId}-${index}`}><q>{support.quote}</q>{support.locator && <span>{support.locator}</span>}</li>)}</ul> : <em className="pis-review-claim-missing">Nema priloženog odlomka za provjeru.</em>}
+            {claim.support && claim.support.length > 0 ? <ul className="pis-review-support-list">{claim.support.map((support, index) => <li key={`${support.citationId}-${index}`}><q>{support.quote}</q>{support.locator && <span>{support.locator}</span>}<small>{supportVerificationLabel(support)}</small></li>)}</ul> : <em className="pis-review-claim-missing">Nema priloženog odlomka za provjeru.</em>}
           </li>)}</ol>
         </div>}
         {revision.verificationMessage && <p className="pis-review-verification"><strong>{revision.status === 'blocked' ? 'Potrebna provjera · ' : ''}Automatska provjera</strong> {revision.verificationMessage}</p>}
@@ -111,7 +121,15 @@ function matrixStatus(evidence: AgenticReviewEvidence[], supports: AgenticReview
   if (!evidence.length) return { label: 'Nema povezanog izvora', tone: 'blocked' }
   if (!evidence.some((item) => item.verified)) return { label: 'Čeka provjeru izvora', tone: 'pending' }
   if (!supports.length) return { label: 'Nedostaje odlomak', tone: 'pending' }
-  return { label: 'Identitet provjeren · odlomak priložen', tone: 'ready' }
+  if (supports.some((support) => support.verification?.status === 'blocked' || support.verification?.claimSupported === 'contradicted')) return { label: 'Odlomak ne podržava tvrdnju', tone: 'blocked' }
+  if (!supports.some((support) => support.verification?.status === 'verified' && support.verification.claimSupported === 'supported')) return { label: 'Odlomak čeka neovisnu provjeru', tone: 'pending' }
+  return { label: 'Izvor i odlomak neovisno provjereni', tone: 'ready' }
+}
+
+function supportVerificationLabel(support: AgenticReviewSupport): string {
+  if (support.verification?.status === 'blocked' || support.verification?.claimSupported === 'contradicted') return 'Ne podržava tvrdnju'
+  if (support.verification?.status === 'verified' && support.verification.claimSupported === 'supported') return 'Neovisno provjereno'
+  return 'Čeka neovisnu provjeru'
 }
 
 function isAcceptable(manuscript: ManuscriptV1, revision: AgenticDraftV1['sections'][number]) {

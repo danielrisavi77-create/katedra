@@ -89,6 +89,51 @@ describe('agent verifier', () => {
     }, { requireIndependentSourceVerification: true })).toMatchObject({ status: 'verified' })
   })
 
+  it('does not treat a merely supplied passage as independently verified', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s odlomkom koji još nije provjeren.',
+      claims: [{
+        id: 'claim-1',
+        text: 'Tvrdnja s odlomkom koji još nije provjeren.',
+        citationIds: ['source-1'],
+        support: [{
+          citationId: 'source-1',
+          quote: 'Odlomak koji treba provjeru.',
+          locator: 'p. 4',
+          verification: { status: 'needs_review', method: 'independent_gateway', checkedAt: '2026-08-16T10:00:00.000Z' },
+        }],
+      }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+      } }],
+    }, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true })).toMatchObject({
+      status: 'needs_revision',
+      issues: [{ code: 'unverified_passage_evidence' }],
+    })
+  })
+
+  it('accepts a passage only when the independent passage verifier marks it supported', () => {
+    expect(verifyAgentResult({
+      agent: 'writing',
+      output: 'Tvrdnja s neovisno provjerenim odlomkom.',
+      claims: [{
+        id: 'claim-1',
+        text: 'Tvrdnja s neovisno provjerenim odlomkom.',
+        citationIds: ['source-1'],
+        support: [{
+          citationId: 'source-1',
+          quote: 'Odlomak koji podržava tvrdnju.',
+          locator: 'p. 4',
+          verification: { status: 'verified', method: 'independent_gateway', checkedAt: '2026-08-16T10:00:00.000Z', claimSupported: 'supported' },
+        }],
+      }],
+      citations: [{ id: 'source-1', doi: '10.1234/example', verified: true, verification: {
+        status: 'verified', method: 'crossref', checkedAt: '2026-08-16T10:00:00.000Z',
+      } }],
+    }, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true })).toMatchObject({ status: 'verified' })
+  })
+
   it('blocks citation-required results when claim-to-source evidence is missing', () => {
     expect(verifyAgentResult({
       agent: 'writing',

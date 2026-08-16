@@ -18,6 +18,10 @@ const completeEnvironment = {
   KATEDRA_AGENT_WORKER_TOKEN: 'worker-token',
   KATEDRA_AGENT_WORKER_CRON_SECRET: 'cron-secret',
   ANTHROPIC_API_KEY: 'sk-test',
+  KATEDRA_VERIFIER_POLICY_APPROVED: 'true',
+  KATEDRA_VERIFIER_PROVIDER_URL: 'https://verifier.example.test/run',
+  KATEDRA_VERIFIER_PROVIDER_KEY: 'gateway-secret',
+  KATEDRA_VERIFIER_PROVIDER_MODEL: 'verifier-model',
 }
 
 describe('agentic workspace availability', () => {
@@ -57,19 +61,17 @@ describe('agentic workspace availability', () => {
   })
 
   it('keeps the independent verifier provider fail-closed until separately approved', () => {
-    expect(isAgentVerifierProviderAvailable(completeEnvironment)).toBe(false)
+    expect(isAgentVerifierProviderAvailable(completeEnvironment)).toBe(true)
 
     const configured = {
       ...completeEnvironment,
-      KATEDRA_VERIFIER_POLICY_APPROVED: 'true',
-      KATEDRA_VERIFIER_PROVIDER_URL: 'https://verifier.example.test/run',
-      KATEDRA_VERIFIER_PROVIDER_KEY: 'gateway-secret',
-      KATEDRA_VERIFIER_PROVIDER_MODEL: 'verifier-model',
+      KATEDRA_VERIFIER_POLICY_APPROVED: 'false',
     }
 
-    expect(isAgentVerifierProviderAvailable(configured)).toBe(true)
+    expect(isAgenticWorkspaceAvailable(configured)).toBe(false)
+    expect(isAgentVerifierProviderAvailable(configured)).toBe(false)
+    expect(isAgentVerifierProviderAvailable({ ...completeEnvironment, KATEDRA_VERIFIER_POLICY_APPROVED: 'false' })).toBe(false)
     expect(isAgentVerifierProviderAvailable({ ...configured, KATEDRA_VERIFIER_PROVIDER_URL: 'http://localhost:4000' })).toBe(false)
-    expect(isAgentVerifierProviderAvailable({ ...configured, KATEDRA_VERIFIER_POLICY_APPROVED: 'false' })).toBe(false)
-    expect(isAgentVerifierProviderAvailable({ ...configured, KATEDRA_VERIFIER_PROVIDER_KEY: 'REPLACE_IN_DEPLOYMENT_SECRET_STORE' })).toBe(false)
+    expect(isAgentVerifierProviderAvailable({ ...completeEnvironment, KATEDRA_VERIFIER_PROVIDER_KEY: 'REPLACE_IN_DEPLOYMENT_SECRET_STORE' })).toBe(false)
   })
 })

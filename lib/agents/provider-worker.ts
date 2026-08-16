@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 
 import { documentText } from '../manuscript/model'
 import type { ManuscriptV1 } from '../manuscript/types'
-import type { AgentInput, AgentProvider, AgentResultV1 } from './contracts'
+import type { AgentInput, AgentProvider, AgentResultV1, ClaimEvidence, CitationEvidence } from './contracts'
 import type { ProviderRouter } from './provider-router'
 import { executeBilledAgentProvider, type BillingDatabase } from './billed-provider-execution'
 import type { AgentStepRecord } from './run-state'
@@ -25,6 +25,7 @@ export function createProviderBackedExecutor(input: {
   loadMaterials?: () => Promise<RunMaterialContext[]>
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
+  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[] }) => Promise<ClaimEvidence[]>
   sourcePolicy?: SourcePolicy
   billing: { db: BillingDatabase; userId: string; model?: string; modelFor?: (provider: AgentProvider, step: AgentStepRecord) => string; requestIdFor?: (step: AgentStepRecord) => string }
   router: Pick<ProviderRouter, 'providerFor'>
@@ -66,6 +67,9 @@ export function createProviderBackedExecutor(input: {
         : []
       const candidateCitations = mergeCitations([...inheritedCitations, ...result.citations, ...inheritedArtifacts])
       const citations = input.verifyCitations ? await input.verifyCitations(candidateCitations) : candidateCitations
+      const claims = result.claims && input.verifyPassages
+        ? await input.verifyPassages({ projectId: input.projectId, runId: input.runId, claims: result.claims, citations })
+        : result.claims
       logAgentEvent({
         eventName: 'agent_provider_completed',
         requestId,
@@ -85,6 +89,7 @@ export function createProviderBackedExecutor(input: {
       return {
         ...result,
         citations,
+        ...(claims ? { claims } : {}),
         ...(verifiedArtifacts.length ? { inputArtifactIds: verifiedArtifacts.map((artifact) => artifact.artifactId) } : {}),
         ...(activeSection ? { sectionId: activeSection.id, baseRevision: activeSection.updatedAt } : {}),
       }

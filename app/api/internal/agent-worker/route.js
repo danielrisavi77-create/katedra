@@ -12,6 +12,7 @@ import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { verifyAgentResult } from '@/lib/agents/verifier'
 import { createIndependentCitationVerifier } from '@/lib/agents/source-verification'
+import { createGatewayPassageVerifier } from '@/lib/agents/passage-verification'
 import { loadAgentRunResults, storeAgentStepResult } from '@/lib/agents/run-result-storage'
 import { isAgentVerifierProviderAvailable } from '@/lib/deployment/agentic-availability'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
@@ -120,6 +121,14 @@ async function handlePost(req) {
     assignments,
   })
   const citationVerifier = createIndependentCitationVerifier()
+  const passageVerifier = isAgentVerifierProviderAvailable(process.env)
+    ? createGatewayPassageVerifier({
+      endpoint: process.env.KATEDRA_VERIFIER_PROVIDER_URL,
+      apiKey: process.env.KATEDRA_VERIFIER_PROVIDER_KEY,
+      model: process.env.KATEDRA_VERIFIER_PROVIDER_MODEL,
+      timeoutMs: 30_000,
+    })
+    : undefined
   const storage = db.storage.from(BUCKET)
   const payloadStorage = {
     async download(path) {
@@ -138,6 +147,9 @@ async function handlePost(req) {
     loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     verifyCitations: citationVerifier.verify,
+    verifyPassages: passageVerifier
+      ? ({ projectId, runId: currentRunId, claims, citations }) => passageVerifier.verify({ projectId, runId: currentRunId, claims, citations })
+      : undefined,
     router,
     billing: { db, userId: run.user_id, model: workerConfig.model },
   })
@@ -155,7 +167,7 @@ async function handlePost(req) {
   })
   const result = await runAgentWorkerLoop(
     { db, workerId: process.env.KATEDRA_AGENT_WORKER_ID || 'katedra-web-worker', runId },
-    { execute, verify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: true }), storeResult },
+    { execute, verify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true }), storeResult },
     { maxSteps: 1 },
   )
   if (result.error) return privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 })
