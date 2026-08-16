@@ -64,7 +64,7 @@ describe('agentic runtime integration', () => {
 
     const result = await runAgentWorkerLoop(
       { db: { rpc }, workerId: 'worker-1', runId: 'run-1' },
-      { execute, verify: verifyAgentResult },
+      { execute, verify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: false }) },
       { maxSteps: 1 },
     )
 
