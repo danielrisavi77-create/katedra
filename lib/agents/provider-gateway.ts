@@ -24,6 +24,7 @@ export function createGatewayAgentProvider({
 }): AgentProvider {
   return {
     id,
+    model,
     capabilities: [...new Set(capabilities)],
     async *run(input: AgentInput): AsyncIterable<AgentEvent> {
       const controller = new AbortController()

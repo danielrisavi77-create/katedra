@@ -91,7 +91,7 @@ async function handlePost(req) {
   })
   const providers = [provider]
   const assignments = Object.fromEntries(AGENT_IDS.map((agent) => [agent, provider.id]))
-  if (isResearchGatewayConfigured(process.env)) {
+  if (run.source_policy === 'web_research' && isResearchGatewayConfigured(process.env)) {
     const researchProvider = createGatewayAgentProvider({
       id: 'configured-research-gateway',
       endpoint: process.env.KATEDRA_RESEARCH_PROVIDER_URL,

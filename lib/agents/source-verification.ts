@@ -54,14 +54,15 @@ async function verifyDoi(
 ): Promise<CitationEvidence> {
   const verificationBase = { method: 'crossref' as const, checkedAt: input.now(), evidenceUrl: `https://api.crossref.org/works/${encodeURIComponent(doi)}` }
   try {
-    const response = await fetchWithTimeout(verificationBase.evidenceUrl, input)
+    const fetched = await fetchJsonWithTimeout(verificationBase.evidenceUrl, input)
+    if (!fetched) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
+    const { response, body } = fetched
     if (!response.ok) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
-    const body = await readJsonResponse(response, MAX_REGISTRY_RESPONSE_BYTES)
     const message = readCrossrefMessage(body)
     if (!message) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
 
     const titleMatch = !citation.title || normalizeText(citation.title) === normalizeText(message.title)
-    const yearMatch = !citation.year || !message.year || citation.year === message.year
+    const yearMatch = !citation.year || (message.year !== undefined && citation.year === message.year)
     const status = titleMatch && yearMatch ? 'verified' : 'needs_review'
     return withVerification(citation, { ...verificationBase, status, titleMatch, yearMatch })
   } catch {
@@ -81,15 +82,16 @@ async function readJsonResponse(response: Response, maxBytes: number): Promise<u
   }
 }
 
-async function fetchWithTimeout(
+async function fetchJsonWithTimeout(
   url: string,
   input: { fetchImpl: FetchImplementation; timeoutMs: number },
-  init: RequestInit = {},
-): Promise<Response> {
+): Promise<{ response: Response; body: unknown } | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), normalizeTimeout(input.timeoutMs))
   try {
-    return await input.fetchImpl(url, { ...init, signal: controller.signal })
+    const response = await input.fetchImpl(url, { signal: controller.signal })
+    const body = response.ok ? await readJsonResponse(response, MAX_REGISTRY_RESPONSE_BYTES) : null
+    return { response, body }
   } finally {
     clearTimeout(timeout)
   }

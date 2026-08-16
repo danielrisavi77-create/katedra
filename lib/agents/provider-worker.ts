@@ -25,7 +25,7 @@ export function createProviderBackedExecutor(input: {
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
   sourcePolicy?: SourcePolicy
-  billing: { db: BillingDatabase; userId: string; model?: string; requestIdFor?: (step: AgentStepRecord) => string }
+  billing: { db: BillingDatabase; userId: string; model?: string; modelFor?: (provider: AgentProvider, step: AgentStepRecord) => string; requestIdFor?: (step: AgentStepRecord) => string }
   router: Pick<ProviderRouter, 'providerFor'>
 }) {
   return async (step: AgentStepRecord): Promise<Omit<AgentResultV1, 'agent'>> => {
@@ -35,7 +35,7 @@ export function createProviderBackedExecutor(input: {
       : undefined
     const materials = input.loadMaterials ? await input.loadMaterials() : []
     const results = input.loadResults ? await input.loadResults() : []
-    const verifiedArtifacts = selectVerifiedAgentArtifacts(results, step)
+    const verifiedArtifacts = selectVerifiedAgentArtifacts(results, { ...step, projectId: input.projectId, runId: input.runId })
     const provider = input.router.providerFor(step.agent, capabilityFor(step.agent, input.sourcePolicy, materials))
     const requestId = normalizeBillingRequestId(input.billing.requestIdFor?.(step) || `${input.runId}:${step.id}:${step.attempt}`)
     const startedAt = Date.now()
@@ -52,7 +52,7 @@ export function createProviderBackedExecutor(input: {
         userId: input.billing.userId,
         projectId: input.projectId,
         requestId,
-        model: input.billing.model || provider.id,
+        model: input.billing.modelFor?.(provider, step) || provider.model || input.billing.model || provider.id,
       })
       const inheritedCitations = citationBoundAgent(step.agent)
         ? manuscript.sources
@@ -162,9 +162,10 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
       warnings: material.warnings,
     }]
   })
-  const images = materials
+  const images = step.agent === 'intake' ? materials
     .filter((material) => material.image)
     .map((material) => ({ mimeType: material.image!.mimeType, data: material.image!.data }))
+    : []
   const artifactContext = verifiedArtifacts.map((artifact) => ({
     artifactId: artifact.artifactId,
     stepId: artifact.stepId,

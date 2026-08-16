@@ -24,12 +24,14 @@ export interface VerifiedAgentArtifactContext {
 
 export function selectVerifiedAgentArtifacts(
   results: AgentStepResultPayloadV1[],
-  currentStep: { order: number },
+  currentStep: { order: number; projectId?: string; runId?: string },
 ): VerifiedAgentArtifactContext[] {
   const latestByStep = new Map<string, AgentStepResultPayloadV1>()
 
   for (const result of results) {
     if (result.verification.status !== 'verified') continue
+    if (currentStep.projectId && result.projectId !== currentStep.projectId) continue
+    if (currentStep.runId && result.runId !== currentStep.runId) continue
     if (!Number.isInteger(result.stepOrder) || result.stepOrder >= currentStep.order) continue
 
     const previous = latestByStep.get(result.stepId)

@@ -35,6 +35,7 @@ export type AgentEvent = AgentDeltaEvent | AgentCompletedEvent | AgentErrorEvent
 
 export interface AgentProvider {
   id: string
+  model?: string
   capabilities: AgentCapability[]
   run(input: AgentInput): AsyncIterable<AgentEvent>
 }

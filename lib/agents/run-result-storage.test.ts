@@ -24,6 +24,25 @@ describe('agent result payload storage', () => {
     expect(rpc).toHaveBeenCalledWith('register_agent_payload', expect.objectContaining({ p_run_id: 'run-1', p_material_id: expect.stringMatching(/^agent-result:/), p_storage_path: expect.stringContaining('/results/') }))
   })
 
+  it('reuses an immutable result after a worker crash between storage and completion', async () => {
+    const upload = vi.fn(async () => ({ error: { message: 'already exists' } }))
+    const remove = vi.fn(async () => ({ error: null }))
+    const rpc = vi.fn(async () => ({ data: [{ manifest_id: 'manifest-existing' }], error: null }))
+    const download = vi.fn(async () => ({ data: JSON.stringify({
+      kind: 'agent-step-result', materialId: 'agent-result:run-1_writing_section-1:1',
+      projectId: 'project-1', runId: 'run-1', stepId: 'run-1:writing:section-1',
+      expiresAt: '2026-08-17T10:00:00.000Z',
+    }) }))
+
+    const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({ upload, remove, download })) } }, {
+      userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification,
+      now: () => Date.parse('2026-08-16T10:00:00.000Z'),
+    })
+
+    expect(stored).toEqual({ ok: true, value: { manifestId: 'manifest-existing', materialId: 'agent-result:run-1_writing_section-1:1', expiresAt: '2026-08-17T10:00:00.000Z' } })
+    expect(remove).not.toHaveBeenCalled()
+  })
+
   it('rejects a result that targets a different section than the claimed step', async () => {
     const rpc = vi.fn(async () => ({ data: [{ manifest_id: 'manifest-result-1' }], error: null }))
     const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({

@@ -116,6 +116,7 @@ export function createAnthropicAgentProvider({
 }): AgentProvider {
   return {
     id: 'anthropic',
+    model,
     capabilities: enableVision ? ['text', 'vision'] : ['text'],
     async *run(input: AgentInput): AsyncIterable<AgentEvent> {
       const parsed = readPayload(input.payload)

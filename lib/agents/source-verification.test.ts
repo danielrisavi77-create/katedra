@@ -32,6 +32,16 @@ describe('independent citation verification', () => {
     ])
   })
 
+  it('does not verify a cited year when the registry omits the year', async () => {
+    const verifier = createIndependentCitationVerifier({
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ message: { title: ['Matching title'] } }), { status: 200 })),
+    })
+
+    await expect(verifier.verify([{ id: 'doi-year', title: 'Matching title', year: 2024, doi: '10.1000/example', verified: false }])).resolves.toEqual([
+      expect.objectContaining({ verified: false, verification: expect.objectContaining({ status: 'needs_review', yearMatch: false }) }),
+    ])
+  })
+
   it('keeps a URL in review without server-side fetching user-controlled hosts', async () => {
     const fetchImpl = vi.fn()
     const verifier = createIndependentCitationVerifier({ fetchImpl })

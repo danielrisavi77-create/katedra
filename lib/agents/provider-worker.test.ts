@@ -232,6 +232,33 @@ describe('provider-backed worker context', () => {
     await expect(execute({ id: 'step-vision', agent: 'intake', verifier: 'intake_verifier', order: 0, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Analiza skena.' })
   })
 
+  it('uses the selected provider model for billing attribution', async () => {
+    const provider: AgentProvider = {
+      id: 'research-gateway',
+      model: 'research-model',
+      capabilities: ['text'],
+      async *run() {
+        yield { type: 'completed', value: { output: 'Rezultat.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
+      ? { data: { status: 'reserved' }, error: null }
+      : name === 'katedra_consume'
+        ? { data: { status: 'settled' }, error: null }
+        : { data: { status: 'released' }, error: null })
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      router: { providerFor: () => provider },
+      billing: { db: { rpc }, userId: 'user-1', model: 'default-model' },
+    })
+
+    await execute({ id: 'step-model', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+
+    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_model: 'research-model' }))
+  })
+
   it('bounds the default billing request id when a section id is long', async () => {
     const provider: AgentProvider = {
       id: 'fake',

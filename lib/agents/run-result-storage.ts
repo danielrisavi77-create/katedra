@@ -112,14 +112,16 @@ export async function storeAgentStepResult(
   const bucket = input.bucket || DEFAULT_BUCKET
   const manifest = { ...payload, storageBucket: bucket, storagePath, manifestPath }
   const storage = db.storage.from(bucket)
-  const payloadUpload = await ensureImmutableObject(storage, storagePath, body)
+  const identity = { kind: 'agent-step-result', materialId, projectId: input.projectId, runId: input.runId, stepId: input.step.id }
+  const payloadUpload = await ensureImmutableObject(storage, storagePath, body, identity)
   if (!payloadUpload.ok) return { ok: false, error: 'Spremanje rezultata agenta nije uspjelo.' }
   const manifestBody = new TextEncoder().encode(JSON.stringify(manifest))
-  const manifestUpload = await ensureImmutableObject(storage, manifestPath, manifestBody)
+  const manifestUpload = await ensureImmutableObject(storage, manifestPath, manifestBody, identity)
   if (!manifestUpload.ok) {
     if (payloadUpload.created) await storage.remove([storagePath])
     return { ok: false, error: 'Spremanje manifesta rezultata nije uspjelo.' }
   }
+  const persistedExpiresAt = readExpiresAt(manifestUpload.body) || expiresAt
   const registered = await registerAgentPayload(db, {
     userId: input.userId,
     projectId: input.projectId,
@@ -128,24 +130,36 @@ export async function storeAgentStepResult(
     storageBucket: bucket,
     storagePath,
     manifestPath,
-    expiresAt,
+    expiresAt: persistedExpiresAt,
   })
   if (!registered.ok) {
     if (payloadUpload.created || manifestUpload.created) await storage.remove([storagePath, manifestPath])
     return { ok: false, error: 'Registracija rezultata agenta nije uspjela.' }
   }
-  return { ok: true, value: { manifestId: registered.value.manifestId, materialId, expiresAt } }
+  return { ok: true, value: { manifestId: registered.value.manifestId, materialId, expiresAt: persistedExpiresAt } }
 }
 
-async function ensureImmutableObject(storage: ResultStorageObjectClient, path: string, body: Uint8Array): Promise<{ ok: true; created: boolean } | { ok: false }> {
+async function ensureImmutableObject(
+  storage: ResultStorageObjectClient,
+  path: string,
+  body: Uint8Array,
+  identity: { kind: string; materialId: string; projectId: string; runId: string; stepId: string },
+): Promise<{ ok: true; created: boolean; body: Uint8Array } | { ok: false }> {
   const uploaded = await storage.upload(path, body, { contentType: 'application/json', cacheControl: '3600', upsert: false })
-  if (!uploaded.error) return { ok: true, created: true }
+  if (!uploaded.error) return { ok: true, created: true, body }
   if (!storage.download) return { ok: false }
   try {
     const existing = await storage.download(path)
     if (existing.error || existing.data === undefined || existing.data === null) return { ok: false }
     const existingBytes = await storageValueToBytes(existing.data)
-    return bytesEqual(existingBytes, body) ? { ok: true, created: false } : { ok: false }
+    if (existingBytes.byteLength > MAX_RESULT_BYTES) return { ok: false }
+    const parsed = JSON.parse(new TextDecoder().decode(existingBytes)) as Record<string, unknown>
+    const matchesIdentity = parsed.kind === identity.kind
+      && parsed.materialId === identity.materialId
+      && parsed.projectId === identity.projectId
+      && parsed.runId === identity.runId
+      && parsed.stepId === identity.stepId
+    return matchesIdentity ? { ok: true, created: false, body: existingBytes } : { ok: false }
   } catch {
     return { ok: false }
   }
@@ -159,9 +173,13 @@ async function storageValueToBytes(value: unknown): Promise<Uint8Array> {
   throw new Error('Nepoznat format privatnog objekta.')
 }
 
-function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.byteLength !== right.byteLength) return false
-  return left.every((value, index) => value === right[index])
+function readExpiresAt(body: Uint8Array): string | null {
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>
+    return typeof parsed.expiresAt === 'string' && Number.isFinite(Date.parse(parsed.expiresAt)) ? parsed.expiresAt : null
+  } catch {
+    return null
+  }
 }
 
 export async function loadAgentRunResults(

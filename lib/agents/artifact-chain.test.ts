@@ -47,4 +47,13 @@ describe('verified agent artifact chain', () => {
 
     expect(artifacts[0].output).toHaveLength(120_000)
   })
+
+  it('rejects artifacts from another run or project even when the caller passes mixed results', () => {
+    const artifacts = selectVerifiedAgentArtifacts([
+      result({ materialId: 'agent-result:other:1', projectId: 'other-project', runId: 'other-run', output: 'Ne smije ući' }),
+      result({ materialId: 'agent-result:valid:1', stepId: 'valid-step', output: 'Smije ući' }),
+    ], { order: 2, projectId: 'project-1', runId: 'run-1' })
+
+    expect(artifacts).toEqual([expect.objectContaining({ stepId: 'valid-step', output: 'Smije ući' })])
+  })
 })

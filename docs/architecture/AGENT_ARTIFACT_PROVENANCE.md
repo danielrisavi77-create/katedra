@@ -16,7 +16,7 @@ verificirani rezultat ranijih koraka.
 - `inputArtifactIds` omogućuje naknadnu rekonstrukciju razloga za rezultat,
   bez spremanja punog rukopisa u shared state;
 - privatni result objekti se pišu immutable (`upsert: false`), a ponovljeni
-  identični upload prihvaća se bez prepisivanja.
+  upload istog rezultatskog identiteta prihvaća se bez prepisivanja.
 
 ## Izvori
 
