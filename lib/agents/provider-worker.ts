@@ -40,6 +40,7 @@ export function createProviderBackedExecutor(input: {
     const results = input.loadResults ? await input.loadResults() : []
     const verifiedArtifacts = selectVerifiedAgentArtifacts(results, { ...step, projectId: input.projectId, runId: input.runId })
     const provider = input.router.providerFor(step.agent, capabilityFor(step.agent, input.sourcePolicy, materials))
+    const model = input.billing.modelFor?.(provider, step) || provider.model || input.billing.model || provider.id
     const requestId = normalizeBillingRequestId(input.billing.requestIdFor?.(step) || `${input.runId}:${step.id}:${step.attempt}`)
     const startedAt = Date.now()
     const agentInput: AgentInput = {
@@ -56,7 +57,7 @@ export function createProviderBackedExecutor(input: {
         projectId: input.projectId,
         requestId,
         agent: step.agent,
-        model: input.billing.modelFor?.(provider, step) || provider.model || input.billing.model || provider.id,
+        model,
       })
       const inheritedCitations = citationBoundAgent(step.agent)
         ? manuscript.sources
@@ -80,6 +81,7 @@ export function createProviderBackedExecutor(input: {
         runId: input.runId,
         agent: step.agent,
         provider: result.provider,
+        model,
         attempt: step.attempt,
         latencyMs: Date.now() - startedAt,
         inputTokens: result.usage?.inputTokens,
@@ -104,6 +106,7 @@ export function createProviderBackedExecutor(input: {
         runId: input.runId,
         agent: step.agent,
         provider: provider.id,
+        model,
         attempt: step.attempt,
         latencyMs: Date.now() - startedAt,
         inputArtifactCount: verifiedArtifacts.length,

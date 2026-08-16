@@ -153,6 +153,38 @@ describe('provider-backed worker context', () => {
     expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_request_id: 'run-1:step-1:1', p_project_id: 'project-1' }))
   })
 
+  it('records the billed model in provider telemetry', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      const provider: AgentProvider = {
+        id: 'fake-provider',
+        model: 'provider-model',
+        capabilities: ['text'],
+        async *run() {
+          yield { type: 'completed', value: { output: 'Telemetrijski nacrt.', usage: { inputTokens: 4, outputTokens: 5 } } }
+        },
+      }
+      const execute = createProviderBackedExecutor({
+        projectId: 'project-1',
+        runId: 'run-1',
+        loadContext: async () => manuscript,
+        router: { providerFor: () => provider },
+        billing: { db: billingDependencies().db, userId: 'user-1', model: 'fallback-model' },
+      })
+
+      await execute({ id: 'step-telemetry', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+
+      const events = info.mock.calls
+        .map(([line]) => {
+          try { return JSON.parse(String(line)) as Record<string, unknown> } catch { return null }
+        })
+        .filter((event): event is Record<string, unknown> => Boolean(event))
+      expect(events).toContainEqual(expect.objectContaining({ eventName: 'agent_provider_completed', model: 'provider-model' }))
+    } finally {
+      info.mockRestore()
+    }
+  })
+
   it('keeps a DOI as DOI evidence instead of labeling it as a URL', async () => {
     const provider: AgentProvider = {
       id: 'fake',
