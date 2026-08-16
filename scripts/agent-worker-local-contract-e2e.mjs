@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 
-const mode = String(process.env.KATEDRA_AGENT_WORKER_CONTRACT_MODE || '').trim().toLowerCase()
+const configuredMode = process.env.KATEDRA_AGENT_WORKER_CONTRACT_MODE
+const mode = String(configuredMode || '').trim().toLowerCase()
 
-if (mode !== 'fixture') {
+if (configuredMode !== undefined && mode !== 'fixture') {
   console.log('BLOCKED_EXTERNAL: deterministic worker contract is separate from authenticated staging credentials')
   process.exit(0)
 }
