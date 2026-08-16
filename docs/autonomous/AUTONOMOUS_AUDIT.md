@@ -4517,3 +4517,49 @@ separate logging path and did not expose a single auditable event contract.
   in the hosted environment still need staging/production evidence.
 - Authenticated money-flow, canonical Lekta/RLS deployment and provider
   credentials remain external release gates.
+
+## Cycle: 2026-08-16o — unified safe errors and Golden Academic Projects
+
+### Root causes selected
+
+Priority: production observability and regression depth. Agentic billing had a
+redacted event path, but the classic `/api/chat` finalizer and worker
+verification path could still carry raw infrastructure messages into logs or
+temporary run state. The source-gate tests also lacked a named, reusable set
+of end-to-end academic failure scenarios.
+
+### Fix
+
+- Routed chat billing and internal worker operational events through the same
+  allowlisted AI event contract as agentic execution.
+- Added bounded `safeErrorCode` normalization; provider, SQL and upstream
+  messages are not written to telemetry or verification issues.
+- Replaced raw worker failure text with stable user-facing outcomes for retry,
+  blocked capability and billing reconciliation states.
+- Added ten `Golden Academic Projects` fixtures spanning seminarski, završni
+  and diplomski work, all source policies, valid evidence, missing passages,
+  unverified/retracted sources, unmapped claims, empty output and independent
+  review failures.
+- Documented how deterministic golden fixtures complement, but do not replace,
+  authenticated staging with real providers and billing.
+
+### Verification
+
+- Focused chat/worker/telemetry/golden regressions: **60 passed**.
+- Katedra: **191 test files passed, 4 skipped; 809 tests passed, 4 skipped**.
+- Typecheck: PASS. Lint: PASS with one pre-existing warning in
+  `app/katedra-engine.js:2744`. Production build: PASS with 28 routes.
+- `npm audit --omit=dev --audit-level=high`: **0 vulnerabilities**.
+- Browser verification: `test:e2e:pisi` passed; the hybrid desktop/mobile
+  light/dark route matrix passed and explicitly reported authenticated
+  checkout/worker/provider coverage as external-blocked.
+- Lekta TypeScript compilation passed; its full suite remains a separate long
+  running check and was not counted as a completed pass in this cycle.
+
+### Remaining issues
+
+- Canonical Lekta/Supabase deployment, RLS/concurrency evidence, authenticated
+  money-flow, provider credentials and production log shipping remain required
+  before enabling paid agent runs.
+- Golden fixtures are contract-level deterministic evidence; they do not prove
+  real web retrieval, OCR quality or provider semantic entailment.

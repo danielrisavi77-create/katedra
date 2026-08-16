@@ -16,6 +16,7 @@ import { loadAgentRunResults, storeAgentStepResult } from '@/lib/agents/run-resu
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { getRequestId, withRequestId } from '@/lib/observability/request-id.js'
+import { logAiEvent, safeErrorCode } from '@/lib/observability/ai-events'
 
 export const runtime = 'nodejs'
 
@@ -65,10 +66,7 @@ async function handlePost(req) {
   try {
     db = createAdminClient()
   } catch (error) {
-    console.error(JSON.stringify({
-      eventName: 'agent_worker_admin_client_unavailable',
-      error: error instanceof Error ? error.message : 'unknown admin client error',
-    }))
+    logAiEvent({ eventName: 'agent_worker_admin_client_unavailable', requestId, userId: 'unknown', projectId: 'unknown', runId, errorCode: safeErrorCode(error), outcome: 'failed' }, 'error')
     return privateJson({ error: 'Agent worker storage trenutno nije konfiguriran.' }, { status: 503 })
   }
   const { data: run, error: runError } = await db.from('agent_runs')

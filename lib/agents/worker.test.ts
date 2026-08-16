@@ -109,6 +109,21 @@ describe('agent worker lease contract', () => {
     expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({ p_status: 'failed', p_requeue: true }))
   })
 
+  it('does not persist raw provider error messages in the run verification record', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
+      .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
+
+    await processClaimedAgentStep({ db: { rpc }, workerId: 'worker-1', runId: 'run-1' }, {
+      execute: vi.fn().mockRejectedValue(Object.assign(new Error('private upstream response with prompt text'), { retryable: true })),
+      verify: vi.fn(),
+    })
+
+    const verification = rpc.mock.calls[1][1].p_verification
+    expect(JSON.stringify(verification)).not.toContain('private upstream response')
+    expect(verification.issues[0].message).toContain('privremeno')
+  })
+
   it('does not retry a non-retryable billing or configuration failure', async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })

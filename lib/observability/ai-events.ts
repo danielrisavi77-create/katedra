@@ -65,6 +65,21 @@ export function logAiEvent(event: AiEventMetadata, level: AiEventLevel = 'info')
   else console.info(line)
 }
 
+/**
+ * Converts an unknown infrastructure/provider error into a bounded code.
+ * Error messages are intentionally never returned because they may contain
+ * SQL, upstream response text or user-supplied content.
+ */
+export function safeErrorCode(value: unknown): string {
+  const candidate = value instanceof Error
+    ? value.name
+    : value && typeof value === 'object' && !Array.isArray(value) && typeof (value as Record<string, unknown>).code === 'string'
+      ? String((value as Record<string, unknown>).code)
+      : ''
+  const normalized = candidate.trim().replace(/[^A-Za-z0-9_.-]+/gu, '_').slice(0, 80)
+  return normalized || 'unknown_error'
+}
+
 function optionalString(value: unknown, key: string, max: number): Record<string, string> {
   if (typeof value !== 'string' || !value.trim()) return {}
   return { [key]: value.trim().slice(0, max) }

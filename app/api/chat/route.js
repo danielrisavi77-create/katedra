@@ -26,6 +26,7 @@ import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveD
 import { AI_COST_LIMITS, AI_MODEL_COST_MULTIPLIERS, estimateChatCharge, maxAffordableOutputTokens, validateCostCeiling } from '@/lib/ai/cost-policy'
 import { countChatAttachmentChars, countChatInputChars, validateChatRequest } from '@/lib/chat/validation'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
+import { logAiEvent, safeErrorCode } from '@/lib/observability/ai-events'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 
@@ -125,14 +126,15 @@ async function handlePOST(req, requestContext = {}) {
       eventName: 'chat_admin_client_unavailable',
       requestId,
       userId,
-      error: error instanceof Error ? error.message : 'unknown admin client error',
+      projectId,
+      errorCode: safeErrorCode(error),
     }))
     return json(503, { error: 'AI pristup trenutno nije konfiguriran za siguran rad.' })
   }
 
   const projectResult = await resolveOwnedProjectResult(db, { userId, projectId })
   if ('error' in projectResult) {
-    console.error(JSON.stringify({ eventName: 'chat_project_lookup_failed', userId, projectId, error: projectResult.error }))
+    logAiEvent({ eventName: 'chat_project_lookup_failed', requestId, userId, projectId, errorCode: safeErrorCode(projectResult.error), outcome: 'failed' }, 'error')
     return json(503, { error: 'Projekt trenutačno nije moguće provjeriti.' })
   }
   const project = projectResult.value
@@ -198,7 +200,7 @@ async function handlePOST(req, requestContext = {}) {
   }
   const releaseReservation = async () => {
     await releaseRateLimitReservation(reservation, (error, attempt) => {
-      console.error(JSON.stringify({ eventName: 'rate_limit_release_failed', attempt, requestId, billingRequestId, userId, error: error?.message }))
+      logAiEvent({ eventName: 'rate_limit_release_failed', attempt, requestId, billingRequestId, userId, projectId: project.projectId || projectId, errorCode: safeErrorCode(error), outcome: 'pending_reconciliation' }, 'error')
     })
   }
 
@@ -208,7 +210,7 @@ async function handlePOST(req, requestContext = {}) {
   if (!adminOverride) {
     const passLookup = await lookupActiveProjectPass(db, { userId, projectId: canonicalProjectId })
     if (!passLookup.ok) {
-      console.error(JSON.stringify({ eventName: 'project_pass_lookup_unavailable', requestId, userId, projectId: canonicalProjectId, error: passLookup.error }))
+      logAiEvent({ eventName: 'project_pass_lookup_unavailable', requestId, userId, projectId: canonicalProjectId, errorCode: safeErrorCode(passLookup.error), outcome: 'failed' }, 'error')
       await releaseReservation()
       return json(503, { error: 'Status Passa trenutno nije moguće provjeriti.' })
     }
@@ -271,7 +273,7 @@ async function handlePOST(req, requestContext = {}) {
       .maybeSingle())
   }
   if (walletError) {
-    console.error(JSON.stringify({ eventName: 'wallet_lookup_failed', requestId, userId, projectId: canonicalProjectId, error: walletError.message }))
+    logAiEvent({ eventName: 'wallet_lookup_failed', requestId, userId, projectId: canonicalProjectId, errorCode: safeErrorCode(walletError), outcome: 'failed' }, 'error')
     await releaseReservation()
     return json(503, { error: 'Stanje walleta trenutno nije dostupno.' })
   }
@@ -451,9 +453,10 @@ async function handlePOST(req, requestContext = {}) {
       }
       const { inputTokens, outputTokens } = usageParser.usage()
       if (inputTokens <= 0 && outputTokens <= 0) {
-        console.error(JSON.stringify({
+        logAiEvent({
           eventName: 'billing_usage_unavailable', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-        }))
+          model, inputTokens: 0, outputTokens: 0, billingState: 'pending_reconciliation', outcome: 'pending_reconciliation',
+        }, 'error')
         let pending
         try {
           pending = await db.rpc('katedra_mark_pending', buildBillingPendingParams({
@@ -469,10 +472,10 @@ async function handlePOST(req, requestContext = {}) {
           pending = { error: pendingError }
         }
         if (pending?.error || pending?.data?.status !== 'pending_reconciliation') {
-          console.error(JSON.stringify({
+          logAiEvent({
             eventName: 'billing_pending_marker_failed', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-            error: pending?.error?.message || 'unknown pending marker result',
-          }))
+            errorCode: pending?.error ? safeErrorCode(pending.error) : 'pending_marker_rejected', outcome: 'pending_reconciliation',
+          }, 'error')
         }
         throw new Error('Billing usage unavailable')
       }
@@ -508,11 +511,10 @@ async function handlePOST(req, requestContext = {}) {
         } catch (pendingError) {
           pending = { error: pendingError }
         }
-        console.error(JSON.stringify({
+        logAiEvent({
           eventName: 'billing_pending_reconciliation', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-          inputTokens, outputTokens, error: error.message,
-          markerError: pending?.error?.message,
-        }))
+          model, inputTokens, outputTokens, charged, billingState: 'pending_reconciliation', errorCode: safeErrorCode(error), outcome: 'pending_reconciliation',
+        }, 'error')
         throw new Error('Billing finalization failed')
       }
       const outcome = resolveBillingOutcome({
@@ -535,16 +537,16 @@ async function handlePOST(req, requestContext = {}) {
         } catch (pendingError) {
           pending = { error: pendingError }
         }
-        console.error(JSON.stringify({
+        logAiEvent({
           eventName: 'billing_pending_reconciliation', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-          inputTokens, outputTokens, reason: outcome.reason, markerError: pending?.error?.message,
-        }))
+          model, inputTokens, outputTokens, charged, billingState: 'pending_reconciliation', reason: outcome.reason, errorCode: pending?.error ? safeErrorCode(pending.error) : undefined, outcome: 'pending_reconciliation',
+        }, 'error')
         throw new Error('Billing finalization pending reconciliation')
       }
-      console.log(JSON.stringify({
+      logAiEvent({
         eventName: 'billing_settled', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-        inputTokens, outputTokens, charged,
-      }))
+        model, inputTokens, outputTokens, charged, billingState: 'settled', outcome: 'settled',
+      })
     })().finally(async () => {
       clearTimeout(upstreamTimeout)
       await releaseReservation()
@@ -568,10 +570,10 @@ async function handlePOST(req, requestContext = {}) {
        } catch (error) {
          usageParser.finish()
         await consume().catch((billingError) => {
-          console.error(JSON.stringify({
+          logAiEvent({
             eventName: 'billing_finalization_failed', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-            error: billingError?.message,
-          }))
+            errorCode: safeErrorCode(billingError), outcome: 'pending_reconciliation',
+          }, 'error')
         })
          try { controller.error(error) } catch { /* client already cancelled */ }
       }
@@ -580,10 +582,10 @@ async function handlePOST(req, requestContext = {}) {
        upstreamController.abort()
        usageParser.finish()
       await consume().catch((billingError) => {
-        console.error(JSON.stringify({
+        logAiEvent({
           eventName: 'billing_finalization_failed', requestId, billingRequestId, userId, projectId: canonicalProjectId,
-          error: billingError?.message,
-        }))
+          errorCode: safeErrorCode(billingError), outcome: 'pending_reconciliation',
+        }, 'error')
       })
       await reader.cancel(reason).catch(() => {})
     }, // klijent prekinuo stream — naplata svejedno prođe

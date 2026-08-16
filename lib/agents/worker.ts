@@ -39,15 +39,17 @@ export async function processClaimedAgentStep(
         billingState: error.billingState,
         issues: [{
           code: error.billingState === 'pending_reconciliation' ? 'billing_reconciliation_pending' : 'billing_released',
-          message: error.message,
+          message: error.billingState === 'pending_reconciliation'
+            ? 'Naplata rezultata čeka sigurnu uskladbu; korak se neće automatski ponoviti.'
+            : 'Naplata rezultata nije potvrđena; korak je zaustavljen.',
         }],
         evidence: [],
       }
       : error instanceof ProviderCapabilityError
-      ? { status: 'blocked', issues: [{ code: 'provider_capability_unavailable', message: error.message }], evidence: [] }
+      ? { status: 'blocked', issues: [{ code: 'provider_capability_unavailable', message: 'Ovaj korak trenutno nije dostupan jer potreban AI alat nije konfiguriran.' }], evidence: [] }
       : isRetryableAgentProviderError(error)
-        ? { status: 'needs_revision', issues: [{ code: 'invalid_output', message: error instanceof Error ? error.message : 'Provider je privremeno nedostupan.' }], evidence: [] }
-      : { status: 'failed', issues: [{ code: 'invalid_output', message: error instanceof Error ? error.message : 'Agent nije uspio.' }], evidence: [] }
+        ? { status: 'needs_revision', issues: [{ code: 'invalid_output', message: 'AI provider je privremeno nedostupan; pokušat ću ponovno.' }], evidence: [] }
+      : { status: 'failed', issues: [{ code: 'invalid_output', message: 'Agent nije uspio dovršiti ovaj korak.' }], evidence: [] }
     result = {
       output: '',
       citations: [],
@@ -66,7 +68,7 @@ export async function processClaimedAgentStep(
       const billingState = verification.billingState || result.billingState
       completionVerification = {
         status: 'failed',
-        issues: [...verification.issues, { code: 'invalid_output', message: error instanceof Error ? error.message : 'Rezultat agenta nije moguće spremiti.' }],
+        issues: [...verification.issues, { code: 'invalid_output', message: 'Rezultat agenta nije moguće sigurno spremiti.' }],
         evidence: verification.evidence,
       }
       if (billingState) completionVerification.billingState = billingState

@@ -3,7 +3,7 @@ import { AI_MODEL_COST_MULTIPLIERS, estimateChatCharge } from '../ai/cost-policy
 import { releaseRateLimitReservation, reserveDistributedRequest } from '../ai/rate-limit.js'
 import type { AgentInput, AgentProvider, AgentResultV1, UsageRecord } from './contracts'
 import { executeAgentProvider } from './provider-execution'
-import { logAiEvent } from '../observability/ai-events'
+import { logAiEvent, safeErrorCode } from '../observability/ai-events'
 
 const OUTPUT_WEIGHT = 5
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096
@@ -69,7 +69,7 @@ export async function executeBilledAgentProvider(
     try {
       result = await executeAgentProvider(input.provider, input.agentInput)
     } catch (error) {
-      logAiEvent({ ...eventContext, eventName: 'agent_provider_failed', errorCode: error instanceof Error ? error.name : 'unknown_provider_error', outcome: 'failed', latencyMs: Date.now() - startedAt }, 'error')
+      logAiEvent({ ...eventContext, eventName: 'agent_provider_failed', errorCode: safeErrorCode(error), outcome: 'failed', latencyMs: Date.now() - startedAt }, 'error')
       throw error
     }
     const usage = normalizeUsage(result.usage)
@@ -167,7 +167,7 @@ async function releaseReservationWithRetry(
       requestId: input.requestId,
       userId: input.userId,
       projectId: input.projectId,
-      errorCode: error instanceof Error ? error.name : 'unknown_release_error',
+      errorCode: safeErrorCode(error),
       outcome: 'pending_reconciliation',
     }, 'error')
   })

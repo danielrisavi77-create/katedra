@@ -20,6 +20,10 @@ it('keeps chat behind project ownership, bounded input, and observable billing f
   expect(source).not.toContain(".from('katedra_usage')")
   expect(source).toContain('pending_reconciliation')
   expect(source).toContain('katedra_mark_pending')
+  expect(source).toContain('logAiEvent')
+  expect(source).toContain('safeErrorCode')
+  expect(source).not.toContain('error: error.message')
+  expect(source).not.toContain('markerError')
   expect(source).not.toContain("detail })")
 })
 

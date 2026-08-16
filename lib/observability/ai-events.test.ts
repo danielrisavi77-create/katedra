@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { logAiEvent, safeAiEvent } from './ai-events'
+import { logAiEvent, safeAiEvent, safeErrorCode } from './ai-events'
 
 describe('AI event telemetry', () => {
   it('keeps operational billing metadata and drops prompt/output content', () => {
@@ -51,5 +51,12 @@ describe('AI event telemetry', () => {
       error.mockRestore()
       info.mockRestore()
     }
+  })
+
+  it('derives a bounded error code without exposing an error message', () => {
+    expect(safeErrorCode({ code: 'PGRST204', message: 'private database detail' })).toBe('PGRST204')
+    expect(safeErrorCode(new Error('private provider detail'))).toBe('Error')
+    expect(safeErrorCode({ message: 'private detail' })).toBe('unknown_error')
+    expect(safeErrorCode({ code: 'bad code with spaces' })).toBe('bad_code_with_spaces')
   })
 })
