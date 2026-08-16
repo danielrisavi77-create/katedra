@@ -89,6 +89,18 @@ describe('resolveProjectCapability', () => {
       unlimited: true,
     })
   })
+
+  it('does not allow the admin allowlist to replace a Pass in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_ADMIN_OVERRIDE_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_ADMIN_EMAILS', 'danielrisavi77@gmail.com')
+    const db = createDb({ userEmail: 'danielrisavi77@gmail.com', emailConfirmedAt: '2026-08-15T10:00:00.000Z', lock: null, entitlement: false })
+
+    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'web_research' })).resolves.toMatchObject({
+      allowed: false,
+      code: 'pass_required',
+    })
+  })
 })
 
 describe('resolveCanonicalProjectPass', () => {

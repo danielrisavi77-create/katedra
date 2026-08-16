@@ -122,4 +122,23 @@ describe('GET /api/balance entitlement errors', () => {
     expect(mocks.lookupActiveProjectPass).not.toHaveBeenCalled()
     expect(mocks.authorizeProjectAiRequest).not.toHaveBeenCalled()
   })
+
+  it('does not return unlimited balance for the admin allowlist in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-daniel' } } }) } })
+    mocks.createAdminClient.mockReturnValue({})
+    mocks.resolveOwnedProject.mockResolvedValue({ projectId: 'project-1', guestProjectId: 'guest-1' })
+    mocks.isAdminOverrideUser.mockReturnValue(true)
+    mocks.readProjectLock.mockResolvedValue({ ok: true, lock: null })
+    mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: false, reason: 'no-pass', balance: 0 })
+
+    const response = await GET(new Request('http://localhost/api/balance?projectId=project-1'))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ hasPass: false, balance: 0, low: true, reason: 'no-pass' })
+    expect(mocks.readProjectLock).toHaveBeenCalled()
+    expect(mocks.authorizeProjectAiRequest).toHaveBeenCalled()
+  })
 })

@@ -68,7 +68,8 @@ async function handleGET(req) {
   // This is an explicit account override, not a synthetic Stripe Pass. Keep
   // the project ownership check above and avoid reading entitlement/wallet
   // state for the allowlisted account.
-  if (project && isAdminOverrideUser(user)) {
+  const localAdminOverride = isAdminOverrideUser(user) && process.env.NODE_ENV !== 'production'
+  if (project && localAdminOverride) {
     return Response.json({ hasPass: false, adminOverride: true, unlimited: true, balance: null, low: false })
   }
 

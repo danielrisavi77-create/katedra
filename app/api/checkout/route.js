@@ -46,7 +46,7 @@ async function handlePOST(req) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
-  if (isAdminOverrideUser(user)) {
+  if (isAdminOverrideUser(user) && process.env.NODE_ENV !== 'production') {
     return Response.json({ error: 'Ovaj račun ima aktivan admin pristup; plaćanje nije potrebno.', adminOverride: true }, { status: 409 })
   }
   if (process.env.NODE_ENV === 'production' && process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {

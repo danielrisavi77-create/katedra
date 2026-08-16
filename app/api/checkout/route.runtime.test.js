@@ -102,6 +102,30 @@ describe('POST /api/checkout runtime guards', () => {
     expect(mocks.getStripe).not.toHaveBeenCalled()
   })
 
+  it('does not bypass checkout for the admin allowlist in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000')
+    mocks.createClient.mockResolvedValue({
+      ...projectDb({ project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, [
+        { data: { user_id: 'user-daniel', project_id: projectId, guest_project_id: null, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
+        { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
+        { data: null, error: null },
+      ]),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-daniel', email: 'danielrisavi77@gmail.com', email_confirmed_at: '2026-08-15T10:00:00.000Z' } } }) },
+    })
+    mocks.isAdminOverrideUser.mockReturnValue(true)
+    mocks.validateCheckoutProject.mockReturnValue({ ok: true })
+    const create = vi.fn().mockResolvedValue({ url: 'https://checkout.test/session' })
+    mocks.getStripe.mockReturnValue({ checkout: { sessions: { create } } })
+
+    const response = await POST(request({ package: 'diplomski', projectId, topic: 'Tema', lockConfirmation: true }))
+
+    expect(response.status).toBe(200)
+    expect(create).toHaveBeenCalled()
+  })
+
   it('rejects an anonymous checkout before Stripe initialization', async () => {
     mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) } })
 

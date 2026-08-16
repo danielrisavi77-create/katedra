@@ -10,10 +10,14 @@ by `KATEDRA_ADMIN_EMAILS`.
   comma-separated server-side allowlist.
 - `user_metadata` is never used for authorization.
 - Canonical project ownership is still required for every project operation.
+- The override is available only when `NODE_ENV` is not `production`; it is a
+  local development/support convenience, never a production entitlement.
 - The override does not create a Stripe Pass, alter Lekta entitlements, or
   bypass global rate/concurrency/input-size protection.
-- Provider usage is still recorded with a zero user charge for the override
-  account. The real provider cost remains an application responsibility.
+- In local development, provider usage is intentionally free for the
+  allowlisted account and the real provider cost remains an application
+  responsibility. Production always uses the normal Pass, wallet, policy and
+  billing gates.
 - In local development only, the override may use the provider without the
   Lekta billing RPC configured; the request is never presented as settled and
   no billing RPC is called. Production always requires the real v2 settlement
@@ -34,8 +38,10 @@ KATEDRA_ADMIN_OVERRIDE_ENABLED=true
 KATEDRA_ADMIN_EMAILS=danielrisavi77@gmail.com
 ```
 
-Production must set the same values in its protected deployment environment,
-not in the repository and not as `NEXT_PUBLIC_*` variables.
+Production must not enable this override. Keep
+`KATEDRA_ADMIN_OVERRIDE_ENABLED=false` and omit the allowlist from the
+protected production environment; these values must never be exposed as
+`NEXT_PUBLIC_*` variables.
 
 ## Admin page
 

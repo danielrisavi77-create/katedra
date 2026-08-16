@@ -280,8 +280,8 @@ describe('POST /api/chat runtime guards', () => {
     expect(mocks.resolveOwnedProject).not.toHaveBeenCalled()
   })
 
-  it('lets the explicit admin override stream without Pass or wallet gates and records zero user charge', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
+  it('lets the explicit local admin override stream without Pass or wallet gates', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
     const release = vi.fn().mockResolvedValue(undefined)
@@ -318,7 +318,37 @@ describe('POST /api/chat runtime guards', () => {
     expect(response.status).toBe(200)
     expect(mocks.lookupActiveProjectPass).not.toHaveBeenCalled()
     expect(mocks.authorizeProjectAiRequest).not.toHaveBeenCalled()
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_charged: 0, p_project_id: project.projectId }))
+    expect(rpc).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let the admin allowlist bypass production Pass and wallet gates', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
+    vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
+    const release = vi.fn().mockResolvedValue(undefined)
+    const db = { rpc: vi.fn() }
+    mocks.createClient.mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: {
+      id: 'user-daniel', email: 'danielrisavi77@gmail.com', email_confirmed_at: '2026-08-15T10:00:00.000Z',
+    } } }) } })
+    mocks.createAdminClient.mockReturnValue(db)
+    mocks.resolveOwnedProject.mockResolvedValue(project)
+    mocks.isAdminOverrideUser.mockReturnValue(true)
+    mocks.validateChatRequest.mockReturnValue({ ok: true })
+    mocks.countChatInputChars.mockReturnValue(3)
+    mocks.isDistributedRateLimitConfigured.mockReturnValue(true)
+    mocks.reserveDistributedRequest.mockResolvedValue({ allowed: true, release })
+    mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: false })
+    mocks.authorizeProjectAiRequest.mockResolvedValue({ allowed: false, reason: 'no-pass', balance: 0 })
+
+    const response = await POST(request({ projectId: project.projectId, capability: 'contextual_ai', messages: [{ role: 'user', content: 'Bok' }] }))
+
+    expect(response.status).toBe(402)
+    expect(mocks.lookupActiveProjectPass).toHaveBeenCalledWith(db, { userId: 'user-daniel', projectId: project.projectId })
+    expect(mocks.authorizeProjectAiRequest).toHaveBeenCalledWith(db, {
+      userId: 'user-daniel', projectId: project.projectId, hasPass: false,
+    })
+    expect(db.rpc).not.toHaveBeenCalled()
     expect(release).toHaveBeenCalledTimes(1)
   })
 

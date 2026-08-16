@@ -95,7 +95,7 @@ async function handlePOST(req, requestContext = {}) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return json(401, { error: 'Prijavi se za korištenje Katedre.' })
   const userId = user.id
-  const adminOverride = isAdminOverrideUser(user)
+  const adminOverride = isAdminOverrideUser(user) && process.env.NODE_ENV !== 'production'
   // The allowlisted local admin account is intentionally free during local
   // development, where the canonical Lekta billing RPC is not available yet.
   // Production must still use the real settlement contract below.

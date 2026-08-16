@@ -38,6 +38,11 @@ export function getAdminAccess(
   runtime: AdminAccessRuntime = process.env,
 ): AdminAccessResult {
   if (!user) return { allowed: false, reason: 'unauthenticated' }
+  // This is a local development convenience for the explicitly allowlisted
+  // account, never a production entitlement or billing bypass.
+  if (runtime.NODE_ENV === 'production') {
+    return { allowed: false, reason: 'override_disabled' }
+  }
   if (runtime.KATEDRA_ADMIN_OVERRIDE_ENABLED !== 'true') {
     return { allowed: false, reason: 'override_disabled' }
   }

@@ -35,6 +35,10 @@ describe('server-side admin access', () => {
     expect(isAdminOverrideUser(confirmedDaniel, { ...runtime, KATEDRA_ADMIN_OVERRIDE_ENABLED: 'false' })).toBe(false)
   })
 
+  it('disables the local admin override in production', () => {
+    expect(isAdminOverrideUser(confirmedDaniel, { ...runtime, NODE_ENV: 'production' })).toBe(false)
+  })
+
   it('exposes an explicit reason for the admin page without exposing the allowlist', () => {
     expect(getAdminAccess(confirmedDaniel, runtime)).toEqual({ allowed: true, reason: 'allowlisted_confirmed_email' })
     expect(getAdminAccess({ ...confirmedDaniel, email: 'other@example.com' }, runtime)).toEqual({ allowed: false, reason: 'email_not_allowlisted' })

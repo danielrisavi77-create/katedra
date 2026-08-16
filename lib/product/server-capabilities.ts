@@ -43,7 +43,7 @@ export async function resolveProjectCapability(
   // Admin access is an explicit server-side support override. It is checked
   // only after canonical ownership, so it cannot become a cross-project key.
   // It also does not create or pretend that a Stripe/Lekta Pass exists.
-  if (isAdminOverrideUser(authenticatedUser)) {
+  if (process.env.NODE_ENV !== 'production' && isAdminOverrideUser(authenticatedUser)) {
     return decideProjectCapability({
       userId: input.userId,
       projectId: owned.projectId,
