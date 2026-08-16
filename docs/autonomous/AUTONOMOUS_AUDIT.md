@@ -4640,6 +4640,31 @@ release or reconciliation record.
   behavior; it does not prove a deployed canonical RPC or real provider
   semantic entailment.
 
+## Cycle: 2026-08-16s — release evidence URL hardening
+
+### Root cause selected
+
+Release readiness accepted any parseable HTTPS URL in operator-supplied
+evidence. A URL containing embedded credentials could therefore be recorded as
+release evidence, increasing the chance of accidental secret disclosure.
+
+### Fix
+
+- Evidence URLs now require HTTPS, a hostname and no username or password
+  component.
+- Added a regression for credential-bearing deployment URLs; readiness remains
+  fail-closed when the URL is unsafe.
+
+### Verification
+
+- Release readiness tests: **5 passed**.
+- Foundation and Academic browser CI gates passed for commit `1d67231`.
+
+### Remaining issues
+
+- This protects the evidence parser only; it does not create canonical Lekta,
+  Supabase, Stripe or provider evidence. Those release blockers remain.
+
 ## Cycle: 2026-08-16r — explicit upstream artifact chain
 
 ### Root cause selected

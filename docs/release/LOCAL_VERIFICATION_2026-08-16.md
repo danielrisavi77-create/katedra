@@ -6,7 +6,7 @@ podatke.
 
 ## Prošlo lokalno
 
-Na Katedra repozitoriju, commit `e85aa79`, prošli su:
+Na Katedra repozitoriju, commit `1d67231`, prošli su:
 
 ```text
 npm.cmd run typecheck
@@ -43,11 +43,11 @@ da je isti ugovor deployan u canonical Supabase projektu.
 
 ## Udaljeni master gateovi
 
-Commit `e85aa79` je objavljen na udaljeni `master` i oba gatea su završila
+Commit `1d67231` je objavljen na udaljeni `master` i oba gatea su završila
 uspješno:
 
-- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31971810806)
-- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31971810732)
+- [Foundation check](https://github.com/danielrisavi77-create/katedra/actions/runs/31972125879)
+- [Academic Suite browser E2E](https://github.com/danielrisavi77-create/katedra/actions/runs/31972125872)
 
 Ovo potvrđuje CI i javne/browser regresije na GitHubu. Ne zamjenjuje staging
 dokaz za authenticated commerce, canonical Lekta RPC/RLS, providere ili worker.
