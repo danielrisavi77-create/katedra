@@ -1,6 +1,8 @@
 name: Academic Suite browser E2E
 
 on:
+  push:
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:

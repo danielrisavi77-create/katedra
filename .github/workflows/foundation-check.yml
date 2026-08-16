@@ -3,6 +3,7 @@ name: Foundation check
 on:
   push:
     branches:
+      - master
       - architecture/lekta-katedra-foundation-v0.1
   pull_request:
     branches:
