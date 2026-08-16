@@ -1,8 +1,10 @@
 import type { CitationEvidence, CitationVerification, CitationVerificationMethod } from './contracts'
+import { mapWithConcurrency } from '../async/map-limited'
 
 const DOI_PATTERN = /^10\.\d{4,9}\/\S+$/i
 const DEFAULT_TIMEOUT_MS = 8_000
 const MAX_REGISTRY_RESPONSE_BYTES = 512 * 1024
+const MAX_CONCURRENT_CITATION_VERIFICATIONS = 4
 
 type FetchImplementation = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -20,7 +22,22 @@ export function createIndependentCitationVerifier({
   timeoutMs?: number
 } = {}): IndependentCitationVerifier {
   return {
-    verify: async (citations) => Promise.all(citations.map((citation) => verifyCitation(citation, { fetchImpl, now, timeoutMs }))),
+    verify: async (citations) => {
+      const cache = new Map<string, Promise<CitationEvidence>>()
+      return mapWithConcurrency(citations, MAX_CONCURRENT_CITATION_VERIFICATIONS, async (citation) => {
+        const key = citationVerificationKey(citation)
+        if (!key) return verifyCitation(citation, { fetchImpl, now, timeoutMs })
+        const pending = cache.get(key) || verifyCitation(citation, { fetchImpl, now, timeoutMs })
+        cache.set(key, pending)
+        const verified = await pending
+        return {
+          ...citation,
+          ...(verified.doi ? { doi: verified.doi } : {}),
+          verified: verified.verified,
+          ...(verified.verification ? { verification: verified.verification } : {}),
+        }
+      })
+    },
   }
 }
 
@@ -147,6 +164,21 @@ function normalizeDoi(value: string | undefined): string | null {
   if (typeof value !== 'string') return null
   const normalized = value.trim().replace(/^doi:\s*/i, '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
   return DOI_PATTERN.test(normalized) ? normalized : null
+}
+
+function citationVerificationKey(citation: CitationEvidence): string | null {
+  const locator = normalizeDoi(citation.doi)
+    ? `doi:${normalizeDoi(citation.doi)!.toLocaleLowerCase()}`
+    : isHttpUrl(citation.url)
+      ? `url:${citation.url!.trim().toLocaleLowerCase()}`
+      : ''
+  if (!locator) return null
+  return [
+    locator,
+    normalizeText(citation.title || ''),
+    normalizeText(citation.authors || ''),
+    citation.year === undefined ? '' : String(citation.year),
+  ].join('|')
 }
 
 function isHttpUrl(value: unknown): value is string {

@@ -117,4 +117,41 @@ describe('independent citation verification', () => {
       expect.objectContaining({ verified: false, verification: expect.objectContaining({ status: 'blocked' }) }),
     ])
   })
+
+  it('limits concurrent registry checks for a large citation batch', async () => {
+    let active = 0
+    let peak = 0
+    const fetchImpl = vi.fn(async () => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise((resolve) => setTimeout(resolve, 2))
+      active -= 1
+      return new Response(JSON.stringify({ message: { title: ['Matching title'] } }), { status: 200 })
+    })
+    const verifier = createIndependentCitationVerifier({ fetchImpl })
+    const citations = Array.from({ length: 12 }, (_, index) => ({
+      id: `doi-${index}`,
+      title: 'Matching title',
+      doi: `10.1000/example-${index}`,
+      verified: false,
+    }))
+
+    await expect(verifier.verify(citations)).resolves.toHaveLength(citations.length)
+    expect(peak).toBeLessThanOrEqual(4)
+  })
+
+  it('deduplicates registry checks for repeated DOI evidence', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ message: { title: ['Matching title'] } }), { status: 200 }))
+    const verifier = createIndependentCitationVerifier({ fetchImpl })
+    const citations = [
+      { id: 'claim-a', title: 'Matching title', doi: '10.1000/example', verified: false },
+      { id: 'claim-b', title: 'Matching title', doi: 'doi:10.1000/example', verified: false },
+    ]
+
+    const results = await verifier.verify(citations)
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(results).toHaveLength(2)
+    expect(results.every((citation) => citation.verified)).toBe(true)
+  })
 })
