@@ -63,4 +63,38 @@ describe('AgenticReview', () => {
     expect(screen.getByText('Neprovjereni izvor')).toBeTruthy()
     expect(screen.queryByRole('link', { name: 'javascript:alert(1)' })).toBeNull()
   })
+
+  it('shows claim-level passages without presenting them as automatic proof', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'z', now: '2026-08-14T10:00:00.000Z' })
+    const first = manuscript.sections[0]
+    const baseDraft = upsertSectionRevision(createAgenticDraft({ projectId: manuscript.projectId, runId: 'run-1', base: manuscript }), {
+      sectionId: first.id,
+      baseRevision: first.updatedAt,
+      proposedContent: plainTextDocument('Novi uvod.'),
+      status: 'verified',
+      updatedAt: '2026-08-14T10:02:00.000Z',
+    })
+    const draft = {
+      ...baseDraft,
+      sections: baseDraft.sections.map((revision) => revision.sectionId === first.id ? {
+        ...revision,
+        status: 'verified' as const,
+        baseRevision: first.updatedAt,
+        proposedContent: plainTextDocument('Novi uvod.'),
+        claims: [{
+          id: 'claim-1',
+          text: 'Tvrdnja o istraživanju.',
+          citationIds: ['source-1'],
+          support: [{ citationId: 'source-1', quote: 'Relevantan odlomak iz izvora.', locator: 'str. 4' }],
+        }],
+      } : revision),
+    }
+
+    render(<AgenticReview manuscript={manuscript} draft={draft} onAccept={vi.fn()} onEdit={vi.fn()} onReject={vi.fn()} />)
+
+    expect(screen.getByText('Tvrdnje i dokazni trag')).toBeTruthy()
+    expect(screen.getByText('Tvrdnja o istraživanju.')).toBeTruthy()
+    expect(screen.getByText('Relevantan odlomak iz izvora.')).toBeTruthy()
+    expect(screen.getByText(/nije automatski dokaz/i)).toBeTruthy()
+  })
 })

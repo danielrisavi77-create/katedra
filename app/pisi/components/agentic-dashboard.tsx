@@ -9,7 +9,7 @@ import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
 import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from './agentic-timeline'
-import { AgenticReview, type AgenticReviewDraft, type AgenticReviewEvidence } from './agentic-review'
+import { AgenticReview, type AgenticReviewClaim, type AgenticReviewDraft, type AgenticReviewEvidence } from './agentic-review'
 import { AgenticEventFeed } from './agentic-event-feed'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 
@@ -245,7 +245,7 @@ function normalizeDraft(body: Record<string, unknown>, manuscript: ManuscriptV1,
     })
     draft = {
       ...nextDraft,
-      sections: nextDraft.sections.map((revision) => revision.sectionId === sectionId ? { ...revision, evidence: normalizeEvidence(result, verification) } : revision),
+      sections: nextDraft.sections.map((revision) => revision.sectionId === sectionId ? { ...revision, evidence: normalizeEvidence(result, verification), claims: normalizeClaims(result) } : revision),
     }
   }
   return draft.sections.length ? draft : null
@@ -266,10 +266,38 @@ function normalizeEvidence(result: Record<string, unknown>, verification: Record
     const candidateUrl = typeof item.url === 'string' ? item.url : ''
     const url = isSafeManuscriptHref(candidateUrl) ? candidateUrl : undefined
     const doi = typeof item.doi === 'string' ? item.doi : undefined
+    const verification = item.verification && typeof item.verification === 'object' ? item.verification as Record<string, unknown> : undefined
     const key = id || url || doi || title || ''
     if (!key || seen.has(key)) return []
     seen.add(key)
-    return [{ id: key, title, url, doi, verified: item.verified === true, status: typeof item.status === 'string' ? item.status : undefined }]
+    const status = verification?.retracted === true
+      ? 'Povučen izvor'
+      : typeof item.status === 'string' ? item.status : undefined
+    return [{ id: key, title, url, doi, verified: item.verified === true, status }]
+  })
+}
+
+function normalizeClaims(result: Record<string, unknown>): AgenticReviewClaim[] {
+  if (!Array.isArray(result.claims)) return []
+  return result.claims.slice(0, 200).flatMap((value) => {
+    if (!value || typeof value !== 'object') return []
+    const claim = value as Record<string, unknown>
+    const id = typeof claim.id === 'string' ? claim.id.trim().slice(0, 200) : ''
+    const text = typeof claim.text === 'string' ? claim.text.trim().slice(0, 10_000) : ''
+    const citationIds = Array.isArray(claim.citationIds)
+      ? [...new Set(claim.citationIds.filter((id): id is string => typeof id === 'string' && Boolean(id.trim())).map((id) => id.trim().slice(0, 200)))].slice(0, 50)
+      : []
+    if (!id || !text) return []
+    const support = Array.isArray(claim.support) ? claim.support.slice(0, 20).flatMap((value) => {
+      if (!value || typeof value !== 'object') return []
+      const item = value as Record<string, unknown>
+      const citationId = typeof item.citationId === 'string' ? item.citationId.trim().slice(0, 200) : ''
+      const quote = typeof item.quote === 'string' ? item.quote.trim().slice(0, 2_000) : ''
+      const locator = typeof item.locator === 'string' ? item.locator.trim().slice(0, 200) : ''
+      if (!citationId || !quote) return []
+      return [{ citationId, quote, ...(locator ? { locator } : {}) }]
+    }) : []
+    return [{ id, text, citationIds, ...(support.length ? { support } : {}) }]
   })
 }
 

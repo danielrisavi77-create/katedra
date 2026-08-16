@@ -8,7 +8,9 @@ import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 
 export type AgenticReviewEvidence = { id: string; title?: string; url?: string; doi?: string; verified?: boolean; status?: string }
-export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[] }
+export type AgenticReviewSupport = { citationId: string; quote: string; locator?: string }
+export type AgenticReviewClaim = { id: string; text: string; citationIds: string[]; support?: AgenticReviewSupport[] }
+export type AgenticReviewRevision = AgenticDraftV1['sections'][number] & { evidence?: AgenticReviewEvidence[]; claims?: AgenticReviewClaim[] }
 export type AgenticReviewDraft = Omit<AgenticDraftV1, 'sections'> & { sections: AgenticReviewRevision[] }
 
 export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }: { manuscript: ManuscriptV1; draft: AgenticReviewDraft; onAccept: (sectionIds?: string[]) => Promise<boolean>; onEdit: (sectionId: string, content: TiptapNode) => void; onReject: (sectionId: string) => void }) {
@@ -49,6 +51,15 @@ export function AgenticReview({ manuscript, draft, onAccept, onEdit, onReject }:
           <strong>Izvori i dokazi</strong>
           {evidence.length > 0 ? <ul>{evidence.map((item) => <li key={item.id}><span>{item.title || item.url || item.doi || 'Neimenovani izvor'}</span>{item.url && isSafeManuscriptHref(item.url) && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}{item.doi && <small>DOI: {item.doi}</small>}<em>{item.verified ? 'Provjereno' : item.status || 'Potrebna provjera'}</em></li>)}</ul> : <p>Nema priloženih izvora za ovaj rezultat.</p>}
         </div>
+        {revision.claims && revision.claims.length > 0 && <div className="pis-review-claims" aria-label={`Tvrdnje i dokazni trag za ${section.title}`}>
+          <div className="pis-review-claims-heading"><strong>Tvrdnje i dokazni trag</strong><span>{revision.claims.length} tvrdnji</span></div>
+          <p className="pis-review-claims-note">Odlomak je trag za ručnu provjeru, nije automatski dokaz istinitosti tvrdnje.</p>
+          <ol>{revision.claims.map((claim) => <li key={claim.id}>
+            <p className="pis-review-claim-text">{claim.text}</p>
+            <small>Izvor: {claim.citationIds.join(', ') || 'nije povezan'}</small>
+            {claim.support && claim.support.length > 0 ? <ul className="pis-review-support-list">{claim.support.map((support, index) => <li key={`${support.citationId}-${index}`}><q>{support.quote}</q>{support.locator && <span>{support.locator}</span>}</li>)}</ul> : <em className="pis-review-claim-missing">Nema priloženog odlomka za provjeru.</em>}
+          </li>)}</ol>
+        </div>}
         {revision.verificationMessage && <p className="pis-review-verification"><strong>{revision.status === 'blocked' ? 'Potrebna provjera · ' : ''}Verifikator</strong> {revision.verificationMessage}</p>}
         {canReview && <div className="pis-review-item-actions"><button type="button" onClick={() => textareas.current[section.id]?.focus()} aria-label={`Uredi ${section.title}`}>Uredi</button><button type="button" className="is-primary" disabled={!acceptable} onClick={() => void accept([section.id])} aria-label={`Prihvati ${section.title}`}>Prihvati</button><button type="button" onClick={() => onReject(section.id)} aria-label={`Odbaci ${section.title}`}>Odbaci</button></div>}
       </article>

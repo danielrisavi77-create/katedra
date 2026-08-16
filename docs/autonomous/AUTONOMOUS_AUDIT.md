@@ -4440,3 +4440,38 @@ did not expose the commit variable required by the fail-closed preflight.
   required before enabling autonomous paid runs.
 - Canonical Lekta/Supabase deployment, authenticated money-flow/agentic E2E,
   provider credentials and production release evidence remain external gates.
+
+## Cycle: 2026-08-16m — evidence review UX and source integrity
+
+### Root causes selected
+
+Priority: make provenance useful to the person reviewing a generated section,
+not only to the backend. The review screen showed source metadata, but not the
+claim-to-passage relationship; Crossref identity checks also did not account
+for cited authors or retraction relations.
+
+### Fix
+
+- Agentic review now shows each generated claim, linked citation IDs, quoted
+  support passages and locators.
+- The UI explicitly explains that a passage is a review aid, not an automatic
+  proof of semantic truth.
+- Crossref verification compares cited authors when supplied and blocks
+  records marked as retracted through relation/update metadata.
+- Provider and temporary-result validators preserve and bound author metadata
+  and retraction status.
+
+### Verification
+
+- Focused source/review/dashboard regressions: **49 passed**.
+- Katedra: **189 test files passed, 4 skipped; 794 tests passed, 4 skipped**.
+- Typecheck: PASS. Lint: PASS with one pre-existing warning in
+  `app/katedra-engine.js:2744`. Production build: PASS with 28 routes.
+- Browser verification: `test:e2e:pisi` passed; upload/reload and responsive
+  checks remain green.
+
+### Remaining issues
+
+- Claim passages still require a real retrieval/entailment verifier and do not
+  by themselves establish truth. Authenticated staging, canonical Lekta/RLS,
+  provider credentials and production release evidence remain required.

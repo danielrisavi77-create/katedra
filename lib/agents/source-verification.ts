@@ -62,9 +62,15 @@ async function verifyDoi(
     if (!message) return withVerification(citation, { ...verificationBase, status: 'needs_review' })
 
     const titleMatch = !citation.title || normalizeText(citation.title) === normalizeText(message.title)
+    const authorMatch = !citation.authors || !citation.authors.trim()
+      ? true
+      : Boolean(message.authors && authorsMatch(citation.authors, message.authors))
     const yearMatch = !citation.year || (message.year !== undefined && citation.year === message.year)
-    const status = titleMatch && yearMatch ? 'verified' : 'needs_review'
-    return withVerification(citation, { ...verificationBase, status, titleMatch, yearMatch })
+    if (message.retracted) {
+      return withVerification(citation, { ...verificationBase, status: 'blocked', titleMatch, authorMatch, yearMatch, retracted: true })
+    }
+    const status = titleMatch && authorMatch && yearMatch ? 'verified' : 'needs_review'
+    return withVerification(citation, { ...verificationBase, status, titleMatch, authorMatch, yearMatch })
   } catch {
     return withVerification(citation, { ...verificationBase, status: 'needs_review' })
   }
@@ -97,16 +103,39 @@ async function fetchJsonWithTimeout(
   }
 }
 
-function readCrossrefMessage(value: unknown): { title?: string; year?: number } | null {
+function readCrossrefMessage(value: unknown): { title?: string; authors?: string; year?: number; retracted?: boolean } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const message = (value as { message?: unknown }).message
   if (!message || typeof message !== 'object' || Array.isArray(message)) return null
-  const candidate = message as { title?: unknown; published?: { ['date-parts']?: unknown } }
+  const candidate = message as { title?: unknown; author?: unknown; published?: { ['date-parts']?: unknown }; relation?: unknown; ['update-to']?: unknown }
   const title = Array.isArray(candidate.title) && typeof candidate.title[0] === 'string' ? candidate.title[0] : undefined
+  const authors = Array.isArray(candidate.author)
+    ? candidate.author.map((author) => {
+      if (!author || typeof author !== 'object') return ''
+      const value = author as { given?: unknown; family?: unknown }
+      return [value.given, value.family].filter((part): part is string => typeof part === 'string' && Boolean(part.trim())).join(' ')
+    }).filter(Boolean).join('; ')
+    : ''
   const dateParts = candidate.published?.['date-parts']
   const year = Array.isArray(dateParts) && Array.isArray(dateParts[0]) && typeof dateParts[0][0] === 'number' ? dateParts[0][0] : undefined
-  if (!title && !year) return null
-  return { title, year }
+  if (!title && !year && !authors) return null
+  const retracted = containsRetractionMarker(candidate.relation) || containsRetractionMarker(candidate['update-to'])
+  return { title, ...(authors ? { authors } : {}), year, ...(retracted ? { retracted: true } : {}) }
+}
+
+function authorsMatch(cited: string, registry: string): boolean {
+  const citedTokens = new Set(normalizeText(cited).split(' ').filter((token) => token.length >= 2))
+  const registryTokens = new Set(normalizeText(registry).split(' ').filter((token) => token.length >= 2))
+  return citedTokens.size > 0 && [...citedTokens].every((token) => registryTokens.has(token))
+}
+
+function containsRetractionMarker(value: unknown): boolean {
+  if (value === undefined || value === null) return false
+  try {
+    return /retract/i.test(JSON.stringify(value))
+  } catch {
+    return false
+  }
 }
 
 function withVerification(citation: CitationEvidence, verification: CitationVerification): CitationEvidence {

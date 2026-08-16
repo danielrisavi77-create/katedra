@@ -43,6 +43,7 @@ export interface AgentProvider {
 export interface CitationEvidence {
   id: string
   title?: string
+  authors?: string
   year?: number
   url?: string
   doi?: string
@@ -61,6 +62,7 @@ export interface CitationVerification {
   authorMatch?: boolean
   yearMatch?: boolean
   evidenceUrl?: string
+  retracted?: boolean
 }
 
 export interface ClaimSupport {

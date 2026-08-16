@@ -24,6 +24,9 @@ Providerov `verified` flag se nikada ne prihvaća kao dokaz. Provider vraća sam
 kandidate, nakon čega server:
 
 - DOI provjerava preko fiksnog Crossref endpointa i uspoređuje naslov/godinu;
+- kada su autori navedeni, uspoređuje i imena autora s registarskim zapisom;
+- Crossref relation/update zapisi koji označavaju povlačenje rada blokiraju
+  izvor umjesto da ga označe verificiranim;
 - proizvoljni URL ne dohvaća sa servera zbog SSRF rizika, nego ga ostavlja u
   `needs_review` stanju;
 - agenticni source/writing/citation/review verifikatori zahtijevaju

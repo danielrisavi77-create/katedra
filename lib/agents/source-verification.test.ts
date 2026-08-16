@@ -7,16 +7,17 @@ describe('independent citation verification', () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       message: {
         title: ['Matching title'],
+        author: [{ given: 'Jane', family: 'Doe' }],
         published: { 'date-parts': [[2024]] },
       },
     }), { status: 200, headers: { 'content-type': 'application/json' } }))
     const verifier = createIndependentCitationVerifier({ fetchImpl, now: () => '2026-08-16T12:00:00.000Z' })
 
-    await expect(verifier.verify([{ id: 'doi-1', title: 'Matching title', year: 2024, doi: '10.1000/example', verified: false }])).resolves.toEqual([
+    await expect(verifier.verify([{ id: 'doi-1', title: 'Matching title', authors: 'Jane Doe', year: 2024, doi: '10.1000/example', verified: false }])).resolves.toEqual([
       expect.objectContaining({
         id: 'doi-1',
         verified: true,
-        verification: expect.objectContaining({ status: 'verified', method: 'crossref', titleMatch: true, yearMatch: true }),
+        verification: expect.objectContaining({ status: 'verified', method: 'crossref', titleMatch: true, authorMatch: true, yearMatch: true }),
       }),
     ])
     expect(fetchImpl).toHaveBeenCalledWith('https://api.crossref.org/works/10.1000%2Fexample', expect.objectContaining({ signal: expect.any(AbortSignal) }))
@@ -32,6 +33,20 @@ describe('independent citation verification', () => {
     ])
   })
 
+  it('does not verify a DOI when cited authors do not match registry metadata', async () => {
+    const verifier = createIndependentCitationVerifier({
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ message: {
+        title: ['Matching title'],
+        author: [{ given: 'Jane', family: 'Doe' }],
+        published: { 'date-parts': [[2024]] },
+      } }), { status: 200 })),
+    })
+
+    await expect(verifier.verify([{ id: 'doi-author', title: 'Matching title', authors: 'Mark Smith', year: 2024, doi: '10.1000/example', verified: false }])).resolves.toEqual([
+      expect.objectContaining({ verified: false, verification: expect.objectContaining({ status: 'needs_review', authorMatch: false }) }),
+    ])
+  })
+
   it('does not verify a cited year when the registry omits the year', async () => {
     const verifier = createIndependentCitationVerifier({
       fetchImpl: vi.fn(async () => new Response(JSON.stringify({ message: { title: ['Matching title'] } }), { status: 200 })),
@@ -39,6 +54,23 @@ describe('independent citation verification', () => {
 
     await expect(verifier.verify([{ id: 'doi-year', title: 'Matching title', year: 2024, doi: '10.1000/example', verified: false }])).resolves.toEqual([
       expect.objectContaining({ verified: false, verification: expect.objectContaining({ status: 'needs_review', yearMatch: false }) }),
+    ])
+  })
+
+  it('blocks a DOI that Crossref marks as retracted', async () => {
+    const verifier = createIndependentCitationVerifier({
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ message: {
+        title: ['Matching title'],
+        published: { 'date-parts': [[2024]] },
+        relation: { 'is-retracted-by': [{ id: '10.1000/retraction' }] },
+      } }), { status: 200 })),
+    })
+
+    await expect(verifier.verify([{ id: 'doi-retracted', title: 'Matching title', year: 2024, doi: '10.1000/example', verified: false }])).resolves.toEqual([
+      expect.objectContaining({
+        verified: false,
+        verification: expect.objectContaining({ status: 'blocked', retracted: true }),
+      }),
     ])
   })
 

@@ -118,7 +118,7 @@ function citationFromSource(source: ManuscriptV1['sources'][number]) {
     : typeof source.year === 'string' && /^\d{4}$/.test(source.year)
       ? Number(source.year)
       : undefined
-  const base = { id: source.id, title: source.title, ...(numericYear ? { year: numericYear } : {}), verified: true as const }
+  const base = { id: source.id, title: source.title, ...(source.authors ? { authors: source.authors } : {}), ...(numericYear ? { year: numericYear } : {}), verified: true as const }
   return /^10\.\d{4,9}\/\S+$/i.test(locator)
     ? { ...base, doi: locator }
     : { ...base, url: locator }

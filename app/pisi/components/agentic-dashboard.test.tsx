@@ -80,7 +80,7 @@ describe('AgenticDashboard', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       run: { run_id: 'run-1', project_id: 'project-1', mode: 'autonomous', status: 'completed' },
       steps: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', status: 'verified', attempt: 1 }],
-      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Novi uvod.', citations: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }], verification: { status: 'verified', issues: [], evidence: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
+      results: [{ schemaVersion: 1, kind: 'agent-step-result', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', stepId: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'intro', baseRevision: '2026-08-14T10:00:00.000Z', attempt: 1, output: 'Novi uvod.', citations: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }], claims: [{ id: 'claim-1', text: 'Tvrdnja iz uvoda.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'str. 4' }] }], verification: { status: 'verified', issues: [], evidence: [{ id: 'source-1', title: 'Ustav Republike Hrvatske', url: 'https://example.test/ustav', verified: true }] }, provider: 'test', usage: { inputTokens: 1, outputTokens: 2 }, createdAt: '2026-08-14T10:01:00.000Z', expiresAt: '2026-08-17T10:01:00.000Z' }],
     }) }))
     render(<AgenticDashboard runId="run-1" projectId="project-1" manuscript={manuscript} />)
 
@@ -88,6 +88,8 @@ describe('AgenticDashboard', () => {
     expect(screen.getAllByRole('link', { name: 'https://example.test/ustav' }).length).toBeGreaterThan(0)
     const evidence = screen.getByLabelText('Izvori za Uvod')
     expect(within(evidence).getByText('Provjereno')).toBeTruthy()
+    expect(screen.getByText('Tvrdnja iz uvoda.')).toBeTruthy()
+    expect(screen.getByText('Relevantan odlomak.')).toBeTruthy()
   })
 
   it('keeps authorization and availability errors readable', async () => {

@@ -101,6 +101,7 @@ function isCitationEvidence(value: unknown): value is CitationEvidence {
     && citation.id.trim().length > 0
     && typeof citation.verified === 'boolean'
     && (citation.title === undefined || typeof citation.title === 'string')
+    && (citation.authors === undefined || typeof citation.authors === 'string')
     && (citation.year === undefined || (typeof citation.year === 'number' && Number.isInteger(citation.year)))
     && (citation.url === undefined || typeof citation.url === 'string')
     && (citation.doi === undefined || typeof citation.doi === 'string')
@@ -110,6 +111,7 @@ function asUnverifiedCitation(citation: CitationEvidence): CitationEvidence {
   return {
     id: citation.id,
     ...(citation.title ? { title: citation.title } : {}),
+    ...(citation.authors ? { authors: citation.authors } : {}),
     ...(citation.year !== undefined ? { year: citation.year } : {}),
     ...(citation.url ? { url: citation.url } : {}),
     ...(citation.doi ? { doi: citation.doi } : {}),
