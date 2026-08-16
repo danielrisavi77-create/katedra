@@ -63,6 +63,17 @@ pretvorio u kanal za nekontrolirani payload.
 - bez konfiguracije provider router baca capability error, a worker ostaje
   fail-closed.
 
+## Prompt trust boundary
+
+- `sourceCandidates` u promptu su samo kandidati iz projektnog rukopisa. Njihov
+  lokalni `verified` boolean nikada se ne promiče u dokaz za agentski rezultat.
+- `verifiedAgentArtifacts` je jedini prethodni agentski kontekst koji se smije
+  tretirati kao verificiran; u njega ulaze samo immutable rezultati sa statusom
+  `verified` i ograničenim `inputArtifactIds`.
+- Worker naslijeđene izvore ponovno pretvara u kandidat-citate i neovisni
+  verifier ih mora ponovno obraditi prije nego ih rezultat može koristiti kao
+  dokaz.
+
 Ovaj dokument opisuje lokalni ugovor. Aktivacija produkcijskog rada i dalje
 zahtijeva deploy Lekta migracija/RPC-a, RLS provjeru i staging E2E s pravim
 testnim credentialima.
