@@ -61,7 +61,9 @@ No new object, table or database schema is needed.
 Before calling a provider for writing, citation, review or export, the worker
 requires a current approval in every run mode, including bounded autonomous
 mode. This guard applies even when the external service is optional/unconfigured;
-it blocks without provider usage. Existing source, policy, billing and quality
+it blocks without provider usage. Each non-plan executor uses exactly the checked
+manuscript and planning-result snapshot, preventing a delayed context upload from
+substituting an unapproved plan between the check and the provider call. Existing source, policy, billing and quality
 checks remain in force. The service checks the server-supplied approval record
 and its run/project/revision binding before conversion or non-plan gates.
 A plan-stage gate may run before consent. Already-approved plans do not display

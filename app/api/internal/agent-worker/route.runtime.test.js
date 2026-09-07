@@ -274,6 +274,16 @@ it('requires explicit plan approval before provider execution even in autonomous
   const review = buildPlanReview(manuscript, selectVerifiedAgentArtifacts([saved], { order: 4 }))
   const planApproval = { schemaVersion: 1, projectId: 'project-1', runId: 'run-1', approvedBy: 'user-1', planRevision: review.planRevision, approvedAt: '2026-09-01T00:00:00Z' }
   mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript, planApproval })
+  // A context request admitted while blocked finishes after the approval check.
+  // The billed provider must still receive the approved snapshot, not that later upload.
+  mocks.loadRunManuscriptContext.mockResolvedValue({ ...manuscript, title: 'Unapproved concurrent upload' })
+  executeProvider.mockImplementation(async () => {
+    const options = mocks.createProviderBackedExecutor.mock.calls.at(-1)[0]
+    mocks.loadAgentRunResults.mockResolvedValueOnce([{ ...saved, output: 'Unapproved replacement plan' }])
+    expect(await options.loadContext()).toEqual(manuscript)
+    expect(await options.loadResults()).toEqual([saved])
+    return { output: 'Generated' }
+  })
   await expect(execute(step)).resolves.toEqual({ output: 'Generated' })
   expect(executeProvider).toHaveBeenCalledOnce()
   mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript: { ...manuscript, title: 'Changed plan topic' }, planApproval })

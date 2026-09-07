@@ -145,7 +145,7 @@ async function handlePost(req) {
   }
   const manifestStore = createSupabaseRunPayloadManifestStore(db)
   const paths = runContextStoragePaths(run.user_id, run.project_id, runId)
-  const execute = createProviderBackedExecutor({
+  const executorOptions = {
     projectId: run.project_id,
     runId,
     sourcePolicy: run.source_policy,
@@ -178,7 +178,8 @@ async function handlePost(req) {
       : undefined,
     router,
     billing: { db, userId: run.user_id, model: workerConfig.model },
-  })
+  }
+  const execute = createProviderBackedExecutor(executorOptions)
   const storeResult = ({ step, result, verification }) => storeAgentStepResult({ db, storage }, {
     userId: run.user_id,
     projectId: run.project_id,
@@ -196,7 +197,7 @@ async function handlePost(req) {
     const { manuscript, planApproval } = await loadRunContextSnapshot(payloadStorage, { ...paths, runId, projectId: run.project_id })
     const results = await loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET })
     const artifacts = selectVerifiedAgentArtifacts(results, { order: step.order, projectId: run.project_id, runId })
-    return { manuscript, artifacts, planApproval }
+    return { manuscript, artifacts, planApproval, results }
   }
   const gateVerify = createGateBackedVerifier({
     config: gateConfig, runId, userId: run.user_id,
@@ -210,11 +211,18 @@ async function handlePost(req) {
   })
   const executeWithApproval = async (step) => {
     if (GATE_PHASE_FOR_AGENT[step.agent] !== 'plan') {
-      const { manuscript, artifacts, planApproval } = await loadGateContext({ step })
+      const { manuscript, artifacts, planApproval, results } = await loadGateContext({ step })
       const review = buildPlanReview(manuscript, artifacts)
       if (!review.ready || !isPlanApprovalCurrent(planApproval, {
         userId: run.user_id, projectId: run.project_id, runId, planRevision: review.planRevision,
       })) throw new PlanApprovalRequiredError()
+      // Use the approved snapshot throughout execution: a concurrent context upload
+      // must not replace the plan between this check and the billed provider call.
+      return createProviderBackedExecutor({
+        ...executorOptions,
+        loadContext: async () => manuscript,
+        loadResults: async () => results,
+      })(step)
     }
     return execute(step)
   }
