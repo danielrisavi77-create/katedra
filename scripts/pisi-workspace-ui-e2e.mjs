@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
 
 const baseUrl = String(process.env.KATEDRA_PISI_URL || 'http://localhost:3000').replace(/\/$/u, '')
@@ -40,6 +41,31 @@ try {
   await page.getByRole('tab', { name: 'Pomagala' }).click()
   await page.getByRole('button', { name: /Sljedeći najbolji korak/i }).waitFor({ state: 'visible' })
   assert.equal(await page.getByText('Interaktivni prototip').count(), 0)
+
+  // Synthetic local metadata exercises the real History/export UI. This is
+  // not an authenticated chat/provider or billing integration assertion.
+  await page.evaluate(() => {
+    const readyKey = Object.keys(localStorage).find(key => key.startsWith('katedra_manuscript_ready:'))
+    if (!readyKey) throw new Error('Synthetic workspace project was not persisted')
+    const projectId = readyKey.slice('katedra_manuscript_ready:'.length)
+    localStorage.setItem(`katedra_ai_ledger_v1:${projectId}`, JSON.stringify({
+      schemaVersion: 1, projectId, entries: [{
+        projectId, proposalId: 'browser-proposal-1', sectionId: 'browser-section-1', action: 'draft',
+        requestedAt: '2026-09-08T00:00:00.000Z', outcome: 'requested', decision: 'none',
+        prompt: 'SYNTHETIC_PRIVATE_PROMPT', output: 'SYNTHETIC_PRIVATE_OUTPUT',
+      }],
+    }))
+  })
+  await page.getByRole('button', { name: 'Povijest', exact: true }).first().click()
+  await page.getByRole('heading', { name: 'Lokalna povijest projekta' }).waitFor()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Izvezi AI evidenciju' }).click()
+  const download = await downloadPromise
+  const exported = await readFile(await download.path(), 'utf8')
+  assert.doesNotMatch(exported, /SYNTHETIC_PRIVATE/)
+  assert.equal(JSON.parse(exported).entries[0].outcome, 'requested')
+  assert.equal(JSON.parse(exported).entries[0].billing, 'unknown')
+  await page.getByRole('button', { name: 'Zatvori projektne alate' }).click()
 
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: width < 800 ? 844 : 900 })

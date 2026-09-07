@@ -13,6 +13,7 @@
     "lib/academic-suite/state-issue-projection.ts",
     "lib/manuscript/proposal-application.ts",
     "lib/manuscript/server-hydration.ts",
+    "lib/manuscript/ai-ledger.ts",
     "app/pisi/components/use-manuscript-state.ts",
     "app/pisi/components/use-proposal-expiry.ts",
     "scripts/check-database-projection.mjs",
