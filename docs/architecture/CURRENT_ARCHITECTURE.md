@@ -19,10 +19,15 @@ Scope: current master `24dfc1841f475ba31791c017d23267deaee796ff` plus the isolat
 | AI budget | Project access / wallet spend authority | Canonical billing reservation, consume, pending and release RPCs | Local mocked tests cannot prove concurrent database atomicity |
 | Payment | Signed Stripe event and canonical purchase contract | Webhook entitlement/grant/refund paths | Authenticated money-flow and replay/uniqueness proof remain external |
 | Withdrawal | Durable receipt and reservation contract | `withdrawal_requests`, canonical reservation, email provider | Provider acceptance is not inbox delivery; failed confirmation must remain visible for reconciliation |
-| AI provenance | Current local accepted-proposal history and separate agent ledger | Workspace local history; per-run agent results | Neither is a complete cross-device interactive AI audit trail or proof of billing settlement |
+| AI provenance | Local manual-chat attempt/decision metadata, accepted-proposal history and separate agent ledger | Versioned local storage and metadata-only export; per-run agent results | Best-effort, 200 attempts per project; no prompt/body, cross-device guarantee or billing settlement claim |
 | Logs / analytics | Explicit bounded operational projections | Request IDs, safe error codes and outcome events | No prompts, manuscript, attachment text, arbitrary provider errors or secrets |
 
 ## Shared state compatibility
+
+The typed finding projection lives in `state-issue-projection.ts`; route auth,
+origin, lookup, lock validation and persistence remain in the HTTP orchestrator.
+Other legacy gen/history/log allowlists remain explicit in the route. This is a
+bounded extraction, not a claim that the whole route or workspace is decomposed.
 
 `GET /api/state` requires a project ID, authenticates the user, resolves the owned project, and reads only that user's canonical project row. `PUT` checks origin, bounded JSON, project identity and locks; strips manuscript content before building an allowlisted patch; and retains the existing first guest-to-account synchronization path. Database errors and missing production lock configuration fail closed. The current writer remains `katedra_projects`; a design document mentioning `completion_project_state` is not evidence that its deployment or migration is complete.
 

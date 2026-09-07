@@ -1,4 +1,4 @@
-# Current release status — 2026-09-07
+# Current release status — 2026-09-08
 
 **Hardening in progress; service activation is not approved.** Local verification is recorded in [LOCAL_VERIFICATION_2026-09-07.md](LOCAL_VERIFICATION_2026-09-07.md). Actual authority and unresolved privacy choices are mapped in [CURRENT_ARCHITECTURE.md](../architecture/CURRENT_ARCHITECTURE.md). Historical release documents remain historical evidence and are not superseded by a claim of production readiness.
 
@@ -33,5 +33,16 @@ Issues remain open. A local regression test or mocked RPC is not evidence to clo
 - Withdrawal confirmation checks resolved email API errors and reports pending reconciliation if email acceptance or persistence fails, preserving the durable receipt.
 - Material extraction keeps its truncation marker within the consumer's size bound and checks image extension/MIME agreement before OCR.
 - Worker context access checks canonical manifest presence, exact scope and canonical/private expirations before reading manuscript content. This does not promise atomic revocation during an in-flight download.
+- Duplicate refunds require successful provider status; unique entitlement conflicts require exact purchase identity before wallet grant.
+- Workspace hydration/proposal races, destroyed-editor section transitions and purchase-context consent/focus behavior have local regression and browser evidence.
+- Institutional policy unlocks require sourced, verified, valid non-future dates and applicable scope. Course/program identity remains unresolved; old-but-valid dates are not a freshness guarantee.
+- Ordinary chat has bounded, metadata-only local provenance and separate export. Storage failures remain visible; cross-device persistence and billing settlement are not claimed.
+- Auth callback redirects are private and bounded; state finding projection is typed; an offline supplied-source schema checker and scoped strictness ratchet are available.
+
+Latest complete local checkpoint: 1017 passed tests, 4 skipped; typecheck, strict
+check, lint, build and three browser scripts passed. See the verification record
+for the distinction between component fixtures, guest browser checks and external
+authenticated evidence. [The HTTP matrix](HTTP_AUTHORITY_MATRIX_2026-09-08.md)
+documents each mutation boundary and unresolved canonical recovery guarantees.
 
 The full overnight checklist is tracked in [the implementation plan](../superpowers/plans/2026-09-07-overnight-hardening.md); unfinished items remain unfinished. No merge or production-readiness conclusion is made here.
