@@ -25,9 +25,9 @@
 Each implementation slice follows: inspect actual caller and contract; reproduce failure; minimum fix; focused and related tests; review diff; semantic commit. A confirmed external dependency or undecided privacy authority gets a concrete brief, not a simulated PASS.
 
 - [x] Sections 0–1: inspect rules, freeze Git state, fetch master, create isolated branch.
-- [ ] Section 2: finish baseline and record versions, counts, skips and browser checks in `docs/release/LOCAL_VERIFICATION_2026-09-07.md`.
-- [ ] Sections 3, 26: reconcile PRs #19/#21/#36 and issues #23–#32 against current code; record classifications and remaining proof.
-- [ ] Section 4: write `docs/architecture/CURRENT_ARCHITECTURE.md` with authority, persistence, compatibility and activation matrix.
+- [x] Section 2: finish baseline and record versions, counts, skips and browser checks in `docs/release/LOCAL_VERIFICATION_2026-09-07.md`.
+- [x] Sections 3, 26: reconcile PRs #19/#21/#36 and issues #23–#32 against current code; record classifications and remaining proof.
+- [x] Section 4: write `docs/architecture/CURRENT_ARCHITECTURE.md` with authority, persistence, compatibility and activation matrix.
 - [ ] Sections 5–6: audit DOCX content extraction and temporary Storage; test bounded extraction and revoked/expired context; document constitutional privacy options and canonical cleanup/replacement dependencies.
 - [ ] Sections 7–8, 17: complete mutation HTTP matrix; reproduce cost reservation, withdrawal confirmation and duplicate-refund failures; preserve replay and ownership checks.
 - [ ] Section 9: inspect run lease/claim/cancel/resume/retry/budget/provenance invariants with existing runtime tests; distinguish local contracts from deployed RPC proof.
@@ -52,11 +52,11 @@ Each implementation slice follows: inspect actual caller and contract; reproduce
 
 **Observed risk:** The route reserves an estimate for 512 output tokens before later allowing up to 8192. The canonical daily ceiling receives a smaller amount than the provider's permitted output. A passing local test must compare the reserved estimate with the actual outgoing provider limit, not merely assert that a reservation was called.
 
-- [ ] Add a runtime regression using a token-sensitive cost estimate, an affordable output limit greater than 512, and a captured provider request. Assert reserved charge covers permitted output.
-- [ ] Run the test and record its expected assertion failure.
-- [ ] Bound reservation conservatively before side effects, or reserve the actual final affordable limit with equivalent pre-provider fail-closed behavior. Preserve release on every acquired-reservation exit and unknown-usage reconciliation.
-- [ ] Assert successful stream responses use private/no-store caching, with no response-body contract change.
-- [ ] Run chat runtime, cost-policy, rate-limit and billing tests; review affected exits; commit.
+- [x] Add a runtime regression using a token-sensitive cost estimate, an affordable output limit greater than 512, and a captured provider request. Assert reserved charge covers permitted output.
+- [x] Run the test and record its expected assertion failure: 2561 reserved versus 5121 / 40961 required by allowed output.
+- [x] Bound reservation conservatively before side effects. Preserve release on every acquired-reservation exit and unknown-usage reconciliation.
+- [x] Assert successful stream responses use private/no-store caching, with no response-body contract change. Separately observed the previous `no-cache` assertion failure.
+- [x] Run chat runtime, cost-policy, rate-limit and billing tests; review affected exits; commit `de278b9`.
 
 ## Additional reproduced-failure candidates
 

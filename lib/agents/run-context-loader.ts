@@ -21,6 +21,7 @@ export interface RunPayloadManifest {
   storageBucket: string
   storagePath: string
   manifestPath: string
+  expiresAt?: string
 }
 
 export interface RunPayloadManifestStore {
@@ -55,7 +56,7 @@ export function createSupabaseRunPayloadManifestStore(db: RunPayloadManifestData
   return {
     async list(runId, projectId) {
       const result = await db.from('agent_payload_manifests')
-        .select('material_id, project_id, run_id, storage_bucket, storage_path, manifest_path')
+        .select('material_id, project_id, run_id, storage_bucket, storage_path, manifest_path, expires_at')
         .eq('run_id', runId)
         .eq('project_id', projectId)
         .is('deleted_at', null)
@@ -69,8 +70,9 @@ export function createSupabaseRunPayloadManifestStore(db: RunPayloadManifestData
         const storageBucket = String(value.storage_bucket || '')
         const storagePath = String(value.storage_path || '')
         const manifestPath = String(value.manifest_path || '')
+        const expiresAt = typeof value.expires_at === 'string' ? value.expires_at : undefined
         return materialId && rowProjectId === projectId && rowRunId === runId && storageBucket && storagePath && manifestPath
-          ? [{ materialId, projectId: rowProjectId, runId: rowRunId, storageBucket, storagePath, manifestPath }]
+          ? [{ materialId, projectId: rowProjectId, runId: rowRunId, storageBucket, storagePath, manifestPath, expiresAt }]
           : []
       })
     },

@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   createProviderBackedExecutor: vi.fn(),
   runAgentWorkerLoop: vi.fn(),
   loadRunManuscriptContext: vi.fn(),
+  loadActiveRunManuscriptContext: vi.fn(),
+  manifestStore: { list: vi.fn() },
   loadRunMaterialContexts: vi.fn(),
   runContextStoragePaths: vi.fn(),
   verifyAgentResult: vi.fn(),
@@ -21,10 +23,11 @@ vi.mock('@/lib/agents/provider-router', () => ({ createProviderRouter: mocks.cre
 vi.mock('@/lib/agents/provider-worker', () => ({ createProviderBackedExecutor: mocks.createProviderBackedExecutor }))
 vi.mock('@/lib/agents/worker-loop', () => ({ runAgentWorkerLoop: mocks.runAgentWorkerLoop }))
 vi.mock('@/lib/agents/run-context-loader', () => ({
-  createSupabaseRunPayloadManifestStore: vi.fn(),
+  createSupabaseRunPayloadManifestStore: () => mocks.manifestStore,
   loadRunManuscriptContext: mocks.loadRunManuscriptContext,
   loadRunMaterialContexts: mocks.loadRunMaterialContexts,
 }))
+vi.mock('@/lib/agents/run-context-access', () => ({ loadActiveRunManuscriptContext: mocks.loadActiveRunManuscriptContext }))
 vi.mock('@/lib/agents/run-context', () => ({ runContextStoragePaths: mocks.runContextStoragePaths }))
 vi.mock('@/lib/agents/verifier', () => ({ verifyAgentResult: mocks.verifyAgentResult }))
 vi.mock('@/lib/agents/run-result-storage', () => ({ storeAgentStepResult: mocks.storeAgentStepResult }))
@@ -94,6 +97,19 @@ afterEach(() => {
 })
 
 describe('POST /api/internal/agent-worker runtime contract', () => {
+  it('loads manuscript context through canonical active-manifest authority', async () => {
+    const { POST } = await loadRoute()
+    await POST(request())
+    const executorOptions = mocks.createProviderBackedExecutor.mock.calls[0][0]
+    await executorOptions.loadContext()
+    expect(mocks.loadActiveRunManuscriptContext).toHaveBeenCalledWith(
+      mocks.manifestStore,
+      expect.objectContaining({ download: expect.any(Function) }),
+      { runId: run.run_id, projectId: run.project_id, userId: run.user_id, bucket: 'katedra-temporary-materials' },
+    )
+    expect(mocks.loadRunManuscriptContext).not.toHaveBeenCalled()
+  })
+
   it('passes the 150 second provider timeout and returns the request id', async () => {
     const { POST } = await loadRoute()
 

@@ -9,8 +9,8 @@ import { packProfileHint } from '@/lib/agents/pack-profile.server'
 import { resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 import { runAgentWorkerLoop } from '@/lib/agents/worker-loop'
-import { createSupabaseRunPayloadManifestStore, loadRunManuscriptContext, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
-import { runContextStoragePaths } from '@/lib/agents/run-context'
+import { createSupabaseRunPayloadManifestStore, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
+import { loadActiveRunManuscriptContext } from '@/lib/agents/run-context-access'
 import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { verifyAgentResult } from '@/lib/agents/verifier'
@@ -141,7 +141,6 @@ async function handlePost(req) {
     },
   }
   const manifestStore = createSupabaseRunPayloadManifestStore(db)
-  const paths = runContextStoragePaths(run.user_id, run.project_id, runId)
   const execute = createProviderBackedExecutor({
     projectId: run.project_id,
     runId,
@@ -154,7 +153,7 @@ async function handlePost(req) {
       return resolved.effective === 'blocked'
     },
     runMode: run.mode,
-    loadContext: () => loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
+    loadContext: () => loadActiveRunManuscriptContext(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     verifyCitations: citationVerifier.verify,
