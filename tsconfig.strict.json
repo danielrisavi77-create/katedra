@@ -10,6 +10,11 @@
     "lib/agents/run-context-access.ts",
     "lib/stripe/entitlement-replay.ts",
     "lib/academic-suite/process-facts.ts",
+    "lib/academic-suite/state-issue-projection.ts",
+    "lib/manuscript/proposal-application.ts",
+    "lib/manuscript/server-hydration.ts",
+    "app/pisi/components/use-manuscript-state.ts",
+    "app/pisi/components/use-proposal-expiry.ts",
     "lib/deployment/agentic-preflight.mjs"
   ],
   "exclude": ["node_modules", "Lekta"]
