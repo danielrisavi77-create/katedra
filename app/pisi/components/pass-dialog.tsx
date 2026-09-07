@@ -15,7 +15,7 @@ const PASS_PACKAGES: Record<LegacyWorkType, { key: string; name: string; price: 
 const PASS_INCLUDES: Record<LegacyWorkType, string[]> = {
   s: ['struktura i izvori', 'pisanje po sekcijama', 'revizija i Lekta handoff'],
   z: ['istraživačko pitanje i metodologija', 'pisanje i mentor review', 'priprema obrane i Lekta handoff'],
-  d: ['istraživački dizajn i podatci', 'više revizijskih krugova', 'priprema obrane i Lekta handoff'],
+  d: ['plan istraživanja i literatura', 'sadržajne revizije', 'priprema obrane i Lekta handoff'],
 }
 
 type PassDialogProps = {

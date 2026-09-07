@@ -7,13 +7,17 @@ Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0
 - Katedra: vodi proces, planiranje, pisanje, semantičku recenziju i pripremu obrane.
 - Lekta: čita stvarni `.docx`, provjerava verificirana pravila i jedina smije deterministički potvrditi da je nalaz riješen.
 - Lekta Supabase: isti account, isti akademski projekt, postojeći Lekta commerce i Katedra-owned workflow/AI-credit tablice.
-- Raw `.docx` i tekst rada ne ulaze u shared backend.
+- Tekst rada ne ulazi u `/api/state` ni zajedničke logove. Postojeći privremeni privatni Storage za agentičke sadržaje zahtijeva usklađivanje s ustavom proizvoda prije aktivacije; granica i opcije opisane su u [aktualnoj arhitekturi](docs/architecture/CURRENT_ARCHITECTURE.md).
 
 Lokalni manuskript je canonical sadržaj uređivanja. Agenticni runovi, uploadi i
 plaćeni project-lock tok ostaju fail-closed dok canonical Lekta ugovor, worker,
 RLS i staging money-flow ne budu deployani i dokazani; aktualni status je u
-[`docs/release/LOCAL_VERIFICATION_2026-08-16.md`](docs/release/LOCAL_VERIFICATION_2026-08-16.md)
+[`docs/release/CURRENT_STATUS.md`](docs/release/CURRENT_STATUS.md), uz
+[aktualne lokalne provjere](docs/release/LOCAL_VERIFICATION_2026-09-07.md)
 i [`docs/autonomous/BLOCKERS.md`](docs/autonomous/BLOCKERS.md).
+
+Raniji zapisi pod `docs/release/`, uključujući provjeru od 2026-08-16, ostaju
+povijesni dokazi. Nijedan lokalni PASS sam po sebi nije odobrenje aktivacije.
 
 Za nepregovorljive produktne granice vidi `PRODUCT_CONSTITUTION.md`. Database authority i migracije žive u `danielrisavi77-create/Lekta/supabase/`.
 
