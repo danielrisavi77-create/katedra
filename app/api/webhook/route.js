@@ -38,13 +38,14 @@
 // RPC radi "on conflict do nothing" na toj koloni za wallet dio. Za
 // entitlements idempotencija dolazi iz stvarnog unique(provider, order_id)
 // constrainta (provider='stripe', order_id=Stripe session id) — insert pa
-// 23505 = već grantano, nastavi na wallet dio.
+// Nakon 23505 potvrdi identitet postojeće kupnje prije wallet dijela.
 // ============================================================
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getKatedraPackage, PURCHASE_WINDOW_DAYS } from '@/lib/stripe/catalog'
 import { validateCheckoutConfirmation } from '../../../lib/stripe/checkout-validation.js'
 import { refundDuplicateProjectPass } from '../../../lib/stripe/duplicate-refund.js'
+import { isSameStripeEntitlementPurchase } from '../../../lib/stripe/entitlement-replay'
 import { katedraPassProductFilter, katedraPassProductId } from '../../../lib/katedra-pass-catalog.js'
 import { lockPaidProject, readProjectLock } from '../../../lib/academic-suite/project-lock'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
@@ -287,7 +288,14 @@ async function handlePOST(req) {
           purchase_expires_at: new Date(Date.now() + windowDays * 24 * 3600 * 1000).toISOString(),
           academic_project_id: UUID_RE.test(projectId) ? projectId : null,
         })
-        // 23505 = unique(provider, order_id) već pogođen (retry iste Stripe sesije) — grant je već izvršen.
+        // A unique conflict can involve another constraint or purchase. Prove
+        // the exact session identity before continuing the idempotent grant.
+        if (insertError?.code === '23505' && !await isSameStripeEntitlementPurchase(db, {
+          userId, projectId, sessionId: s.id, productId, workType: productKey,
+        })) {
+          logOperationalEvent({ eventName: 'entitlement_replay_unverified', sessionId: s.id, userId, projectId }, 'error')
+          return new Response('entitlement reconciliation pending', { status: 500 })
+        }
         if (insertError && insertError.code !== '23505') {
           logOperationalEvent({ eventName: 'entitlement_grant_failed', sessionId: s.id, userId, projectId, error: insertError }, 'error')
           return new Response('entitlement grant failed', { status: 500 }) // Stripe će retry-ati

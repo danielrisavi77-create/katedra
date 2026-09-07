@@ -32,6 +32,60 @@ afterEach(() => {
 })
 
 describe('POST /api/webhook runtime guards', () => {
+  it.each([
+    ['exact replay', {}, 200],
+    ['missing purchase', null, 500],
+    ['foreign owner', { user_id: 'other-user' }, 500],
+    ['foreign project', { academic_project_id: '22222222-2222-4222-8222-222222222222' }, 500],
+    ['wrong product', { product_id: 'katedra_pass_seminarski' }, 500],
+    ['wrong work type', { work_type: 'seminarski' }, 500],
+    ['wrong provider', { provider: 'other' }, 500],
+    ['wrong order', { order_id: 'cs_other' }, 500],
+    ['lookup error', { lookupError: true }, 500],
+    ['lookup rejects', { lookupThrows: true }, 500],
+  ])('proves purchase identity after a unique conflict: %s', async (_name, override, expectedStatus) => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
+    mocks.getStripe.mockReturnValue({ webhooks: { constructEvent: () => ({
+      type: 'checkout.session.completed', data: { object: {
+        id: 'cs_replay', mode: 'payment', payment_status: 'paid', currency: 'eur', amount_total: 12_990,
+        metadata: { user_id: 'user-1', academic_project_id: projectId, product_key: 'diplomski', product_id: 'katedra_pass_diplomski', tokens: '12000000', amount_eur: '129.9' },
+      } },
+    }) } })
+    let inserted = false
+    const replayFilters = []
+    const rpc = vi.fn().mockResolvedValue({ error: null })
+    const db = {
+      rpc,
+      from(table) {
+        const query = {
+          select() { return query },
+          eq(column, value) { if (inserted) replayFilters.push([column, value]); return query },
+          or() { return query }, gt() { if (inserted) throw new Error('Replay identity must not filter expiry'); return query }, limit() { return query },
+          async insert() { inserted = true; return { error: { code: '23505' } } },
+          async maybeSingle() {
+            if (table === 'katedra_projects') return { data: { user_id: 'user-1', project_id: projectId, work_type_canonical: 'graduate' }, error: null }
+            if (!inserted) return { data: null, error: null }
+            if (override?.lookupThrows) throw new Error('private-database-detail')
+            return {
+              data: override === null ? null : { id: 'entitlement-1', user_id: 'user-1', academic_project_id: projectId, provider: 'stripe', order_id: 'cs_replay', product_id: 'katedra_pass_diplomski', work_type: 'diplomski', ...override },
+              error: override?.lookupError ? { code: 'XX000', message: 'private-database-detail' } : null,
+            }
+          },
+        }
+        return query
+      },
+    }
+    mocks.createAdminClient.mockReturnValue(db)
+    const response = await POST(request())
+    expect(response.status).toBe(expectedStatus)
+    expect(await response.text()).not.toContain('private-database-detail')
+    if (expectedStatus === 200) {
+      expect(rpc).toHaveBeenCalledWith('katedra_grant', expect.objectContaining({ p_user: 'user-1', p_session: 'cs_replay' }))
+      expect(replayFilters).toEqual([['provider', 'stripe'], ['order_id', 'cs_replay']])
+    } else expect(rpc).not.toHaveBeenCalled()
+  })
+
   it('returns a retryable response when the admin client is unavailable', async () => {
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
     mocks.getStripe.mockReturnValue({
