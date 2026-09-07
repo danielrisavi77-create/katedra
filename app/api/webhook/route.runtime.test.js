@@ -171,7 +171,7 @@ describe('POST /api/webhook runtime guards', () => {
     expect(mocks.createAdminClient).not.toHaveBeenCalled()
   })
 
-  it('does not grant a second active Pass for a concurrent paid session', async () => {
+  it.each(['succeeded', 'pending', 'failed'])('does not grant a second active Pass when duplicate refund is %s', async (refundStatus) => {
     mocks.getStripe.mockReturnValue({
       webhooks: {
         constructEvent: vi.fn().mockReturnValue({
@@ -198,7 +198,7 @@ describe('POST /api/webhook runtime guards', () => {
       },
     })
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
-    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second' })
+    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second', status: refundStatus })
     const calls = []
     const db = {
       from(table) {
@@ -245,13 +245,13 @@ describe('POST /api/webhook runtime guards', () => {
           },
         } },
       }) },
-      refunds: { create: refundCreate },
+      refunds: { create: refundCreate, retrieve: vi.fn().mockResolvedValue({ id: 're_second', status: refundStatus }) },
     })
 
     const response = await POST(request())
 
-    expect(response.status).toBe(200)
-    expect(await response.text()).toBe('ok')
+    expect(response.status).toBe(refundStatus === 'succeeded' ? 200 : 500)
+    expect(await response.text()).toBe(refundStatus === 'succeeded' ? 'ok' : 'duplicate refund pending')
     expect(db.rpc).not.toHaveBeenCalled()
     expect(refundCreate).toHaveBeenCalledWith(
       { payment_intent: 'pi_second' },
@@ -337,7 +337,7 @@ describe('POST /api/webhook runtime guards', () => {
   it('refunds a second payment when the canonical project lock already belongs to another session', async () => {
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
-    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second_lock_race' })
+    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second_lock_race', status: 'succeeded' })
     const calls = []
     const db = {
       rpc: vi.fn(() => { throw new Error('a duplicate lock race must not grant wallet') }),
