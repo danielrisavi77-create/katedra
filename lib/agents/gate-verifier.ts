@@ -12,7 +12,8 @@ import type { AgentStepRecord } from './run-state'
 import type { ManuscriptV1 } from '../manuscript/types'
 import type { VerifiedAgentArtifactContext } from './artifact-chain'
 import type { DoctrineProfileHint } from './doctrine'
-import { extractPlanArtifact, planLooksApprovable, type PlanArtifactV1 } from './plan-artifact'
+import type { PlanArtifactV1 } from './plan-artifact'
+import { buildPlanReview, isPlanApprovalCurrent } from './plan-approval'
 
 export type GatePhase = 'plan' | 'pisanje' | 'audit' | 'predaja'
 
@@ -46,6 +47,8 @@ export interface GateVerifyInput {
   artifacts: readonly VerifiedAgentArtifactContext[]
   profile?: DoctrineProfileHint | null
   mentorComments?: Array<Record<string, unknown>>
+  userId?: string
+  planApproval?: unknown
 }
 
 export function resolveGateVerifierConfig(env: Record<string, string | undefined>): GateVerifierConfig {
@@ -73,7 +76,10 @@ export function gateSummaryForStorage(response: GateVerifierResponse): Record<st
 
 export async function callGateVerifier(config: GateVerifierConfig, input: GateVerifyInput): Promise<GateVerifierResponse> {
   const fetchImpl = config.fetchImpl || fetch
-  const plan = extractPlanArtifact(input.artifacts, input.manuscript.sections)
+  const { plan, planRevision, ready } = buildPlanReview(input.manuscript, input.artifacts)
+  const approved = ready && isPlanApprovalCurrent(input.planApproval, {
+    userId: input.userId, projectId: input.manuscript.projectId, runId: input.runId, planRevision,
+  })
   const body = {
     runId: input.runId,
     stepId: input.step.id,
@@ -82,7 +88,10 @@ export async function callGateVerifier(config: GateVerifierConfig, input: GateVe
     attempt: input.step.attempt,
     manuscript: input.manuscript,
     profile: input.profile ?? null,
-    planApproved: planLooksApprovable(plan, input.manuscript.workType),
+    planReady: ready,
+    planRevision,
+    planApproved: approved,
+    planApproval: approved ? input.planApproval : null,
     plan: plan ? toServicePlan(plan) : null,
     mentorComments: input.mentorComments ?? null,
     agentResult: input.result,
@@ -161,8 +170,9 @@ function mapGateCode(code: string): VerificationIssue['code'] {
 export function createGateBackedVerifier(input: {
   config: GateVerifierConfig
   runId: string
+  userId?: string
   baseVerify: (result: AgentResultV1) => VerificationResultV1
-  loadContext: (context: { step: AgentStepRecord }) => Promise<{ manuscript: ManuscriptV1; artifacts: VerifiedAgentArtifactContext[] }>
+  loadContext: (context: { step: AgentStepRecord }) => Promise<{ manuscript: ManuscriptV1; artifacts: VerifiedAgentArtifactContext[]; planApproval?: unknown }>
   loadProfileHint?: (manuscript: ManuscriptV1) => Promise<DoctrineProfileHint | null>
   onGateResult?: (summary: Record<string, unknown>) => void
 }) {
@@ -176,9 +186,9 @@ export function createGateBackedVerifier(input: {
       return { ...base, issues: [...base.issues, { code: 'gate_step_skipped', message: 'Gate verifikator nije konfiguriran; provjeren je samo citatni sloj.' }] }
     }
     try {
-      const { manuscript, artifacts } = await input.loadContext(context)
+      const { manuscript, artifacts, planApproval } = await input.loadContext(context)
       const profile = input.loadProfileHint ? await input.loadProfileHint(manuscript).catch(() => null) : null
-      const gate = await callGateVerifier(input.config, { step: context.step, runId: input.runId, result, manuscript, artifacts, profile })
+      const gate = await callGateVerifier(input.config, { step: context.step, runId: input.runId, result, manuscript, artifacts, profile, planApproval, userId: input.userId })
       input.onGateResult?.(gateSummaryForStorage(gate))
       return mergeVerification(base, gate)
     } catch {

@@ -1,3 +1,4 @@
+import { PlanApprovalRequiredError } from './plan-approval'
 import type { AgentResultV1, VerificationResultV1 } from './contracts'
 import { claimAgentStep, completeAgentStep, type AgentBackendResult, type AgentRunControlStatus } from './backend-contract'
 import type { AgentStepRecord } from './run-state'
@@ -34,7 +35,9 @@ export async function processClaimedAgentStep(
     result = await handlers.execute(step)
     verification = await handlers.verify({ ...result, agent: step.agent }, { step })
   } catch (error) {
-    verification = error instanceof AgentBillingReconciliationError
+    verification = error instanceof PlanApprovalRequiredError
+      ? { status: 'blocked', issues: [{ code: 'gate_finding', message: 'Pregledaj i izričito odobri plan prije nastavka pisanja.' }], evidence: [] }
+      : error instanceof AgentBillingReconciliationError
       ? {
         status: 'failed',
         billingState: error.billingState,

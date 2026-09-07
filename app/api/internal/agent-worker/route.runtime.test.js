@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createProviderBackedExecutor: vi.fn(),
   runAgentWorkerLoop: vi.fn(),
   loadRunManuscriptContext: vi.fn(),
+  loadRunContextSnapshot: vi.fn(),
   loadRunMaterialContexts: vi.fn(),
   runContextStoragePaths: vi.fn(),
   verifyAgentResult: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/lib/agents/worker-loop', () => ({ runAgentWorkerLoop: mocks.runAgentW
 vi.mock('@/lib/agents/run-context-loader', () => ({
   createSupabaseRunPayloadManifestStore: vi.fn(() => ({})),
   loadRunManuscriptContext: mocks.loadRunManuscriptContext,
+  loadRunContextSnapshot: mocks.loadRunContextSnapshot,
   loadRunMaterialContexts: mocks.loadRunMaterialContexts,
 }))
 vi.mock('@/lib/agents/run-context', () => ({ runContextStoragePaths: mocks.runContextStoragePaths }))
@@ -217,6 +219,7 @@ it('wires the export gate to the verified plan, scoped loaders and text-free log
     citations: [], createdAt: '2026-09-07T00:00:00Z', output: `<!-- PLAN:JSON -->${JSON.stringify(plan)}<!-- /PLAN:JSON -->`, ...extra,
   })
   mocks.loadRunManuscriptContext.mockResolvedValue(manuscript)
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript })
   mocks.loadAgentRunResults.mockResolvedValue([
     makeArtifact('structure', 2, { thesis: 'PRIVATE thesis', perspectives: [{ label: 'a', position: 'a', why: 'a' }, { label: 'b', position: 'b', why: 'b' }], chapters: [{ sectionId: 's1', title: 'Chapter', pages: 2 }] }),
     makeArtifact('planning', 3, { chapters: [{ sectionId: 's1', content: 'PRIVATE program', sources: ['source-1'] }] }),
@@ -239,7 +242,7 @@ it('wires the export gate to the verified plan, scoped loaders and text-free log
   const agentResult = { agent: 'export', output: 'PRIVATE output', citations: [], provider: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }
   expect((await verify(agentResult, { step: { id: 'export', order: 7, agent: 'export', attempt: 2 } })).status).toBe('needs_revision')
   const body = JSON.parse(fetchMock.mock.calls[0][1].body)
-  expect(body).toMatchObject({ runId: 'run-1', stepId: 'export', agent: 'export', attempt: 2, manuscript, profile: { citation: 'APA' }, agentResult, planApproved: true,
+  expect(body).toMatchObject({ runId: 'run-1', stepId: 'export', agent: 'export', attempt: 2, manuscript, profile: { citation: 'APA' }, agentResult, planReady: true, planApproved: false,
     plan: { thesis: 'PRIVATE thesis', chapters: [{ sectionId: 's1', title: 'Chapter', content: 'PRIVATE program', sources: ['source-1'] }] },
   })
   expect(body.plan.chapters).toHaveLength(1)
@@ -249,4 +252,31 @@ it('wires the export gate to the verified plan, scoped loaders and text-free log
   const log = String(info.mock.calls.at(-1)[0])
   expect(log).not.toContain('PRIVATE')
   expect(JSON.parse(log)).toMatchObject({ eventName: 'agent_gate_verified', requestId: 'worker-request-1', gate: { faza: 'predaja', prolaz: false, exitCode: 1 } })
+})
+
+it('requires explicit plan approval before provider execution even in autonomous mode with an optional service', async () => {
+  const { buildPlanReview } = await import('@/lib/agents/plan-approval')
+  const { selectVerifiedAgentArtifacts } = await import('@/lib/agents/artifact-chain')
+  const manuscript = { schemaVersion: 1, projectId: 'project-1', title: 'Topic', workType: 's', sections: [], sources: [], meta: {} }
+  const saved = { materialId: 'plan-1', stepId: 'planning', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, attempt: 1, projectId: 'project-1', runId: 'run-1', createdAt: '2026-09-01T00:00:00Z', citations: [], verification: { status: 'verified' },
+    output: '<!-- PLAN:JSON -->{"thesis":"Thesis","chapters":[{"sectionId":"s1","content":"Program","sources":["src1"]}]}<!-- /PLAN:JSON -->' }
+  mocks.loadAgentRunResults.mockResolvedValue([saved])
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript })
+  mocks.createAdminClient.mockReturnValue(database({ ...run, mode: 'autonomous' }))
+  const executeProvider = vi.fn().mockResolvedValue({ output: 'Generated' })
+  mocks.createProviderBackedExecutor.mockReturnValue(executeProvider)
+  const { POST } = await loadRoute()
+  expect((await POST(request())).status).toBe(200)
+  const { execute } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+  const step = { id: 'writing', agent: 'writing', order: 4, attempt: 1 }
+  await expect(execute(step)).rejects.toThrow('Plan approval required')
+  expect(executeProvider).not.toHaveBeenCalled()
+  const review = buildPlanReview(manuscript, selectVerifiedAgentArtifacts([saved], { order: 4 }))
+  const planApproval = { schemaVersion: 1, projectId: 'project-1', runId: 'run-1', approvedBy: 'user-1', planRevision: review.planRevision, approvedAt: '2026-09-01T00:00:00Z' }
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript, planApproval })
+  await expect(execute(step)).resolves.toEqual({ output: 'Generated' })
+  expect(executeProvider).toHaveBeenCalledOnce()
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript: { ...manuscript, title: 'Changed plan topic' }, planApproval })
+  await expect(execute(step)).rejects.toThrow('Plan approval required')
+  expect(executeProvider).toHaveBeenCalledOnce()
 })

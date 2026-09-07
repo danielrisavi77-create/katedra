@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentResultV1, VerificationResultV1 } from './contracts'
 import type { AgentStepRecord } from './run-state'
 import type { ManuscriptV1 } from '../manuscript/types'
+import { buildPlanReview } from './plan-approval'
 import { callGateVerifier, createGateBackedVerifier, gateSummaryForStorage, mergeVerification, resolveGateVerifierConfig } from './gate-verifier'
 
 const manuscript = { version: 1, id: 'm', title: 't', workType: 'd', meta: {}, sections: [], sources: [] } as unknown as ManuscriptV1
@@ -101,7 +102,8 @@ it('sends chapter scope and a legacy plan mapped to manuscript section IDs', asy
   })
   const body = JSON.parse(fetchImpl.mock.calls[0][1].body)
   expect(body.sectionId).toBe('chapter-1')
-  expect(body.planApproved).toBe(true)
+  expect(body.planApproved).toBe(false)
+  expect(body.planReady).toBe(true)
   expect(body.plan.chapters).toEqual([{ sectionId: 'chapter-1', title: 'Uvod', pages: 2, content: 'Chapter program', sources: ['source-1'] }])
 })
 
@@ -117,4 +119,18 @@ it('aborts a timed-out service and retains the blocking citation result', async 
   expect(merged.status).toBe('blocked')
   expect(merged.issues[0].code).toBe('verifier_error')
   expect(JSON.stringify(merged)).not.toContain('private upstream')
+})
+
+it('sends approval only when stored owner, run and plan revision match the current verified plan', async () => {
+  const current = { ...manuscript, projectId: 'project-1', workType: 's' as const }
+  const artifacts = [{ artifactId: 'plan-1', stepId: 'planning', agent: 'planning' as const, verifier: 'planning_verifier' as const, stepOrder: 3, attempt: 1 as const, citations: [],
+    output: '<!-- PLAN:JSON -->{"thesis":"Thesis","chapters":[{"sectionId":"s1","content":"Program","sources":["src1"]}]}<!-- /PLAN:JSON -->' }]
+  const review = buildPlanReview(current, artifacts)
+  const planApproval = { schemaVersion: 1, projectId: 'project-1', runId: 'r', approvedBy: 'user-1', planRevision: review.planRevision, approvedAt: '2026-09-01T00:00:00Z' }
+  const fetchImpl = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ result: { status: 'verified', issues: [] } })))
+  const input = { runId: 'r', userId: 'user-1', step, result, manuscript: current, artifacts, planApproval }
+  await callGateVerifier({ url: 'https://gate.example', token: 'fixture', fetchImpl }, input)
+  expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toMatchObject({ planReady: true, planApproved: true, planRevision: review.planRevision, planApproval })
+  await callGateVerifier({ url: 'https://gate.example', token: 'fixture', fetchImpl }, { ...input, userId: 'other-user' })
+  expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toMatchObject({ planReady: true, planApproved: false, planApproval: null })
 })
