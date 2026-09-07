@@ -69,6 +69,7 @@ not the worker. An explicitly requested unsupported external mode exits 1.
 - Signed webhook identity checks do not prove canonical concurrent-purchase
   exclusion or wallet idempotency. Refund replay beyond Stripe's idempotency
   retention needs durable refund identity and update handling.
-- Declared ZIP metadata and promise timeouts do not bound actual decompression
-  or terminate extraction. Resource isolation remains an open local hardening
-  task, separate from Lekta's exclusive DOCX compliance authority.
+- Actual ZIP expansion is now bounded by `zip-resource-check.ts`, including
+  trailing-stream and Unicode-path ambiguity checks. Promise timeouts still do
+  not terminate extraction. Cancellable CPU isolation remains an open local
+  hardening task, separate from Lekta's exclusive DOCX compliance authority.

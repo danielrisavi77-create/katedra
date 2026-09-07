@@ -52,5 +52,5 @@ No option has been silently selected. Current changes reduce risks within existi
 - Prove tombstone/orphan recovery and scheduled physical deletion; access expiry alone is insufficient.
 - Provide atomic context replacement semantics; overwriting fixed Storage objects and compensating deletes can destroy the previous context on partial failure.
 - Prove shared billing/lease/entitlement/withdrawal contracts and RLS in staging.
-- Resolve extraction resource safety: declared ZIP sizes and a promise timeout do not bound actual decompression or terminate ongoing work.
+- ZIP output is now checked against actual bounded inflation. Cancellable extraction isolation remains open: a promise timeout does not terminate ongoing work. See `DOCX_RESOURCE_SAFETY.md`.
 - Keep the two independent product signals: Katedra process progress and Lekta technical findings.
