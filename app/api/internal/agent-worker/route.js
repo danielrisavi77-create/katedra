@@ -13,6 +13,8 @@ import { createSupabaseRunPayloadManifestStore, loadRunManuscriptContext, loadRu
 import { runContextStoragePaths } from '@/lib/agents/run-context'
 import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
+import { createGateBackedVerifier, resolveGateVerifierConfig } from '@/lib/agents/gate-verifier'
+import { selectVerifiedAgentArtifacts } from '@/lib/agents/artifact-chain'
 import { verifyAgentResult } from '@/lib/agents/verifier'
 import { createIndependentCitationVerifier } from '@/lib/agents/source-verification'
 import { createGatewayPassageVerifier, executeBilledPassageVerification } from '@/lib/agents/passage-verification'
@@ -188,9 +190,26 @@ async function handlePost(req) {
     if (!stored.ok) throw new Error(stored.error)
     return { manifestId: stored.value.manifestId }
   })
+  const gateVerify = createGateBackedVerifier({
+    config: resolveGateVerifierConfig(process.env),
+    runId,
+    baseVerify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true }),
+    loadContext: async ({ step }) => {
+      const manuscript = await loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id })
+      const results = await loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET })
+      // Omit agent so citation/export retain structure and planning; keep run, project and prior-step checks.
+      const artifacts = selectVerifiedAgentArtifacts(results, { order: step.order, projectId: run.project_id, runId })
+      return { manuscript, artifacts }
+    },
+    loadProfileHint: (manuscript) => packProfileHint(manuscript.meta?.profileId),
+    onGateResult: (summary) => logAiEvent({
+      eventName: 'agent_gate_verified', requestId: getRequestId(req), runId,
+      userId: run.user_id, projectId: run.project_id, gate: summary,
+    }),
+  })
   const result = await runAgentWorkerLoop(
     { db, workerId: process.env.KATEDRA_AGENT_WORKER_ID || 'katedra-web-worker', runId },
-    { execute, verify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true }), storeResult },
+    { execute, verify: gateVerify, storeResult },
     { maxSteps: 1 },
   )
   if (result.error) return privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 })

@@ -8,7 +8,7 @@ export type WorkerLoopStopStatus = WorkerStepStatus | 'limit'
 
 export interface AgentWorkerLoopHandlers {
   execute: (step: AgentStepRecord) => Promise<Omit<AgentResultV1, 'agent'>>
-  verify: (result: AgentResultV1) => VerificationResultV1
+  verify: (result: AgentResultV1, context: { step: AgentStepRecord }) => VerificationResultV1 | Promise<VerificationResultV1>
 }
 
 export interface AgentWorkerLoopOptions {

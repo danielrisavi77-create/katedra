@@ -56,6 +56,7 @@ export function safeAiEvent(event: AiEventMetadata): Record<string, unknown> {
     ...optionalString(event.reason, 'reason', 120),
     ...optionalString(event.errorCode, 'errorCode', 120),
     ...optionalInteger(event.status, 'status'),
+    ...optionalGateSummary(event.gate),
   }
 }
 
@@ -92,4 +93,23 @@ function optionalInteger(value: unknown, key: string): Record<string, number> {
 
 function boundedString(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
+}
+
+
+function optionalGateSummary(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const gate = value as Record<string, unknown>
+  return { gate: {
+    ...(['plan', 'pisanje', 'audit', 'predaja'].includes(String(gate.faza)) ? { faza: gate.faza } : {}),
+    ...(typeof gate.prolaz === 'boolean' ? { prolaz: gate.prolaz } : {}),
+    ...optionalInteger(gate.exitCode, 'exitCode'),
+    koraci: (Array.isArray(gate.koraci) ? gate.koraci : []).slice(0, 100).flatMap((step) => {
+      if (!step || typeof step !== 'object') return []
+      return [{
+        ...optionalString(step.korak, 'korak', 80),
+        ...optionalString(step.stanje, 'stanje', 40),
+        ...(typeof step.blokira === 'boolean' ? { blokira: step.blokira } : {}),
+      }]
+    }),
+  } }
 }

@@ -134,3 +134,25 @@ describe('agent worker loop', () => {
     expect(rpc.mock.calls.filter(([name]) => name === 'claim_agent_step')).toHaveLength(1)
   })
 })
+
+
+describe('async gate verification through the worker loop', () => {
+  it('awaits the gate before completion and forwards the claimed step', async () => {
+    const rpc = vi.fn<Rpc>()
+      .mockResolvedValueOnce({ data: [step(2)], error: null })
+      .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
+    const agentHandlers = handlers()
+    const verify = vi.fn(async (_result, context) => {
+      expect(context.step).toMatchObject({ id: 'step-1', agent: 'writing', attempt: 2 })
+      expect(rpc).toHaveBeenCalledTimes(1)
+      await Promise.resolve()
+      return { status: 'needs_revision' as const, issues: [{ code: 'gate_finding' as const, message: 'Plan missing' }], evidence: [] }
+    })
+    const outcome = await runAgentWorkerLoop(dependencies(rpc), { ...agentHandlers, verify }, { maxSteps: 1 })
+    expect(outcome.status).toBe('retrying')
+    expect(verify).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
+      p_requeue: true, p_verification: expect.objectContaining({ status: 'needs_revision', issues: [expect.objectContaining({ code: 'gate_finding' })] }),
+    }))
+  })
+})
