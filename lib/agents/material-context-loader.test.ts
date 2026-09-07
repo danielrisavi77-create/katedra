@@ -28,7 +28,7 @@ describe('run material context loader', () => {
       })).buffer),
     }
 
-    await expect(loadRunMaterialContexts(manifestStore, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' })).resolves.toEqual([{
+    await expect(loadRunMaterialContexts(manifestStore, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket', now: Date.parse('2026-08-15T00:00:00.000Z') })).resolves.toEqual([{
       id: 'material-1', name: 'Upute', kind: 'mentor', text: 'Mentor traži jasnu tezu.', warnings: [],
     }])
     expect(manifestStore.list).toHaveBeenCalledWith('run-1', 'project-1')
@@ -49,7 +49,7 @@ describe('run material context loader', () => {
     }
 
     await expect(loadRunMaterialContexts(manifestStore, storage, {
-      runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket',
+      runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket', now: Date.parse('2026-08-15T00:00:00.000Z'),
     })).resolves.toEqual([{ id: 'scan-1', name: 'Sken', kind: 'scan', warnings: [], image: { mimeType: 'image/png', data: 'iVBORw==' } }])
     expect(storage.download).toHaveBeenCalledWith('user-1/project-1/run-1/scan.png')
   })
@@ -141,7 +141,7 @@ describe('run material context loader', () => {
       })),
     }
 
-    await expect(loadRunMaterialContexts(manifestStore, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' }))
+    await expect(loadRunMaterialContexts(manifestStore, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket', now: Date.parse('2026-08-15T00:00:00.000Z') }))
       .rejects.toThrow('Kontekst materijala je prevelik')
   })
 })
