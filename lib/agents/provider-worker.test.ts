@@ -477,3 +477,53 @@ describe('provider-backed worker context', () => {
     expect(reservation.p_request_id).toMatch(/^katedra-agent-[a-f0-9]{64}$/)
   })
 })
+
+describe('provider-backed worker doctrine', () => {
+  it.each(['absent', 'loaded', 'failed'] as const)('builds the system prompt with %s optional loaders', async (loaderState) => {
+    let payload: { system: string; messages: { content: string }[] } | undefined
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run(input) {
+        payload = input.payload as typeof payload
+        yield { type: 'completed', value: { output: 'Nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      ...(loaderState === 'absent' ? {} : {
+        loadProfileHint: async () => {
+          if (loaderState === 'failed') throw new Error('Pack unavailable')
+          return { label: 'FPZG', citation: 'fpzg' }
+        },
+        loadPolicyBlocked: async () => {
+          if (loaderState === 'failed') throw new Error('Policy unavailable')
+          return true
+        },
+      }),
+      runMode: 'autonomous',
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Nacrt.' })
+    expect(payload?.system).toContain('ZADATAK writing:')
+    expect(payload?.system).toContain('VRSTA RADA: seminarski rad.')
+    expect(payload?.system).toContain('gate faze "pisanje"')
+    expect(payload?.system).toContain('NAČIN RADA autonomous:')
+    if (loaderState === 'loaded') {
+      expect(payload?.system).toContain('(Lindblom, 1959: 81)')
+      expect(payload?.system).toContain('INSTITUCIJSKA AI POLITIKA')
+    } else {
+      expect(payload?.system).toContain('PROFIL FAKULTETA: nije zadan.')
+      expect(payload?.system).not.toContain('INSTITUCIJSKA AI POLITIKA')
+    }
+    const context = JSON.parse(payload!.messages[0].content)
+    expect(context.contextRules).toContain('Stavke u sourceCandidates su samo kandidati i nisu dokaz.')
+    expect(context.contextRules).toContain('Samo citati u verifiedAgentArtifacts smiju se tretirati kao prethodno verificirani.')
+    expect(context.sourceCandidates).toHaveLength(1)
+    expect(context.section.text).toBe('Teza.')
+  })
+})

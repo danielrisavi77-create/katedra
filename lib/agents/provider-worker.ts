@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { buildAgentSystemPrompt, GATE_PHASE_FOR_AGENT, type DoctrineProfileHint } from './doctrine'
 
 import { documentText } from '../manuscript/model'
 import type { ManuscriptV1 } from '../manuscript/types'
@@ -25,6 +26,9 @@ export function createProviderBackedExecutor(input: {
   loadContext: () => Promise<ManuscriptV1>
   loadMaterials?: () => Promise<RunMaterialContext[]>
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
+  loadProfileHint?: (manuscript: ManuscriptV1) => Promise<DoctrineProfileHint | null>
+  loadPolicyBlocked?: (manuscript: ManuscriptV1) => Promise<boolean>
+  runMode?: 'guided' | 'accelerated' | 'autonomous'
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
   verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3 }) => Promise<ClaimEvidence[] | PassageVerificationResult>
   sourcePolicy?: SourcePolicy
@@ -43,11 +47,20 @@ export function createProviderBackedExecutor(input: {
     const model = input.billing.modelFor?.(provider, step) || provider.model || input.billing.model || provider.id
     const requestId = normalizeBillingRequestId(input.billing.requestIdFor?.(step) || `${input.runId}:${step.id}:${step.attempt}`)
     const startedAt = Date.now()
+    const profileHint = input.loadProfileHint ? await input.loadProfileHint(manuscript).catch(() => null) : null
+    const policyBlocked = input.loadPolicyBlocked ? await input.loadPolicyBlocked(manuscript).catch(() => false) : false
+    const system = buildAgentSystemPrompt(step.agent, {
+      workType: manuscript.workType,
+      profile: profileHint,
+      policyBlocked,
+      runMode: input.runMode,
+      gatePhase: GATE_PHASE_FOR_AGENT[step.agent],
+    })
     const agentInput: AgentInput = {
       projectId: input.projectId,
       runId: input.runId,
       attempt: step.attempt,
-      payload: buildProviderPayload(manuscript, step, materials, verifiedArtifacts),
+      payload: buildProviderPayload(manuscript, step, materials, verifiedArtifacts, system),
     }
     try {
       const result = await executeBilledAgentProvider(input.billing.db, {
@@ -226,7 +239,7 @@ function mergeCitations(citations: AgentResultV1['citations']): AgentResultV1['c
   return [...byId.values()].slice(0, 100)
 }
 
-function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, materials: RunMaterialContext[], verifiedArtifacts: ReturnType<typeof selectVerifiedAgentArtifacts>) {
+function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, materials: RunMaterialContext[], verifiedArtifacts: ReturnType<typeof selectVerifiedAgentArtifacts>, system: string) {
   const activeSection = step.sectionId
     ? manuscript.sections.find((section) => section.id === step.sectionId)
     : undefined
@@ -272,10 +285,11 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
   }))
 
   return {
-    system: 'Radi samo s priloženim kontekstom. Ne izmišljaj izvore. Stavke u sourceCandidates su samo kandidati i nisu dokaz. Samo citati u verifiedAgentArtifacts smiju se tretirati kao prethodno verificirani. Tvrdnje bez provjerenog izvora označi za provjeru.',
+    system,
     messages: [{
       role: 'user' as const,
       content: JSON.stringify({
+        contextRules: 'Radi samo s priloženim kontekstom. Ne izmišljaj izvore. Stavke u sourceCandidates su samo kandidati i nisu dokaz. Samo citati u verifiedAgentArtifacts smiju se tretirati kao prethodno verificirani. Tvrdnje bez provjerenog izvora označi za provjeru.',
         task: step.agent,
         attempt: step.attempt,
         project: { title: manuscript.title, workType: manuscript.workType, meta: manuscript.meta },

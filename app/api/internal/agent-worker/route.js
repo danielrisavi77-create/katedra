@@ -5,6 +5,9 @@ import { createAnthropicAgentProvider } from '@/lib/agents/anthropic-provider'
 import { createGatewayAgentProvider } from '@/lib/agents/provider-gateway'
 import { createProviderRouter } from '@/lib/agents/provider-router'
 import { createProviderBackedExecutor } from '@/lib/agents/provider-worker'
+import { packProfileHint } from '@/lib/agents/pack-profile.server'
+import { resolveCapability } from '@/lib/academic-suite/process-facts'
+import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 import { runAgentWorkerLoop } from '@/lib/agents/worker-loop'
 import { createSupabaseRunPayloadManifestStore, loadRunManuscriptContext, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
 import { runContextStoragePaths } from '@/lib/agents/run-context'
@@ -72,7 +75,7 @@ async function handlePost(req) {
     return privateJson({ error: 'Agent worker storage trenutno nije konfiguriran.' }, { status: 503 })
   }
   const { data: run, error: runError } = await db.from('agent_runs')
-    .select('run_id, user_id, project_id, source_policy, status')
+    .select('run_id, user_id, project_id, mode, source_policy, status')
     .eq('run_id', runId)
     .maybeSingle()
   if (runError) return privateJson({ error: 'Run nije moguće učitati.' }, { status: 503 })
@@ -143,6 +146,14 @@ async function handlePost(req) {
     projectId: run.project_id,
     runId,
     sourcePolicy: run.source_policy,
+    loadProfileHint: (manuscript) => packProfileHint(manuscript.meta?.profileId),
+    loadPolicyBlocked: async (manuscript) => {
+      const facts = await loadProcessFactsFromDisk()
+      const resolved = resolveCapability(facts, manuscript.meta?.unitId || '', 'generate_large_sections')
+      // Mentorov unlock ovdje namjerno ne vrijedi: agent run nema ack tok.
+      return resolved.effective === 'blocked'
+    },
+    runMode: run.mode,
     loadContext: () => loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
     loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),

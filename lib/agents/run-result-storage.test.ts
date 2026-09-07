@@ -68,7 +68,7 @@ describe('agent result payload storage', () => {
     ]) }
     const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2026-08-17T10:00:00.000Z', verification }
     const storage = { download: vi.fn(async (path: string) => path.endsWith('/manifest.json') ? JSON.stringify({ ...payload, storagePath: 'result.json', materialId: 'agent-result:step-1:1' }) : JSON.stringify(payload)) }
-    const loaded = await loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' })
+    const loaded = await loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket', now: Date.parse('2026-08-15T00:00:00.000Z') })
     expect(loaded).toHaveLength(1)
     expect(loaded[0]).toMatchObject({ stepId: 'step-1', output: 'Novi odlomak rada.', projectId: 'project-1', claims: [{ id: 'claim-1', citationIds: ['source-1'] }] })
     expect(storage.download).toHaveBeenCalledWith('user-1/project-1/run-1/manifest.json')
@@ -189,7 +189,7 @@ describe('agent result payload storage', () => {
         : JSON.stringify(payload)),
     }
 
-    await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' }))
+    await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket', now: Date.parse('2026-08-15T00:00:00.000Z') }))
       .resolves.toHaveLength(1)
   })
 
