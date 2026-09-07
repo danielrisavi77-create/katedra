@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "incremental": false
+  },
+  "include": [
+    "lib/ai/cost-policy.ts",
+    "lib/agents/worker-config.ts",
+    "lib/agents/run-context-access.ts",
+    "lib/deployment/agentic-preflight.mjs"
+  ],
+  "exclude": ["node_modules", "Lekta"]
+}

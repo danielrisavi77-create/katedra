@@ -102,7 +102,8 @@ export async function loadRunMaterialContexts(
   storage: RunPayloadStorage,
   input: { runId: string; projectId: string; userId?: string; bucket?: string; now?: number },
 ): Promise<RunMaterialContext[]> {
-  if (!input.userId || !input.bucket) return []
+  const { userId, bucket } = input
+  if (!userId || !bucket) return []
   const entries = await manifests.list(input.runId, input.projectId)
   if (entries.length > MAX_RUN_MATERIALS) throw new MaterialContextLimitError('Previše materijala za jedan agenticni run.')
   const now = input.now ?? Date.now()
@@ -110,7 +111,7 @@ export async function loadRunMaterialContexts(
   const imageBudget = { totalBytes: 0 }
   const contexts = await mapWithConcurrency(entries, 8, async (entry) => {
     if (entry.runId !== input.runId || entry.projectId !== input.projectId) return null
-    if (!isScopedAgentPayload(entry, { userId: input.userId, projectId: input.projectId, runId: input.runId, bucket: input.bucket })) return null
+    if (!isScopedAgentPayload(entry, { userId, projectId: input.projectId, runId: input.runId, bucket })) return null
     try {
       const raw = await storage.download(entry.manifestPath)
       const bytes = toBytes(raw)
