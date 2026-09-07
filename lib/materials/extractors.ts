@@ -55,8 +55,11 @@ function isMimeCompatible(extension: string | undefined, mimeType: string): bool
   if (extension === 'md') return type === 'text/markdown' || type === 'text/plain'
   if (extension === 'docx') return type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || type === 'application/zip'
   if (extension === 'pdf') return type === 'application/pdf'
-  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'tif', 'tiff'].includes(extension || '')) return type.startsWith('image/')
-  return true
+  const imageMimeTypes: Record<string, string> = {
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    webp: 'image/webp', gif: 'image/gif', tif: 'image/tiff', tiff: 'image/tiff',
+  }
+  return imageMimeTypes[extension || ''] === type
 }
 
 function validateBinarySignature(extension: string | undefined, buffer: Buffer): string | null {
@@ -112,9 +115,10 @@ function normalizeText(text: string, warnings: string[] = []): MaterialExtractio
   const trimmed = text.trim()
   if (!trimmed) return { status: 'needs_review', text: '', warnings: [...warnings, 'Dokument nema prepoznat tekst.'] }
   const truncated = trimmed.length > MATERIAL_LIMITS.maxTextChars
+  const truncationMarker = '\n\n[tekst skraćen zbog ograničenja]'
   return {
     status: truncated ? 'partial' : warnings.length ? 'partial' : 'extracted',
-    text: truncated ? `${trimmed.slice(0, MATERIAL_LIMITS.maxTextChars)}\n\n[tekst skraćen zbog ograničenja]` : trimmed,
+    text: truncated ? `${trimmed.slice(0, MATERIAL_LIMITS.maxTextChars - truncationMarker.length)}${truncationMarker}` : trimmed,
     warnings: truncated ? [...warnings, 'Tekst je skraćen zbog ograničenja veličine.'] : warnings,
   }
 }
