@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import LegalSummaryModal from '../../legal-summary-modal'
 import type { LegacyWorkType } from '../../../lib/manuscript/types'
@@ -15,21 +15,10 @@ const PASS_PACKAGES: Record<LegacyWorkType, { key: string; name: string; price: 
 const PASS_INCLUDES: Record<LegacyWorkType, string[]> = {
   s: ['struktura i izvori', 'pisanje po sekcijama', 'revizija i Lekta handoff'],
   z: ['istraživačko pitanje i metodologija', 'pisanje i mentor review', 'priprema obrane i Lekta handoff'],
-  d: ['istraživački dizajn i podatci', 'više revizijskih krugova', 'simulator obrane i Lekta handoff'],
+  d: ['istraživački dizajn i podatci', 'više revizijskih krugova', 'priprema obrane i Lekta handoff'],
 }
 
-export function PassDialog({
-  open,
-  projectId,
-  workType,
-  projectTitle = 'Rad bez naslova',
-  institution,
-  program,
-  mentor,
-  deadline,
-  onClose,
-  onRedirect = (url) => window.location.assign(url),
-}: {
+type PassDialogProps = {
   open: boolean
   projectId: string
   workType: LegacyWorkType
@@ -40,11 +29,33 @@ export function PassDialog({
   deadline?: string
   onClose: () => void
   onRedirect?: (url: string) => void
-}) {
+}
+
+export function PassDialog(props: PassDialogProps) {
+  if (!props.open) return null
+  // Consent belongs to this visible purchase summary, never the next one.
+  const contextKey = JSON.stringify([props.projectId, props.workType, props.projectTitle, props.institution, props.program, props.mentor, props.deadline])
+  return <OpenPassDialog key={contextKey} {...props} />
+}
+
+function OpenPassDialog({
+  open,
+  projectId,
+  workType,
+  projectTitle = 'Rad bez naslova',
+  institution,
+  program,
+  mentor,
+  deadline,
+  onClose,
+  onRedirect = (url) => window.location.assign(url),
+}: PassDialogProps) {
   const [consent, setConsent] = useState(false)
   const [lockConsent, setLockConsent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const requestRef = useRef<AbortController | null>(null)
+  useEffect(() => () => { requestRef.current?.abort() }, [])
   const pkg = PASS_PACKAGES[workType]
 
   if (!open) return null
@@ -53,16 +64,21 @@ export function PassDialog({
     if (!consent || !lockConsent || busy) return
     setBusy(true)
     setError('')
+    const controller = new AbortController()
+    requestRef.current = controller
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ package: pkg.key, projectId, topic: projectTitle, lockConfirmation: true }),
       })
       const body = await response.json().catch(() => ({}))
+      if (controller.signal.aborted) return
       if (!response.ok || typeof body.url !== 'string') throw new Error(body.error || 'Plaćanje trenutačno nije dostupno.')
       onRedirect(body.url)
     } catch (checkoutError) {
+      if (controller.signal.aborted) return
       setError(checkoutError instanceof Error ? checkoutError.message : 'Plaćanje trenutačno nije dostupno.')
       setBusy(false)
     }

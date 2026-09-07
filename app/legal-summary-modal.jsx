@@ -41,17 +41,13 @@ export default function LegalSummaryModal({ type, triggerLabel }) {
     if (!open) return undefined
 
     const previousOverflow = document.body.style.overflow
+    const previousFocus = document.activeElement
     document.body.style.overflow = 'hidden'
     dialogRef.current?.focus()
 
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', onKeyDown)
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()
     }
   }, [open])
 
@@ -84,6 +80,26 @@ export default function LegalSummaryModal({ type, triggerLabel }) {
             aria-labelledby={`legal-summary-title-${type}`}
             aria-describedby={`legal-summary-description-${type}`}
             tabIndex={-1}
+            onKeyDown={(event) => {
+              // Handle the inner dialog before a parent modal's document listener.
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                setOpen(false)
+              }
+              if (event.key !== 'Tab') return
+              event.stopPropagation()
+              const controls = Array.from(event.currentTarget.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'))
+              const first = controls[0]
+              const last = controls[controls.length - 1]
+              if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+                event.preventDefault()
+                last?.focus()
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault()
+                first?.focus()
+              }
+            }}
           >
             <button type="button" className="legal-modal-close" onClick={() => setOpen(false)} aria-label="Zatvori sažetak">
               ×

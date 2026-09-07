@@ -190,7 +190,7 @@ export function ProjectDrawer({
           {tab === 'help' && (
             <section>
               <p className="pis-kicker">Kako radi</p><h3>Pišeš ti. Katedra uređuje uz tvoju potvrdu.</h3>
-              <ol className="pis-help-steps"><li><b>Piši u sredini.</b><span>Svako poglavlje ima vlastiti prostor i lokalnu verziju.</span></li><li><b>Označi tekst.</b><span>Katedra dobiva samo aktivnu sekciju ili označeni dio.</span></li><li><b>Pregledaj prijedlog.</b><span>Ništa ne ulazi u rukopis dok ne odabereš Prihvati.</span></li><li><b>Izvezi i provjeri.</b><span>DOCX otvori u Wordu i provjeri u Lekti.</span></li></ol>
+              <ol className="pis-help-steps"><li><b>Piši u sredini.</b><span>Svako poglavlje ima vlastiti prostor i lokalnu verziju.</span></li><li><b>Označi tekst.</b><span>U chatu Katedra dobiva aktivnu sekciju ili označeni dio, uz strukturu rada, naslove izvora i dodane materijale.</span></li><li><b>Pregledaj prijedlog.</b><span>Ništa ne ulazi u rukopis dok ne odabereš Prihvati.</span></li><li><b>Izvezi i provjeri.</b><span>DOCX otvori u Wordu i provjeri u Lekti.</span></li></ol>
             </section>
           )}
         </div>
