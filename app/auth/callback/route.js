@@ -6,6 +6,12 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getSafeInternalRedirect } from '@/lib/auth/redirect'
 
+function privateRedirect(url) {
+  const response = NextResponse.redirect(url)
+  response.headers.set('Cache-Control', 'private, no-store')
+  return response
+}
+
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
@@ -13,34 +19,39 @@ export async function GET(request) {
   const redirect = getSafeInternalRedirect(searchParams.get('redirect'))
 
   if (oauthError) {
-    return NextResponse.redirect(`${origin}/prijava?error=${encodeURIComponent(oauthError)}`)
+    return privateRedirect(`${origin}/prijava?error=auth_callback_failed`)
   }
 
-  if (code) {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          getAll() { return cookieStore.getAll() },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
+  try {
+    if (code) {
+      const cookieStore = await cookies()
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        {
+          cookies: {
+            getAll() { return cookieStore.getAll() },
+            setAll(cookiesToSet) {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            },
           },
-        },
-      }
-    )
+        }
+      )
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      // Keep auth recovery and email-confirmation links inside the Katedra
-      // app that handled the callback. A shared NEXT_PUBLIC_APP_URL can point
-      // at Lekta in a cross-repo setup and must not control this redirect.
-      return NextResponse.redirect(`${origin}${redirect}`)
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      if (!error) {
+        // Keep auth recovery and email-confirmation links inside the Katedra
+        // app that handled the callback. A shared NEXT_PUBLIC_APP_URL can point
+        // at Lekta in a cross-repo setup and must not control this redirect.
+        return privateRedirect(`${origin}${redirect}`)
+      }
     }
+  } catch {
+    // Callback errors can contain provider details or credentials. Return the
+    // same bounded failure as a rejected code without reflecting those details.
   }
 
-  return NextResponse.redirect(`${origin}/prijava?error=auth_callback_failed`)
+  return privateRedirect(`${origin}/prijava?error=auth_callback_failed`)
 }
