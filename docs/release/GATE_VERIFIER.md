@@ -37,7 +37,7 @@ Katedra does not add a document validator or change the Lekta contract.
 
 ## Explicit plan approval
 
-The matching service release is katedra-pkg 1.9.39 or newer. planReady means
+The matching service release is katedra-pkg 1.9.41 or newer. planReady means
 structural completeness; planApproved means a current, explicit user approval.
 Neither a complete PLAN block, a model response, nor a bare boolean grants consent.
 
