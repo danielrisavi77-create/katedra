@@ -28,23 +28,23 @@ Each implementation slice follows: inspect actual caller and contract; reproduce
 - [x] Section 2: finish baseline and record versions, counts, skips and browser checks in `docs/release/LOCAL_VERIFICATION_2026-09-07.md`.
 - [x] Sections 3, 26: reconcile PRs #19/#21/#36 and issues #23–#32 against current code; record classifications and remaining proof.
 - [x] Section 4: write `docs/architecture/CURRENT_ARCHITECTURE.md` with authority, persistence, compatibility and activation matrix.
-- [ ] Sections 5–6: audit DOCX content extraction and temporary Storage; test bounded extraction and revoked/expired context; document constitutional privacy options and canonical cleanup/replacement dependencies.
+- [x] Sections 5–6: audit DOCX content extraction and temporary Storage; actual ZIP expansion and revoked/expired context now tested; constitutional options and canonical cleanup/replacement dependencies documented. Hard CPU termination remains explicitly open local work.
 - [x] Sections 7–8, 17: complete mutation HTTP matrix; reproduce cost reservation, withdrawal confirmation and duplicate-refund failures; preserve replay and ownership checks. Exact purchase replay and effectful balance reads are documented too; remote guarantees remain external.
 - [x] Section 9: inspect run lease/claim/cancel/resume/retry/budget/provenance invariants with existing runtime tests; distinguish local contracts from deployed RPC proof. Evidence matrix is in `HTTP_AUTHORITY_MATRIX_2026-09-08.md`.
-- [ ] Section 10: extract a typed chat decision only where a reproduced bug justifies it, preserving HTTP and streaming contracts.
+- [ ] Section 10 (partial): reservation/cache regressions fixed using the existing typed cost policy; broader chat orchestration extraction deferred without another reproduced need.
 - [x] Section 11: extract pure state privacy projections from route orchestration; retain legacy writes and project ownership lookups. Typed finding projection extracted; other legacy allowlists remain explicit, not fully refactored.
 - [x] Section 12: reproduce hydration/proposal races with deferred responses; protect edits and extract bounded proposal lifecycle from workspace orchestration. Destroyed-editor transition and real Tiptap/browser checks also covered.
 - [x] Section 13: introduce scoped `typecheck:strict` for changed pure domains; do not enable global strictness.
 - [x] Section 14: provide an offline deterministic canonical database projection check, requiring a supplied authoritative generated source. No fresh canonical source was supplied; remote parity remains unverified.
 - [x] Section 15: reconcile typed server configuration and preflight requirements without enabling flags.
 - [x] Section 16: inspect log call sites and preserve only bounded identifiers, error codes and operational outcomes. Duplicate-refund and legacy starter raw error logs now use the existing projection.
-- [ ] Sections 18–20: map Pass promises to real capabilities; correct inaccurate copy; audit local AI provenance and policy verification without inventing facts or cross-device storage. Local ledger/export and evidence/date/scope guards complete; final promise matrix and owner freshness choices remain to document.
-- [ ] Sections 21–22: verify touched UI accessibility and responsiveness; change performance behavior only with measured evidence.
-- [ ] Sections 23–24: classify test evidence and remove misleading integration claims; consolidate browser helpers only if there is useful, proven duplication.
-- [ ] Section 25: publish current status and preserve historical release evidence.
-- [ ] Sections 27–30: prioritize P0/P1, avoid new subsystems, review and commit small independent changes.
-- [ ] Sections 31–32: final dependency audit, typecheck, strict check, lint, tests, build, browser checks, diff and security/privacy/billing/compatibility review.
-- [ ] Sections 33–36: write `docs/release/OVERNIGHT_HARDENING_2026-09-07.md`, audit completion against this checklist, and provide the requested terminal handoff.
+- [x] Sections 18–20: Pass promise matrix/copy, bounded local AI ledger/export, policy evidence/date/scope guards and owner freshness options documented. No institutional facts or cross-device persistence invented.
+- [x] Sections 21–22: actual editor/purchase focus and responsive browser assertions verified; no unmeasured performance improvement claimed.
+- [x] Sections 23–24: fixture-only worker evidence explicitly labeled; real/synthetic/external evidence separated. Optional browser-helper consolidation deferred.
+- [x] Section 25: current status published; historical release evidence preserved.
+- [x] Sections 27–30: reproduced local risks prioritized; semantic commits and read-only reviews completed, remaining authority boundaries isolated.
+- [x] Sections 31–32: final local audit, typecheck, strict check, lint, 1033 passing tests, build and three browser scripts complete; red preflights accurately external. GitHub exact-head results remain a separate PR gate.
+- [x] Sections 33–36: final `docs/release/OVERNIGHT_HARDENING_2026-09-08.md` records coverage, partial outcomes and concrete terminal handoff. No complete-product or activation claim.
 
 ## First implementation slice: bounded request reservations
 

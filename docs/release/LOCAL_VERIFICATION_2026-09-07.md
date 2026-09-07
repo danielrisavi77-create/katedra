@@ -84,3 +84,21 @@ with 28 moderate advisories. Production, agentic and release preflights each
 exited 1 because required configuration/canonical/staging evidence was absent.
 No secrets or flags were supplied to manufacture a pass. Final audit, secret
 scan, GitHub CI and any later changes still require their own verification.
+
+## Final implementation checkpoint — 2026-09-08
+
+Implementation head: `f411cca`. Typecheck, scoped strict check and lint exit 0;
+lint has no warnings. Full suite: **212 files passed, 4 skipped; 1033 tests passed,
+4 skipped**, 74.17 seconds. Production build exits 0. The three production-build
+browser scripts again report `PISI_WORKSPACE_BROWSER_E2E_PASS`,
+`HYBRID_MENTOR_UI_BROWSER_E2E_PASS` and `AGENT_STUDIO_UI_SMOKE_PASS` on port 3020.
+Hybrid explicitly keeps the authenticated journey blocked externally.
+
+Dependency audit exits 0 with 28 moderate advisories. Redacted gitleaks scans
+the 20 implementation commits and reports no leaks. Root checkout's 164 status
+entries equal the original captured state. Production/agentic/release preflights
+each exit 1 on absent configuration and canonical/authenticated release evidence.
+
+The [final report](OVERNIGHT_HARDENING_2026-09-08.md) records the changed-file
+inventory, commit list, limitations and next five actions. GitHub checks apply
+to the PR's exact head; local evidence does not replace them.

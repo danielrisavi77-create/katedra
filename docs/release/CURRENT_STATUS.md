@@ -1,6 +1,6 @@
 # Current release status — 2026-09-08
 
-**Hardening in progress; service activation is not approved.** Local verification is recorded in [LOCAL_VERIFICATION_2026-09-07.md](LOCAL_VERIFICATION_2026-09-07.md). Actual authority and unresolved privacy choices are mapped in [CURRENT_ARCHITECTURE.md](../architecture/CURRENT_ARCHITECTURE.md). Historical release documents remain historical evidence and are not superseded by a claim of production readiness.
+**Local hardening verified; draft review handoff, service activation is not approved.** The final scope and remaining work are recorded in [OVERNIGHT_HARDENING_2026-09-08.md](OVERNIGHT_HARDENING_2026-09-08.md). Local checkpoints remain in [LOCAL_VERIFICATION_2026-09-07.md](LOCAL_VERIFICATION_2026-09-07.md). Actual authority and unresolved privacy choices are mapped in [CURRENT_ARCHITECTURE.md](../architecture/CURRENT_ARCHITECTURE.md). Historical release documents remain historical evidence and are not superseded by a claim of production readiness.
 
 ## PR reconciliation against master 24dfc18
 
@@ -20,7 +20,7 @@
 | [#26](https://github.com/danielrisavi77-create/katedra/issues/26) | OWNER_DECISION; PARTIALLY_FIXED | Constitutional content/Storage choices remain open; local expiry guard reduces access risk but does not establish deletion |
 | [#27](https://github.com/danielrisavi77-create/katedra/issues/27) | PARTIALLY_FIXED; BLOCKED_EXTERNAL | Local receipt/confirmation reporting improved; deployed durable receipt, reservation and email proof still required |
 | [#29](https://github.com/danielrisavi77-create/katedra/issues/29) | OPEN_VALID; BLOCKED_EXTERNAL | Verified policy pilots and institutional source/date/scope evidence; do not fabricate pack entries |
-| [#30](https://github.com/danielrisavi77-create/katedra/issues/30) | OPEN_VALID | Finish promise-to-capability/copy audit before paid release |
+| [#30](https://github.com/danielrisavi77-create/katedra/issues/30) | PARTIALLY_FIXED; BLOCKED_EXTERNAL | Promise matrix and inaccurate copy corrected; authenticated paid workflow evidence still required |
 | [#31](https://github.com/danielrisavi77-create/katedra/issues/31) | BLOCKED_EXTERNAL | Real provider and independent verifier staging journey |
 | [#32](https://github.com/danielrisavi77-create/katedra/issues/32) | PARTIALLY_FIXED; OWNER_DECISION already recorded | Readback showed strict required `check`, `browser-e2e`, `gitleaks`, admin enforcement and no force-push/delete. Owner explicitly chose zero mandatory approving reviewers; do not restore the stale issue's second-reviewer requirement. Remaining release/negative-enforcement evidence is not claimed. |
 
@@ -39,10 +39,12 @@ Issues remain open. A local regression test or mocked RPC is not evidence to clo
 - Ordinary chat has bounded, metadata-only local provenance and separate export. Storage failures remain visible; cross-device persistence and billing settlement are not claimed.
 - Auth callback redirects are private and bounded; state finding projection is typed; an offline supplied-source schema checker and scoped strictness ratchet are available.
 
-Latest complete local checkpoint: 1017 passed tests, 4 skipped; typecheck, strict
+Latest complete local checkpoint: 1033 passed tests, 4 skipped; typecheck, strict
 check, lint, build and three browser scripts passed. See the verification record
 for the distinction between component fixtures, guest browser checks and external
 authenticated evidence. [The HTTP matrix](HTTP_AUTHORITY_MATRIX_2026-09-08.md)
 documents each mutation boundary and unresolved canonical recovery guarantees.
 
-The full overnight checklist is tracked in [the implementation plan](../superpowers/plans/2026-09-07-overnight-hardening.md); unfinished items remain unfinished. No merge or production-readiness conclusion is made here.
+ZIP expansion now checks actual bounded output and container agreement; hard CPU termination remains open. Dependency audit still reports 28 moderate advisories. Production, agentic and release preflights fail closed on missing configuration/evidence.
+
+The full overnight checklist is tracked in [the implementation plan](../superpowers/plans/2026-09-07-overnight-hardening.md). The final report records a partial product outcome and a draft PR handoff, not merge or activation approval.
