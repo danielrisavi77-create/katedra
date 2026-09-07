@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc --project tsconfig.strict.json --noEmit",
+    "check:database-projection": "node scripts/check-database-projection.mjs",
     "test": "vitest run",
     "test:ci": "vitest run --maxWorkers=2",
     "test:e2e:authenticated": "node scripts/authenticated-money-flow-e2e.mjs",

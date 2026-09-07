@@ -15,6 +15,7 @@
     "lib/manuscript/server-hydration.ts",
     "app/pisi/components/use-manuscript-state.ts",
     "app/pisi/components/use-proposal-expiry.ts",
+    "scripts/check-database-projection.mjs",
     "lib/deployment/agentic-preflight.mjs"
   ],
   "exclude": ["node_modules", "Lekta"]
