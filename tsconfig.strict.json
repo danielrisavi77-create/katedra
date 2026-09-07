@@ -9,6 +9,7 @@
     "lib/agents/worker-config.ts",
     "lib/agents/run-context-access.ts",
     "lib/stripe/entitlement-replay.ts",
+    "lib/academic-suite/process-facts.ts",
     "lib/deployment/agentic-preflight.mjs"
   ],
   "exclude": ["node_modules", "Lekta"]
