@@ -131,6 +131,10 @@ export async function executeBilledOperation<T>(
     }
 
     const charged = Math.round((usage.inputTokens + OUTPUT_WEIGHT * usage.outputTokens) * (AI_MODEL_COST_MULTIPLIERS[input.model] ?? 1))
+    const completed = (): BilledOperationResult<T> => {
+      logAiEvent({ ...eventContext, eventName: 'agent_billing_settled', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'settled', outcome: 'settled', latencyMs: Date.now() - startedAt })
+      return { value: result.value, usage, billingState: 'settled', charged }
+    }
     let settled
     try {
       settled = await db.rpc('katedra_consume', buildBillingConsumeParams({
@@ -153,6 +157,7 @@ export async function executeBilledOperation<T>(
         charged,
       })
       if (!pending.ok) throw pendingMarkerFailure(input)
+      if (pending.settled) return completed()
       logAiEvent({ ...eventContext, eventName: 'agent_billing_pending_reconciliation', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'pending_reconciliation', errorCode: 'consume_rpc_error', outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError('Agent billing finalization unavailable.', 'pending_reconciliation')
     }
@@ -167,6 +172,7 @@ export async function executeBilledOperation<T>(
         charged,
       })
       if (!pending.ok) throw pendingMarkerFailure(input)
+      if (pending.settled) return completed()
       logAiEvent({ ...eventContext, eventName: 'agent_billing_pending_reconciliation', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'pending_reconciliation', errorCode: 'consume_rpc_rejected', outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError('Agent billing finalization failed.', 'pending_reconciliation')
     }
@@ -188,11 +194,11 @@ export async function executeBilledOperation<T>(
         charged,
       })
       if (!pending.ok) throw pendingMarkerFailure(input)
+      if (pending.settled) return completed()
       logAiEvent({ ...eventContext, eventName: 'agent_billing_pending_reconciliation', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: 'pending_reconciliation', reason: outcome.reason, outcome: 'pending_reconciliation', latencyMs: Date.now() - startedAt }, 'error')
       throw new AgentBillingReconciliationError(`Agent billing outcome: ${outcome.state}.`, 'pending_reconciliation')
     }
-    logAiEvent({ ...eventContext, eventName: 'agent_billing_settled', charged, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, billingState: outcome.state, outcome: 'settled', latencyMs: Date.now() - startedAt })
-    return { value: result.value, usage, billingState: outcome.state, charged }
+    return completed()
   } finally {
     await releaseReservationWithRetry({ release: reservationRelease }, input)
   }
@@ -217,11 +223,15 @@ async function releaseReservationWithRetry(
 
 async function markPendingBilling(db: BillingDatabase, input: Parameters<typeof buildBillingPendingParams>[0]) {
   try {
-    const result = await db.rpc('katedra_mark_pending', buildBillingPendingParams(input))
+    const actualUsage = input.inputTokens > 0 || input.outputTokens > 0
+    const result = actualUsage
+      ? await db.rpc('record_katedra_billing_usage', buildBillingConsumeParams(input))
+      : await db.rpc('katedra_mark_pending', buildBillingPendingParams(input))
     if (result?.error) return { ok: false, error: result.error.message || 'Canonical pending marker returned an error.' }
     const status = result?.data && typeof result.data === 'object' && !Array.isArray(result.data)
       ? (result.data as Record<string, unknown>).status
       : undefined
+    if (actualUsage && status === 'already_settled') return { ok: true, settled: true }
     if (status !== 'pending_reconciliation') return { ok: false, error: 'Canonical pending marker did not confirm pending_reconciliation.' }
     return { ok: true }
   } catch (error) {

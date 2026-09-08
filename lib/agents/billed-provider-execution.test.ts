@@ -14,6 +14,38 @@ function providerWithEvents(events: Array<{ type: 'completed' | 'error'; value?:
 }
 
 describe('billed provider execution', () => {
+  it.each(['throw', 'error', 'unknown'])('preserves actual usage after a consume %s', async (failure) => {
+    const rpc = vi.fn(async (name: string) => {
+      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
+      if (name === 'katedra_consume') {
+        if (failure === 'throw') throw new Error('connection lost')
+        return { data: { status: 'unknown' }, error: failure === 'error' ? { message: 'unavailable' } : null }
+      }
+      if (name === 'record_katedra_billing_usage') return { data: { status: 'pending_reconciliation' }, error: null }
+      return { data: { status: 'released' }, error: null }
+    })
+    await expect(executeBilledOperation({ rpc }, {
+      provider: 'fixture', model: 'fixture-model', userId: 'user-1', projectId: 'project-1', requestId: 'usage-recovery',
+      execute: async () => ({ value: 'result', usage: { inputTokens: 10, outputTokens: 20 } }),
+    })).rejects.toMatchObject({ billingState: 'pending_reconciliation' })
+    expect(rpc).toHaveBeenCalledWith('record_katedra_billing_usage', {
+      p_user: 'user-1', p_project_id: 'project-1', p_request_id: 'usage-recovery', p_model: 'fixture-model', p_in: 10, p_out: 20, p_charged: 110,
+    })
+    expect(rpc).not.toHaveBeenCalledWith('katedra_mark_pending', expect.anything())
+  })
+  it('recovers a committed settlement when the first database response was lost', async () => {
+    const rpc = vi.fn(async (name: string) => {
+      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
+      if (name === 'katedra_consume') throw new Error('response lost')
+      if (name === 'record_katedra_billing_usage') return { data: { status: 'already_settled' }, error: null }
+      return { data: { status: 'released' }, error: null }
+    })
+    const execute = vi.fn(async () => ({ value: 'result', usage: { inputTokens: 10, outputTokens: 20 } }))
+    await expect(executeBilledOperation({ rpc }, {
+      provider: 'fixture', model: 'fixture-model', userId: 'user-1', projectId: 'project-1', requestId: 'committed-recovery', execute,
+    })).resolves.toMatchObject({ value: 'result', billingState: 'settled', charged: 110 })
+    expect(execute).toHaveBeenCalledTimes(1)
+  })
   it('uses the same billing lifecycle for a non-chat verifier operation', async () => {
     const rpc = vi.fn(async (name: string) => {
       if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
@@ -111,7 +143,7 @@ describe('billed provider execution', () => {
     const rpc = vi.fn(async (name: string) => {
       if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
       if (name === 'katedra_consume') return { data: { status: 'unexpected_status' }, error: null }
-      if (name === 'katedra_mark_pending') return { data: { status: 'pending_reconciliation' }, error: null }
+      if (name === 'record_katedra_billing_usage') return { data: { status: 'pending_reconciliation' }, error: null }
       return { data: { status: 'released' }, error: null }
     })
 
@@ -124,7 +156,7 @@ describe('billed provider execution', () => {
       billingState: 'pending_reconciliation',
     })
     expect(rpc).toHaveBeenCalledWith('katedra_release_request', { p_user: 'user-1', p_request_id: 'request-ambiguous' })
-    expect(rpc).toHaveBeenCalledWith('katedra_mark_pending', expect.objectContaining({ p_request_id: 'request-ambiguous', p_estimated_charge: 110 }))
+    expect(rpc).toHaveBeenCalledWith('record_katedra_billing_usage', expect.objectContaining({ p_request_id: 'request-ambiguous', p_charged: 110, p_in: 10, p_out: 20 }))
   })
 
   it('retries a transient reservation release failure after billing settles', async () => {
