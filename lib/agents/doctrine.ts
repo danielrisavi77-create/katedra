@@ -49,11 +49,6 @@ export interface DoctrineOptions {
   gatePhase?: 'plan' | 'pisanje' | 'audit' | 'predaja'
 }
 
-export const GATE_PHASE_FOR_AGENT: Record<AgentId, DoctrineOptions['gatePhase']> = {
-  intake: 'plan', sources: 'plan', structure: 'plan', planning: 'plan',
-  writing: 'pisanje', citation: 'pisanje', review: 'audit', export: 'predaja',
-}
-
 export const WORK_TYPE_LABEL: Record<LegacyWorkType, string> = {
   s: 'seminarski rad',
   z: 'završni rad',
@@ -197,6 +192,11 @@ ZADATAK structure: prije strukture, perspektive; prije poglavlja, teza.
 4. Ako postoji draft: gap-analiza kao tablica mjesto, problem, ispravak (dupli ili odsječeni naslovi, nedostajući obvezni dijelovi, poglavlje bez ijednog vlastitog prikaza, sadržaj natipkan umjesto polja).
 5. Rad s vlastitim istraživanjem: metodologiju planiraj sada, u osam odjeljaka (pitanje i očekivanja, dizajn i zašto ne drugi, uzorak ili građa s tri broja, instrument, operacionalizacija pojam-varijabla-mjera, postupak, etika i zaštita podataka, ograničenja metode). Uzorak koji je krivo odabran ostaje krivo odabran.
 Vrati strukturu kao tablicu unutar ograde <!-- STRUKTURA:POCETAK --> i <!-- STRUKTURA:KRAJ -->, tezu i perspektive izvan ograde.
+Na kraju izlaza OBAVEZNO dodaj strojno čitljiv blok, doslovno u ovom obliku (JSON bez komentara, sectionId iz konteksta rukopisa):
+<!-- PLAN:JSON -->
+{"thesis":"...","question":"...","perspectives":[{"label":"...","position":"...","why":"..."}],"chapters":[{"sectionId":"...","title":"...","pages":2}]}
+<!-- /PLAN:JSON -->
+Bez tog bloka verifikator ne može provjeriti plan i korak se ne zatvara.
 `.trim(),
 
   planning: `
@@ -209,6 +209,11 @@ ZADATAK planning: PLAN I PROGRAM po odobrenoj strukturi. Ovo je jezgra: pisanje 
 - Pitanja korisniku: numerirano, samo ono što stvarno mijenja plan (odobrenje mentora, točan rok, zvanje mentora, posebni zahtjevi, status prijave teme). Ne pitaj ono što kontekst već sadrži.
 - Izvršni sažetak na vrhu: 3 do 5 razloga zašto trenutno stanje ne nosi ciljanu ocjenu i kako ih plan rješava; brutalno iskreno, jer je to jedini dio plana koji student pročita dvaput.
 Skaliranje: seminarski 2 do 4 stranice plana; završni 8 do 12; diplomski 12 do 18. Plan nije odobren dok ga student ne odobri; ne pretpostavljaj odobrenje.
+Na kraju izlaza OBAVEZNO dodaj strojno čitljiv blok, doslovno u ovom obliku (sectionId iz konteksta; content je opis sadržaja potpoglavlja u 1 do 3 rečenice; sources su ID-jevi izvora iz konteksta, nikad izmišljeni):
+<!-- PLAN:JSON -->
+{"chapters":[{"sectionId":"...","pages":2,"content":"...","sources":["source-id"]}]}
+<!-- /PLAN:JSON -->
+Poglavlje bez content ili bez sources ne prolazi PLAN GATE; radije napiši "[TREBA IZVOR]" u content nego prazan popis.
 `.trim(),
 
   writing: `

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { loadActiveRunManuscriptContext } from './run-context-access'
+import { loadActiveRunManuscriptContext, loadActiveRunContextSnapshot } from './run-context-access'
 import { runContextStoragePaths, MAX_AGENT_CONTEXT_BYTES } from './run-context'
 import { createSupabaseRunPayloadManifestStore } from './run-context-loader'
 
@@ -26,6 +26,32 @@ function storageFor(manifest: unknown = descriptor, body = JSON.stringify({ manu
 }
 
 describe('active run manuscript access', () => {
+  it('returns approval only from the active descriptor matching the body revision', async () => {
+    const approval = { planRevision: 'approved-plan', approvedBy: scope.userId }
+    const storage = storageFor({ ...descriptor, contextRevision: 'current', planApproval: approval }, JSON.stringify({ manuscript, contextRevision: 'current' }))
+    await expect(loadActiveRunContextSnapshot({ list: async () => [active] }, storage, scope))
+      .resolves.toMatchObject({ manuscript, contextRevision: 'current', planApproval: approval })
+    expect(storage.download.mock.calls).toEqual([[paths.manifestPath], [paths.storagePath]])
+  })
+
+  it.each([undefined, 'replaced'])('does not transfer approval to a legacy or replaced body (%s)', async (contextRevision) => {
+    const storage = storageFor({ ...descriptor, contextRevision: 'approved', planApproval: { approvedBy: scope.userId } }, JSON.stringify({ manuscript, contextRevision }))
+    const snapshot = await loadActiveRunContextSnapshot({ list: async () => [active] }, storage, scope)
+    expect(snapshot.manuscript).toEqual(manuscript)
+    expect(snapshot.planApproval).toBeUndefined()
+  })
+
+  it('does not use a newer descriptor substituted after the active descriptor was read', async () => {
+    const storage = storageFor({ ...descriptor, contextRevision: 'old', planApproval: { approvedBy: scope.userId } }, JSON.stringify({ manuscript, contextRevision: 'new' }))
+    const original = storage.download.getMockImplementation()!
+    let descriptorReads = 0
+    storage.download.mockImplementation(async (path) => {
+      if (path === paths.manifestPath && descriptorReads++ > 0) return JSON.stringify({ ...descriptor, contextRevision: 'new', planApproval: { approvedBy: scope.userId } })
+      return original(path)
+    })
+    expect((await loadActiveRunContextSnapshot({ list: async () => [active] }, storage, scope)).planApproval).toBeUndefined()
+    expect(descriptorReads).toBe(1)
+  })
   it('projects expiry from the canonical query while excluding tombstoned rows', async () => {
     const result = Promise.resolve({ data: [{
       material_id: active.materialId, project_id: active.projectId, run_id: active.runId,

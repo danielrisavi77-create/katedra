@@ -1,11 +1,19 @@
 import { runContextStoragePaths } from './run-context'
 import { isScopedAgentPayload, type AgentPayloadScope } from './payload-scope'
-import { loadRunManuscriptContext, type RunPayloadManifestStore, type RunPayloadStorage } from './run-context-loader'
+import { loadRunContextSnapshot, type RunPayloadManifestStore, type RunPayloadStorage } from './run-context-loader'
 
 const MAX_DESCRIPTOR_BYTES = 1024 * 1024
 
 /** Worker entry point: retained Storage bytes alone never authorize a run. */
 export async function loadActiveRunManuscriptContext(
+  manifests: RunPayloadManifestStore,
+  storage: RunPayloadStorage,
+  scope: AgentPayloadScope & { now?: number },
+) {
+  return (await loadActiveRunContextSnapshot(manifests, storage, scope)).manuscript
+}
+
+export async function loadActiveRunContextSnapshot(
   manifests: RunPayloadManifestStore,
   storage: RunPayloadStorage,
   scope: AgentPayloadScope & { now?: number },
@@ -32,7 +40,12 @@ export async function loadActiveRunManuscriptContext(
     || descriptor.storagePath !== entry.storagePath || !isActive(descriptor.expiresAt, now)) {
     throw new Error('Opis konteksta rukopisa nije aktivan za ovaj run.')
   }
-  return loadRunManuscriptContext(storage, { storagePath: entry.storagePath, projectId: scope.projectId })
+  const snapshot = await loadRunContextSnapshot(storage, { storagePath: entry.storagePath, projectId: scope.projectId })
+  // Approval belongs to the descriptor already checked above. Never re-download
+  // it after reading the body: replacement must not mix two context revisions.
+  const planApproval = snapshot.contextRevision && descriptor.contextRevision === snapshot.contextRevision
+    ? descriptor.planApproval : undefined
+  return { ...snapshot, planApproval }
 }
 
 function isActive(value: unknown, now: number): boolean {

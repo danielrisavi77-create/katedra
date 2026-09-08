@@ -69,3 +69,22 @@ describe('verified agent artifact chain', () => {
     expect(artifacts.map((artifact) => artifact.output)).not.toContain('Ulazni sažetak')
   })
 })
+
+
+describe('gate plan context across later agents', () => {
+  it.each([5, 6, 7])('keeps structure and planning without the provider upstream filter at order %s', (order) => {
+    const saved = [
+      result({ stepId: 'structure', agent: 'structure', verifier: 'structure_verifier', stepOrder: 2 }),
+      result({ stepId: 'planning', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3 }),
+      result({ stepId: 'planning', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, attempt: 2 }),
+      result({ stepId: 'foreign', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, runId: 'other' }),
+      result({ stepId: 'foreign-project', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, projectId: 'other' }),
+      result({ stepId: 'rejected', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, verification: { status: 'blocked', issues: [], evidence: [] } }),
+      result({ stepId: 'future', agent: 'planning', verifier: 'planning_verifier', stepOrder: order }),
+    ]
+    const artifacts = selectVerifiedAgentArtifacts(saved, { order, projectId: 'project-1', runId: 'run-1' })
+    expect(artifacts.map(({ agent, attempt }) => ({ agent, attempt }))).toEqual([
+      { agent: 'structure', attempt: 1 }, { agent: 'planning', attempt: 2 },
+    ])
+  })
+})
