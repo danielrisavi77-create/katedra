@@ -10,6 +10,11 @@ function fixture() {
   return { events, rpc, upload, download, db: { rpc, storage: { from: () => ({ upload, download }) } } }
 }
 describe('durable upload tracking', () => {
+  it('preserves the MIME type of a binary material body', async () => {
+    const f = fixture()
+    expect(await trackedPayloadUpload(f.db, { ...input, contentType: 'application/pdf' })).toBe(true)
+    expect(f.upload).toHaveBeenCalledWith(input.path, body, { contentType: 'application/pdf', cacheControl: '0', upsert: false })
+  })
   it('records start before bytes and completion after Storage acknowledgement', async () => {
     const f = fixture()
     expect(await trackedPayloadUpload(f.db, input)).toBe(true)

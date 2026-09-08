@@ -89,7 +89,7 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
   }
 
   const deleteMaterial = async (material: MaterialAssetV1) => {
-    if (busy || !window.confirm(`Obrisati materijal „${material.name}”?`)) return
+    if (busy || !window.confirm(`Povući pristanak i obrisati materijal „${material.name}”? Ako ga koristi tijek, zaustavit će se i zatražit će se brisanje njegovih privremenih kopija. Lokalni rukopis ostaje sačuvan.`)) return
     setBusy(true)
     setDeletingId(material.id)
     setMessage('')
@@ -99,7 +99,9 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
       const body = await response.json().catch(() => ({})) as Record<string, unknown>
       if (!response.ok) throw new Error(materialRequestMessage(response.status, body.error, 'Materijal nije moguće obrisati.'))
       publish(materials.filter((item) => item.id !== material.id))
-      setMessage('Materijal je obrisan.')
+      setMessage(body.cleanup === 'pending'
+        ? body.runConsentRevoked ? 'Pristanak je povučen i povezani tijek zaustavljen; uklanjanje njegovih privremenih kopija još traje.' : 'Pristanak je povučen; uklanjanje datoteka još traje.'
+        : body.runConsentRevoked ? 'Povezani tijek je zaustavljen. Materijal i njegove privremene kopije u tom tijeku su obrisani.' : 'Materijal je obrisan.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Brisanje materijala nije uspjelo.')
     } finally {

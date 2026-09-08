@@ -84,6 +84,22 @@ describe('active run manuscript access', () => {
     expect(query.is).toHaveBeenCalledWith('deleted_at', null)
   })
 
+  it.each([
+    [false, 'material-storage-v1', 0],
+    [true, 'old-version', 0],
+    [true, 'material-storage-v1', 1],
+  ])('requires canonical completed material consent before worker loading (%s, %s)', async (complete, version, count) => {
+    const result = Promise.resolve({ data: [{
+      material_id: '77777777-7777-4777-8777-777777777777', project_id: scope.projectId, run_id: scope.runId,
+      storage_bucket: active.storageBucket, storage_path: active.storagePath, manifest_path: active.manifestPath,
+      expires_at: active.expiresAt, material_upload_complete: complete, material_consent_version: version,
+      material_consent_at: '2026-09-07T12:00:00.000Z',
+    }] })
+    const query = { select: vi.fn(() => query), eq: vi.fn(() => query), is: vi.fn(() => query), then: result.then.bind(result) }
+    const store = createSupabaseRunPayloadManifestStore({ from: () => query })
+    expect(await store.list(scope.runId, scope.projectId)).toHaveLength(Number(count))
+  })
+
   it('reads an active canonical manifest and its bounded descriptor before manuscript bytes', async () => {
     const manifests = { list: vi.fn(async () => [active]) }
     const storage = storageFor()

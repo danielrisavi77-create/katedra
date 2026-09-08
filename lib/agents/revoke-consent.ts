@@ -11,6 +11,11 @@ function validManifest(value: unknown, scope: Scope): value is Manifest {
   if (!value || typeof value !== 'object') return false
   const m = value as Manifest
   if (!m.manifest_id || m.storage_bucket !== 'katedra-temporary-materials') return false
+  const projectPrefix = `${scope.userId}/${scope.projectId}/`
+  if (typeof m.storage_path === 'string' && m.storage_path.startsWith(projectPrefix)) {
+    const material = /^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-[A-Za-z0-9._-]{1,120}$/i.exec(m.storage_path.slice(projectPrefix.length))
+    if (material) return m.manifest_path === `${projectPrefix}${material[1]}.manifest.json`
+  }
   const prefix = `${scope.userId}/${scope.projectId}/${scope.runId}/`
   if (typeof m.storage_path !== 'string' || !m.storage_path.startsWith(prefix)) return false
   const relative = m.storage_path.slice(prefix.length)

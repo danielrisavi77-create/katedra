@@ -31,6 +31,7 @@ describe('paid project setup', () => {
   it('keeps the agent flow unavailable until the Pass is active', () => {
     render(<PaidProjectSetup projectId="project-1" passActive={false} sectionIds={[]} manuscript={manuscript} />)
     expect(screen.getByText('Aktiviraj Pass za ovaj projekt.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Privremeni materijali i brisanje' })).toBeTruthy()
     expect(screen.queryByText('Pokreni tijek')).toBeNull()
   })
 

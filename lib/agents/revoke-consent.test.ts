@@ -13,6 +13,13 @@ function fixture(rows = [row]) {
   return { rpc, remove, finalize, admin, ready }
 }
 describe('run consent withdrawal and physical deletion', () => {
+  it('also cleans canonical materials attached to the revoked run', async () => {
+    const materialId = '11111111-1111-4111-8111-111111111111'
+    const material = { ...row, storage_path: `user-1/project-1/${materialId}-body`, manifest_path: `user-1/project-1/${materialId}.manifest.json` }
+    const f = fixture([material])
+    expect(await revokeRunConsent({ rpc: f.rpc }, scope, f.admin)).toEqual({ ok: true, cleanup: 'deleted' })
+    expect(f.remove).toHaveBeenCalledWith([material.storage_path, material.manifest_path])
+  })
   it('retains in-flight uploads without calling Storage.remove', async () => {
     const f = fixture(); f.ready.mockResolvedValue({ data: [], error: null })
     expect(await revokeRunConsent({ rpc: f.rpc }, scope, f.admin)).toEqual({ ok: true, cleanup: 'pending' })

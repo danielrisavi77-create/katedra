@@ -10,7 +10,7 @@ export interface TrackedUploadClient {
 const hash = (body: Uint8Array) => createHash('sha256').update(body).digest('hex')
 
 export async function trackedPayloadUpload(client: TrackedUploadClient, input: {
-  manifestId: string; kind: 'body' | 'manifest'; path: string; body: Uint8Array
+  manifestId: string; kind: 'body' | 'manifest'; path: string; body: Uint8Array; contentType?: string
 }): Promise<boolean> {
   const token = randomUUID()
   const identity = { p_manifest_id: input.manifestId, p_object_kind: input.kind, p_upload_token: token }
@@ -32,7 +32,7 @@ export async function trackedPayloadUpload(client: TrackedUploadClient, input: {
     if (started.data !== 'upload') return false
     let succeeded = false
     try {
-      const uploaded = await storage.upload(input.path, input.body, { contentType: 'application/json', cacheControl: '0', upsert: false })
+      const uploaded = await storage.upload(input.path, input.body, { contentType: input.contentType ?? 'application/json', cacheControl: '0', upsert: false })
       succeeded = !uploaded.error
     } catch { /* The canonical intent remains uncertain until provider evidence exists. */ }
     const finished = await client.rpc('finish_agent_payload_upload', { ...identity, p_succeeded: succeeded })
