@@ -108,6 +108,18 @@ afterEach(() => {
 })
 
 describe('POST /api/internal/agent-worker runtime contract', () => {
+  it('passes the actual service client through to canonical result allocation', async () => {
+    const db = database()
+    db.rpc = vi.fn(async () => ({ data: null, error: { code: '40901' } }))
+    mocks.createAdminClient.mockReturnValue(db)
+    const actual = await vi.importActual('@/lib/agents/run-result-storage')
+    mocks.storeAgentStepResult.mockImplementation(actual.storeAgentStepResult)
+    const { POST } = await loadRoute()
+    await POST(request())
+    const { storeResult } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+    await expect(storeResult({ step: { id: 'step-1', agent: 'writing', attempt: 1 }, result: { output: 'Private test result' }, verification: { status: 'verified' } })).rejects.toThrow()
+    expect(db.rpc).toHaveBeenCalledWith('reserve_agent_result_payload', expect.objectContaining({ p_user_id: 'user-1', p_run_id: 'run-1', p_step_id: 'step-1' }))
+  })
   it('rejects revoked context before reading approval or invoking a provider', async () => {
     mocks.loadActiveRunContextSnapshot.mockRejectedValueOnce(new Error('Context revoked'))
     mocks.loadRunContextSnapshot.mockResolvedValueOnce({ manuscript: { sections: [], sources: [] } })

@@ -179,7 +179,7 @@ async function handlePost(req) {
     billing: { db, userId: run.user_id, model: workerConfig.model },
   }
   const execute = createProviderBackedExecutor(executorOptions)
-  const storeResult = ({ step, result, verification }) => storeAgentStepResult({ db, storage }, {
+  const storeResult = ({ step, result, verification }) => storeAgentStepResult(db, {
     userId: run.user_id,
     projectId: run.project_id,
     runId,

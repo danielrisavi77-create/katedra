@@ -11,35 +11,51 @@ const result: Omit<AgentResultV1, 'agent'> = {
   output: 'Novi odlomak rada.', citations: [{ id: 'source-1', url: 'https://example.test/source', verified: true }], claims: [{ id: 'claim-1', text: 'Novi odlomak rada.', citationIds: ['source-1'], support: [{ citationId: 'source-1', quote: 'Relevantan odlomak.', locator: 'p. 2' }] }], provider: 'test-provider', usage: { inputTokens: 10, outputTokens: 20 }, baseRevision: '2026-08-14T10:00:00.000Z', sectionId: 'section-1',
 }
 const verification: VerificationResultV1 = { status: 'verified', issues: [], evidence: [] }
+const allocation = { manifest_id: 'manifest-result-1', storage_path: 'user-1/project-1/run-1/results/run-1_writing_section-1-1.json', manifest_path: 'user-1/project-1/run-1/results/run-1_writing_section-1-1.manifest.json', created_at: '2026-08-14T10:00:00.000Z', expires_at: '2026-08-17T10:00:00.000Z' }
 
 describe('agent result payload storage', () => {
+  it('never uploads bytes when canonical allocation fails', async () => {
+    const upload = vi.fn(async () => ({ error: null }))
+    const rpc = vi.fn(async () => ({ error: { message: 'consent revoked' } }))
+    expect(await storeAgentStepResult({ rpc, storage: { from: () => ({ upload, remove: vi.fn() }) } }, { userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification })).toMatchObject({ ok: false })
+    expect(upload).not.toHaveBeenCalled()
+  })
   it('stores the generated result privately and registers only its manifest', async () => {
     const upload = vi.fn(async (_path: string, _body: Uint8Array, _options: { contentType: string; cacheControl: string; upsert: boolean }) => ({ error: null }))
     const remove = vi.fn(async (_paths: string[]) => ({ error: null }))
-    const rpc = vi.fn(async () => ({ data: [{ manifest_id: 'manifest-result-1' }], error: null }))
+    const rpc = vi.fn(async (name: string) => ({ data: name === 'reserve_agent_result_payload' ? [allocation] : name === 'begin_agent_payload_upload' ? 'upload' : 'uploaded', error: null }))
     const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({ upload, remove })) } }, { userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification, now: () => Date.parse('2026-08-14T10:00:00.000Z') })
     expect(stored).toMatchObject({ ok: true, value: { manifestId: 'manifest-result-1' } })
     expect(upload).toHaveBeenCalledTimes(2)
     expect(new TextDecoder().decode(upload.mock.calls[0][1])).toContain('Novi odlomak rada.')
-    expect(rpc).toHaveBeenCalledWith('register_agent_payload', expect.objectContaining({ p_run_id: 'run-1', p_material_id: expect.stringMatching(/^agent-result:/), p_storage_path: expect.stringContaining('/results/') }))
+    expect(rpc).toHaveBeenCalledWith('reserve_agent_result_payload', expect.objectContaining({ p_run_id: 'run-1', p_step_id: step.id, p_attempt: 1 }))
+    expect(rpc.mock.invocationCallOrder[0]).toBeLessThan(upload.mock.invocationCallOrder[0])
   })
 
   it('reuses an immutable result after a worker crash between storage and completion', async () => {
-    const upload = vi.fn(async () => ({ error: { message: 'already exists' } }))
+    const objects = new Map<string, Uint8Array>()
+    const finished = new Set<string>()
+    const upload = vi.fn(async (path: string, body: Uint8Array) => { objects.set(path, body); return { error: null } })
     const remove = vi.fn(async () => ({ error: null }))
-    const rpc = vi.fn(async () => ({ data: [{ manifest_id: 'manifest-existing' }], error: null }))
-    const download = vi.fn(async () => ({ data: JSON.stringify({
-      kind: 'agent-step-result', materialId: 'agent-result:run-1_writing_section-1:1',
-      projectId: 'project-1', runId: 'run-1', stepId: 'run-1:writing:section-1',
-      expiresAt: '2026-08-17T10:00:00.000Z',
-    }) }))
+    const rpc = vi.fn(async (name: string, params: Record<string, unknown>) => {
+      const kind = String(params.p_object_kind)
+      if (name === 'reserve_agent_result_payload') return { data: [allocation], error: null }
+      if (name === 'begin_agent_payload_upload') return { data: finished.has(kind) ? 'stored' : 'upload', error: null }
+      finished.add(kind)
+      return { data: 'uploaded', error: null }
+    })
+    const download = vi.fn(async (path: string) => ({ data: objects.get(path) }))
+    const db = { rpc, storage: { from: () => ({ upload, remove, download }) } }
+    const initial = await storeAgentStepResult(db, { userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification, now: () => Date.parse('2026-08-14T10:00:00.000Z') })
+    expect(initial.ok).toBe(true)
 
     const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({ upload, remove, download })) } }, {
       userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification,
       now: () => Date.parse('2026-08-16T10:00:00.000Z'),
     })
 
-    expect(stored).toEqual({ ok: true, value: { manifestId: 'manifest-existing', materialId: 'agent-result:run-1_writing_section-1:1', expiresAt: '2026-08-17T10:00:00.000Z' } })
+    expect(stored).toEqual({ ok: true, value: { manifestId: 'manifest-result-1', materialId: 'agent-result:run-1_writing_section-1:1', expiresAt: '2026-08-17T10:00:00.000Z' } })
+    expect(upload).toHaveBeenCalledTimes(2)
     expect(remove).not.toHaveBeenCalled()
   })
 

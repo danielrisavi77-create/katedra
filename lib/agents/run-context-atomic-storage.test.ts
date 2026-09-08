@@ -14,17 +14,23 @@ function fixture() {
   const events: string[] = []
   const rpc = vi.fn(async (name: string, _params: Record<string, unknown>) => {
     events.push(name)
-    return { data: name === 'reserve_agent_run_context' ? [reservation] : 'manifest-1', error: null as null | { message: string } }
+    return { data: name === 'reserve_agent_run_context' ? [reservation] : name === 'begin_agent_payload_upload' ? 'upload' : name === 'finish_agent_payload_upload' ? 'uploaded' : 'manifest-1', error: null as null | { message: string } }
   })
   const upload = vi.fn(async (_path: string, _body: Uint8Array, _options: unknown) => { events.push('upload'); return { error: null as null | { message: string } } })
   const remove = vi.fn()
   return { rpc, upload, remove, events, db: { rpc, storage: { from: () => ({ upload, remove }) } } }
 }
 describe('atomic context upload protocol', () => {
+  it('sends no bytes when withdrawal wins before upload authorization', async () => {
+    const f = fixture()
+    f.rpc.mockImplementation(async name => ({ data: name === 'reserve_agent_run_context' ? [reservation] : null, error: name === 'begin_agent_payload_upload' ? { message: 'consent withdrawn' } : null }))
+    expect(await storeAgentRunContext(f.db, input)).toMatchObject({ ok: false })
+    expect(f.upload).not.toHaveBeenCalled()
+  })
   it('allocates canonical paths before upload and commits materials with the context', async () => {
     const f = fixture()
     expect(await storeAgentRunContext(f.db, input)).toMatchObject({ ok: true, value: { manifestId: 'manifest-1' } })
-    expect(f.events).toEqual(['reserve_agent_run_context', 'upload', 'upload', 'commit_agent_run_context'])
+    expect(f.events).toEqual(['reserve_agent_run_context', 'begin_agent_payload_upload', 'upload', 'finish_agent_payload_upload', 'begin_agent_payload_upload', 'upload', 'finish_agent_payload_upload', 'commit_agent_run_context'])
     expect(f.upload.mock.calls.every(call => (call[2] as { upsert: boolean }).upsert === false)).toBe(true)
     expect(f.rpc).toHaveBeenLastCalledWith('commit_agent_run_context', expect.objectContaining({ p_manifest_id: 'manifest-1', p_material_ids: ['material-1'] }))
     expect(JSON.parse(new TextDecoder().decode(f.upload.mock.calls[0][1])).contextRevision).toBe(revision)
@@ -34,11 +40,12 @@ describe('atomic context upload protocol', () => {
     const f = fixture()
     f.upload.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'upload failed' } })
     expect(await storeAgentRunContext(f.db, input)).toMatchObject({ ok: false })
-    expect(f.rpc.mock.calls.map(call => call[0])).toEqual(['reserve_agent_run_context'])
+    expect(f.rpc.mock.calls.map(call => call[0])).not.toContain('commit_agent_run_context')
+    expect(f.rpc).toHaveBeenLastCalledWith('finish_agent_payload_upload', expect.objectContaining({ p_succeeded: false }))
   })
   it('does not delete objects after an ambiguous commit failure', async () => {
     const f = fixture()
-    f.rpc.mockImplementation(async name => ({ data: name === 'reserve_agent_run_context' ? [reservation] : null, error: name === 'commit_agent_run_context' ? { message: 'connection lost after commit' } : null }))
+    f.rpc.mockImplementation(async name => ({ data: name === 'reserve_agent_run_context' ? [reservation] : name === 'begin_agent_payload_upload' ? 'upload' : name === 'finish_agent_payload_upload' ? 'uploaded' : null, error: name === 'commit_agent_run_context' ? { message: 'connection lost after commit' } : null }))
     expect(await storeAgentRunContext(f.db, input)).toMatchObject({ ok: false, status: 503 })
     expect(f.remove).not.toHaveBeenCalled()
   })

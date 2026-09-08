@@ -12,6 +12,7 @@ export interface MaterialAssetV1 {
   pageCount?: number
   warnings: string[]
   expiresAt: string
+  storageConsent?: { version: string; acceptedAt: string }
 }
 
 export interface OcrResult {

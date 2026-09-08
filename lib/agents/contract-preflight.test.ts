@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { inspectAgenticContract, REQUIRED_AGENTIC_FUNCTIONS, REQUIRED_AGENTIC_TABLES } from './contract-preflight'
 
 describe('agentic contract preflight', () => {
+  it('blocks activation without atomic consent withdrawal', async () => {
+    const result = await inspectAgenticContract({ hasTable: async () => true, hasFunction: async name => name !== 'revoke_agent_run_consent' })
+    expect(result).toEqual({ ready: false, missingTables: [], missingFunctions: ['revoke_agent_run_consent'] })
+  })
   it('requires canonical material tombstone and active-list RPCs', () => {
     expect(REQUIRED_AGENTIC_FUNCTIONS).toEqual(expect.arrayContaining([
       'tombstone_agent_payload',

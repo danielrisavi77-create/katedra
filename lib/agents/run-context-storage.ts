@@ -1,5 +1,6 @@
 import { MAX_AGENT_CONTEXT_BYTES, runContextStoragePaths, validateAgentRunContext } from './run-context'
 import type { PlanApprovalV1 } from './plan-approval'
+import { trackedPayloadUpload, type TrackedUploadClient } from './tracked-upload'
 
 const DEFAULT_BUCKET = 'katedra-temporary-materials'
 
@@ -29,6 +30,7 @@ export async function storeAgentRunContext(
     bucket?: string
     now?: () => number
   },
+  createUploadClient: () => TrackedUploadClient = () => db,
 ): Promise<StoreRunContextResult> {
   const validated = validateAgentRunContext({ manuscript: input.manuscript }, input.projectId)
   if (validated.ok === false) return {
@@ -56,9 +58,9 @@ export async function storeAgentRunContext(
 
     const bucket = input.bucket || DEFAULT_BUCKET
     if (bucket !== DEFAULT_BUCKET) return { ok: false, status: 503, error: 'Privremeni bucket ne odgovara kanonskom ugovoru.' }
-    const storage = db.storage.from(bucket)
-    const upload = await storage.upload(storagePath, body, { contentType: 'application/json', cacheControl: '0', upsert: false })
-    if (upload.error) return { ok: false, status: 503, error: 'Privremena pohrana konteksta nije uspjela.' }
+    const uploadClient = createUploadClient()
+    const uploaded = await trackedPayloadUpload(uploadClient, { manifestId: allocation.manifest_id, kind: 'body', path: storagePath, body })
+    if (!uploaded) return { ok: false, status: 503, error: 'Privremena pohrana konteksta nije potvrđena.' }
 
     const manifest = {
       schemaVersion: 1,
@@ -71,12 +73,10 @@ export async function storeAgentRunContext(
       contentType: 'application/json',
       expiresAt,
     }
-    const manifestUpload = await storage.upload(manifestPath, new TextEncoder().encode(JSON.stringify(manifest)), {
-      contentType: 'application/json',
-      cacheControl: '0',
-      upsert: false,
+    const manifestUploaded = await trackedPayloadUpload(uploadClient, {
+      manifestId: allocation.manifest_id, kind: 'manifest', path: manifestPath, body: new TextEncoder().encode(JSON.stringify(manifest)),
     })
-    if (manifestUpload.error) {
+    if (!manifestUploaded) {
       return { ok: false, status: 503, error: 'Spremanje statusa konteksta nije uspjelo.' }
     }
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
 import { validateAgentRunContext } from '@/lib/agents/run-context'
@@ -79,7 +80,7 @@ async function handlePost(req, { params }) {
     manuscript: validatedContext.manuscript,
     materialIds: [...new Set(materialIds)],
     bucket: BUCKET,
-  })
+  }, createAdminClient)
   if (!stored.ok) return Response.json({ error: stored.error }, { status: stored.status })
 
   return privateJson({ runId, manifestId: stored.value.manifestId, expiresAt: stored.value.expiresAt, attachedMaterialIds: [...new Set(materialIds)] })

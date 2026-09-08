@@ -12,6 +12,7 @@ import { privateJson } from '@/lib/observability/private-response.js'
 import { mapWithConcurrency } from '@/lib/async/map-limited'
 import { readMultipartForm } from '@/lib/http/multipart.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
+import { MATERIAL_CONSENT_HEADER, MATERIAL_CONSENT_VERSION } from '@/lib/materials/consent'
 
 const ENABLED = process.env.KATEDRA_MATERIALS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -34,6 +35,11 @@ async function handlePost(req, requestContext) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+
+  if (req.headers.get(MATERIAL_CONSENT_HEADER) !== MATERIAL_CONSENT_VERSION) {
+    return Response.json({ error: 'Prije slanja materijala potreban je izričit pristanak na privremenu pohranu.' }, { status: 400 })
+  }
+  const consentAcceptedAt = new Date().toISOString()
 
   const distributedRateLimit = isDistributedRateLimitConfigured()
   if (process.env.NODE_ENV === 'production' && !distributedRateLimit) {
@@ -106,6 +112,7 @@ async function handlePost(req, requestContext) {
     buffer,
   })
   if (asset.extractionStatus === 'failed') return privateJson({ error: asset.warnings[0] || 'Ekstrakcija nije uspjela.', asset }, { status: 422 })
+  asset.storageConsent = { version: MATERIAL_CONSENT_VERSION, acceptedAt: consentAcceptedAt }
 
   const safeName = asset.name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 120) || 'materijal'
   const prefix = `${user.id}/${project.projectId}/${materialId}`

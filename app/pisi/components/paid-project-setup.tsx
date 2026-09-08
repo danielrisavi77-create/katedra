@@ -19,11 +19,16 @@ export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript
   const [intervention, setIntervention] = useState(false)
 
   useEffect(() => {
-    if (!passActive || !projectId) return
+    if (!projectId) return
     let cancelled = false
     const storageKey = `${RUN_STORAGE_PREFIX}${projectId}`
     const resume = async () => {
       const storedRunId = readStoredRunId(storageKey)
+      // Privacy controls must survive Pass expiry, including after a reload.
+      if (!passActive) {
+        if (!cancelled) setRunId(storedRunId)
+        return
+      }
       const response = await fetch(`/api/agent-runs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
       if (!response?.ok) {
         if (storedRunId && !cancelled) setRunId(storedRunId)

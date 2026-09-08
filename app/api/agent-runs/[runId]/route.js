@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { cancelAgentRun } from '@/lib/agents/backend-contract'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { revokeRunConsent } from '@/lib/agents/revoke-consent'
 import { createSupabaseRunPayloadManifestStore } from '@/lib/agents/run-context-loader'
 import { loadAgentRunResults } from '@/lib/agents/run-result-storage'
 import { privateJson } from '@/lib/observability/private-response.js'
@@ -59,12 +60,18 @@ export async function DELETE(req, { params }) {
 async function handleDelete(req, { params }) {
   const origin = validateSameOriginRequest(req, { allowMissingOrigin: process.env.NODE_ENV !== 'production' })
   if (!origin.ok) return Response.json({ error: origin.error }, { status: origin.status })
-  if (!ENABLED) return Response.json({ error: 'Agenticni run ugovor još nije aktivan u backendu.' }, { status: 503 })
+  // Privacy withdrawal remains available after Pass expiry or feature shutdown.
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
   const runId = (await params).runId
-  const cancelled = await cancelAgentRun(supabase, { userId: user.id, runId })
-  if (!cancelled.ok) return Response.json({ error: 'Otkazivanje runa nije uspjelo.' }, { status: 503 })
-  return privateJson(cancelled.value)
+  const requestedProjectId = new URL(req.url).searchParams.get('projectId')?.trim() || ''
+  const { data: run, error } = await supabase.from('agent_runs')
+    .select('run_id, project_id').eq('run_id', runId).eq('user_id', user.id).maybeSingle()
+  if (error) return privateJson({ error: 'Run trenutačno nije moguće provjeriti.' }, { status: 503 })
+  if (!run) return privateJson({ error: 'Run nije pronađen.' }, { status: 404 })
+  if (requestedProjectId && requestedProjectId !== run.project_id) return privateJson({ error: 'Run ne pripada traženom projektu.' }, { status: 403 })
+  const result = await revokeRunConsent(supabase, { userId: user.id, projectId: run.project_id, runId }, createAdminClient)
+  if (!result.ok) return privateJson({ error: 'Povlačenje pristanka nije uspjelo. Pokušaj ponovno.' }, { status: 503 })
+  return privateJson({ runId, consentRevoked: true, cleanup: result.cleanup }, { status: result.cleanup === 'pending' ? 202 : 200 })
 }

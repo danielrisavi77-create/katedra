@@ -202,7 +202,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
 
     expect(response.status).toBe(409)
     expect(mocks.replaceAgentPayloadsForRun).not.toHaveBeenCalled()
-    expect(mocks.storeAgentRunContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ materialIds: ['material-1', 'material-2'] }))
+    expect(mocks.storeAgentRunContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ materialIds: ['material-1', 'material-2'] }), expect.any(Function))
   })
 
   it('can explicitly remove all previously selected input materials', async () => {
@@ -245,7 +245,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     expect(response.status).toBe(200)
     expect(mocks.storeAgentRunContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       userId: 'user-1', projectId: 'project-1', runId: 'run-1', materialIds: [],
-    }))
+    }), expect.any(Function))
     expect(mocks.storeAgentRunContext).toHaveBeenCalled()
   })
 })

@@ -12,6 +12,23 @@ afterEach(() => {
 })
 
 describe('MaterialLibrary', () => {
+  it('requires explicit material consent before uploading bytes', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ materials: [] }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = render(<MaterialLibrary projectId="project-1" />)
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['synthetic notes'], 'notes.txt', { type: 'text/plain' })
+    expect(input.disabled).toBe(true)
+    await user.upload(input, file)
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(false)
+    await user.click(screen.getByRole('checkbox', { name: /Pristajem na slanje/ }))
+    await user.upload(input, file)
+    expect(fetchMock).toHaveBeenCalledWith('/api/materials', expect.objectContaining({
+      method: 'POST', headers: { 'x-katedra-material-consent': 'material-storage-v1' },
+    }))
+  })
+
   it('lets the user delete a temporary material', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn()

@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   createAgentRun: vi.fn(),
   parseAgentRunRequest: vi.fn(),
   validateAgentRunContext: vi.fn(),
+  storeAgentRunContext: vi.fn(),
+  cancelAgentRun: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
@@ -28,14 +30,14 @@ vi.mock('@/lib/agents/backend-contract', () => ({
   createAgentRun: mocks.createAgentRun,
   replaceAgentPayloadsForRun: vi.fn(),
   activateAgentRun: vi.fn(),
-  cancelAgentRun: vi.fn(),
+  cancelAgentRun: mocks.cancelAgentRun,
 }))
 vi.mock('@/lib/agents/run-request', () => ({
   parseAgentRunRequest: mocks.parseAgentRunRequest,
   validateAgentRunSectionSelection: vi.fn(() => ({ ok: true, value: [] })),
 }))
 vi.mock('@/lib/agents/run-context', () => ({ validateAgentRunContext: mocks.validateAgentRunContext }))
-vi.mock('@/lib/agents/run-context-storage', () => ({ storeAgentRunContext: vi.fn() }))
+vi.mock('@/lib/agents/run-context-storage', () => ({ storeAgentRunContext: mocks.storeAgentRunContext }))
 vi.mock('@/lib/deployment/agentic-availability', () => ({
   isAgenticWorkspaceAvailable: vi.fn(() => true),
   isAgentWebResearchAvailable: vi.fn(() => false),
@@ -48,6 +50,41 @@ afterEach(() => {
 })
 
 describe('POST /api/agent-runs canonical Pass boundary', () => {
+  it.each(['missing', 'write_failed', 'recorded'])('requires consent before storage: %s', async (scenario) => {
+    vi.stubEnv('KATEDRA_AGENT_RUNS_ENABLED', 'true')
+    const rpc = vi.fn().mockResolvedValue({ error: scenario === 'write_failed' ? { message: 'unavailable' } : null })
+    mocks.createClient.mockResolvedValue({ rpc, auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) } })
+    mocks.resolveOwnedProjectResult.mockResolvedValue({ ok: true, value: { projectId: 'project-1' } })
+    mocks.readProjectLock.mockResolvedValue({ ok: true, lock: {} })
+    mocks.validateLockedProjectMutation.mockReturnValue({ ok: true })
+    mocks.resolveCanonicalProjectPass.mockResolvedValue({ allowed: true })
+    mocks.resolveProjectCapability.mockResolvedValue({ allowed: true })
+    mocks.parseAgentRunRequest.mockReturnValue({ ok: true, value: { mode: 'guided', sourcePolicy: 'uploaded_only', manuscript: {} } })
+    mocks.validateAgentRunContext.mockReturnValue({ ok: true, manuscript: {} })
+    mocks.cleanupStaleInitializingAgentRun.mockResolvedValue({ ok: true })
+    mocks.createAgentRun.mockResolvedValue({ ok: true, runId: 'run-1' })
+    mocks.cancelAgentRun.mockResolvedValue({ ok: true })
+    mocks.storeAgentRunContext.mockResolvedValue({ ok: false, status: 503, error: 'Synthetic storage stop' })
+    const { POST } = await import('./route')
+    const response = await POST(new Request('http://localhost/api/agent-runs?projectId=project-1', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(scenario === 'missing' ? {} : { snapshotConsent: { accepted: true, version: 'agentic-snapshot-v1' } }),
+    }))
+    expect(response.status).toBe(scenario === 'missing' ? 400 : 503)
+    if (scenario === 'missing') {
+      expect(mocks.createAgentRun).not.toHaveBeenCalled()
+      expect(rpc).not.toHaveBeenCalled()
+    } else {
+      expect(rpc).toHaveBeenCalledWith('record_agent_run_snapshot_consent', expect.objectContaining({ p_user_id: 'user-1', p_project_id: 'project-1', p_run_id: 'run-1' }))
+    }
+    if (scenario === 'recorded') {
+      expect(mocks.storeAgentRunContext).toHaveBeenCalledOnce()
+      expect(rpc.mock.invocationCallOrder[0]).toBeLessThan(mocks.storeAgentRunContext.mock.invocationCallOrder[0])
+    } else {
+      expect(mocks.storeAgentRunContext).not.toHaveBeenCalled()
+    }
+  })
+
   it('rejects an admin-style override before create_agent_run when the exact Pass is missing', async () => {
     vi.stubEnv('KATEDRA_AGENT_RUNS_ENABLED', 'true')
     const project = { projectId: 'project-1', guestProjectId: 'project-1' }

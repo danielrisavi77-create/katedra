@@ -22,6 +22,19 @@ beforeEach(() => {
   mocks.resolveOwnedProjectResult.mockImplementation(async (...args) => ({ ok: true, value: await mocks.resolveOwnedProject(...args) }))
 })
 
+it.each([null, 'true', 'old-version'])('rejects material content without current consent: %s', async (version) => {
+  vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
+  mocks.createClient.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: 'consent-user' } } }) } })
+  const { POST } = await import('./route')
+  const request = new Request('http://localhost/api/materials', {
+    method: 'POST', headers: version ? { 'x-katedra-material-consent': version } : {}, body: 'not parsed',
+  })
+  const response = await POST(request)
+  expect(response.status).toBe(400)
+  expect((await response.json()).error).toContain('pristanak')
+  expect(request.bodyUsed).toBe(false)
+})
+
 describe('GET /api/materials manifest integrity', () => {
   it('returns a controlled 503 when the distributed admin client is unavailable', async () => {
     vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
@@ -32,7 +45,7 @@ describe('GET /api/materials manifest integrity', () => {
     })
     mocks.createAdminClient.mockImplementation(() => { throw new Error('missing service role') })
 
-    const response = await POST(new Request('http://localhost/api/materials', { method: 'POST' }))
+    const response = await POST(new Request('http://localhost/api/materials', { method: 'POST', headers: { 'x-katedra-material-consent': 'material-storage-v1' } }))
 
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toEqual({ error: 'Ograničavanje upload zahtjeva trenutno nije dostupno.' })
