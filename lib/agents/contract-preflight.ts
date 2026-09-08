@@ -9,6 +9,7 @@ export const REQUIRED_AGENTIC_TABLES = [
   'katedra_usage',
   'katedra_request_reservations',
   'katedra_billing_attempts',
+  'katedra_pass_refunds',
 ] as const
 
 export const REQUIRED_AGENTIC_FUNCTIONS = [
@@ -37,6 +38,11 @@ export const REQUIRED_AGENTIC_FUNCTIONS = [
   'katedra_release_request',
   'katedra_consume',
   'katedra_mark_pending',
+  'claim_katedra_pass_refund',
+  'mark_katedra_refund_attempt',
+  'record_katedra_pass_refund',
+  'list_pending_katedra_pass_refunds',
+  'read_katedra_pass_refund',
 ] as const
 
 export interface AgenticContractInspector {

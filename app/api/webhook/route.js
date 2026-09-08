@@ -175,6 +175,28 @@ async function handlePOST(req) {
            return new Response('unknown product', { status: 400 }) // ne retry-aj, konfiguracijska greška
          }
 
+         // A recorded refund remains authoritative even if the original Pass has expired.
+         const refundState = await db.rpc('read_katedra_pass_refund', { p_session_id: s.id })
+         if (refundState.error || refundState.data === undefined) return new Response('refund state unavailable', { status: 500 })
+         let hasPriorRefund = refundState.data !== null
+         if (!hasPriorRefund) {
+           // Refunds created before the ledger rollout must also prevent a new grant.
+           const paymentIntentId = typeof s.payment_intent === 'string' ? s.payment_intent : s.payment_intent?.id
+           if (!paymentIntentId) return new Response('refund history unavailable', { status: 500 })
+           try {
+             const history = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 1 }, { timeout: 10_000, maxNetworkRetries: 0 })
+             if (!Array.isArray(history?.data) || typeof history.has_more !== 'boolean'
+               || (history.has_more && !history.data.length)) return new Response('refund history unavailable', { status: 500 })
+             hasPriorRefund = history.data.length > 0
+           } catch { return new Response('refund history unavailable', { status: 500 }) }
+         }
+         if (hasPriorRefund) {
+           const refund = await refundDuplicateProjectPass(stripe, {
+             sessionId: s.id, paymentIntent: s.payment_intent, userId, projectId, amount: s.amount_total, currency: s.currency,
+           }, db)
+           return new Response(refund.ok ? 'ok' : 'duplicate refund pending', { status: refund.ok ? 200 : 500 })
+         }
+
          // Checkout performs the same check optimistically, but Stripe can
          // deliver two paid sessions created by concurrent tabs. A different
          // active Pass for the same project must not receive another
@@ -200,7 +222,8 @@ async function handlePOST(req) {
            const refund = await refundDuplicateProjectPass(stripe, {
              sessionId: s.id,
              paymentIntent: s.payment_intent,
-           })
+             userId, projectId, amount: s.amount_total, currency: s.currency,
+           }, db)
            if (!refund.ok) {
              console.error(JSON.stringify({
                eventName: 'duplicate_project_pass_reconciliation_pending',
@@ -239,7 +262,8 @@ async function handlePOST(req) {
                const refund = await refundDuplicateProjectPass(stripe, {
                  sessionId: s.id,
                  paymentIntent: s.payment_intent,
-               })
+                 userId, projectId, amount: s.amount_total, currency: s.currency,
+               }, db)
                if (!refund.ok) {
                  console.error(JSON.stringify({
                    eventName: 'duplicate_project_lock_reconciliation_pending',
