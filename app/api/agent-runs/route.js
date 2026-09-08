@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
-import { activateAgentRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun, replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
+import { activateAgentRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun } from '@/lib/agents/backend-contract'
 import { parseAgentRunRequest, validateAgentRunSectionSelection } from '@/lib/agents/run-request'
 import { validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
@@ -121,6 +121,7 @@ async function handlePost(req) {
     projectId: project.projectId,
     runId: created.runId,
     manuscript: validatedContext.manuscript,
+    materialIds: parsed.value.materialIds ?? [],
     bucket: BUCKET,
   })
   if (!context.ok) {
@@ -128,20 +129,7 @@ async function handlePost(req) {
     return Response.json({ error: context.error }, { status: context.status })
   }
 
-  // Keep the run in `initializing` until every selected payload is attached.
-  // Otherwise a worker could claim the first step before its inputs exist.
-  if (parsed.value.materialIds?.length) {
-    const attached = await replaceAgentPayloadsForRun(supabase, {
-      userId: user.id,
-      projectId: project.projectId,
-      runId: created.runId,
-      materialIds: parsed.value.materialIds,
-    })
-    if (!attached.ok || attached.value.materialIds.length !== parsed.value.materialIds.length) {
-      await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, attached.ok ? 'material_selection_mismatch' : attached.error)
-      return Response.json({ error: attached.ok ? 'Jedan ili više materijala više nije dostupan.' : 'Povezivanje materijala nije uspjelo.' }, { status: attached.ok ? 409 : 503 })
-    }
-  }
+  // Context and materials were committed together while the run was initializing.
 
   const activated = await activateAgentRun(supabase, { userId: user.id, runId: created.runId })
   if (!activated.ok) {

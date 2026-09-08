@@ -26,6 +26,20 @@ function storageFor(manifest: unknown = descriptor, body = JSON.stringify({ manu
 }
 
 describe('active run manuscript access', () => {
+  it('uses canonical approval for an immutable revision and ignores descriptor approval', async () => {
+    const contextRevision = '11111111-1111-4111-8111-111111111111'
+    const versionPaths = runContextStoragePaths(scope.userId, scope.projectId, scope.runId, contextRevision)
+    const planApproval = { approvedBy: scope.userId, planRevision: 'canonical' }
+    const entry = { ...active, ...versionPaths, contextRevision, planApproval }
+    const storage = { download: vi.fn(async (path: string) => path === versionPaths.manifestPath
+      ? JSON.stringify({ ...descriptor, storagePath: versionPaths.storagePath, contextRevision, planApproval: { planRevision: 'untrusted' } })
+      : JSON.stringify({ manuscript, contextRevision })) }
+    expect((await loadActiveRunContextSnapshot({ list: async () => [entry] }, storage, scope)).planApproval).toEqual(planApproval)
+    expect((await loadActiveRunContextSnapshot({ list: async () => [{ ...entry, planApproval: null }] }, storage, scope)).planApproval).toBeNull()
+    await expect(loadActiveRunContextSnapshot({ list: async () => [entry] }, {
+      download: async (path: string) => path === versionPaths.manifestPath ? storage.download(path) : JSON.stringify({ manuscript, contextRevision: 'different' }),
+    }, scope)).rejects.toThrow('Revizija')
+  })
   it('returns approval only from the active descriptor matching the body revision', async () => {
     const approval = { planRevision: 'approved-plan', approvedBy: scope.userId }
     const storage = storageFor({ ...descriptor, contextRevision: 'current', planApproval: approval }, JSON.stringify({ manuscript, contextRevision: 'current' }))
@@ -66,7 +80,7 @@ describe('active run manuscript access', () => {
     await expect(store.list(scope.runId, scope.projectId)).resolves.toEqual([active])
     expect(from).toHaveBeenCalledWith('agent_payload_manifests')
     expect(query.select).toHaveBeenCalledWith(expect.stringContaining('expires_at'))
-    expect(query.eq.mock.calls).toEqual([['run_id', scope.runId], ['project_id', scope.projectId]])
+    expect(query.eq.mock.calls).toEqual([['run_id', scope.runId], ['project_id', scope.projectId], ['context_state', 'active']])
     expect(query.is).toHaveBeenCalledWith('deleted_at', null)
   })
 

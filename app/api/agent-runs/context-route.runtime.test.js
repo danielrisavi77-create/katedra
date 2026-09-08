@@ -160,7 +160,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     expect(mocks.storeAgentRunContext).not.toHaveBeenCalled()
   })
 
-  it('does not replace the paused run context before every selected material is attached', async () => {
+  it('reports an atomic context/material commit conflict without a separate attachment', async () => {
     vi.stubEnv('KATEDRA_AGENT_RUNS_ENABLED', 'true')
     const { POST } = await import('./[runId]/context/route')
     const query = {
@@ -174,8 +174,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     })
     mocks.readProjectLock.mockResolvedValue({ ok: true, lock: { userId: 'user-1', projectId: 'project-1', topic: 'Rad', workType: 'zavrsni', productKey: 'zavrsni', paymentId: 'payment-1', lockedAt: '2026-08-14T10:00:00.000Z', status: 'locked' } })
     mocks.lookupActiveProjectPassForProduct.mockResolvedValue({ ok: true, active: true })
-    mocks.replaceAgentPayloadsForRun.mockResolvedValue({ ok: true, value: { materialIds: ['material-1'] } })
-    mocks.storeAgentRunContext.mockResolvedValue({ ok: true, value: { manifestId: 'manifest-1', expiresAt: '2026-08-17T10:00:00.000Z' } })
+    mocks.storeAgentRunContext.mockResolvedValue({ ok: false, status: 409, error: 'Material selection changed' })
 
     const manuscript = {
       schemaVersion: 1,
@@ -202,8 +201,8 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     )
 
     expect(response.status).toBe(409)
-    expect(mocks.replaceAgentPayloadsForRun).toHaveBeenCalled()
-    expect(mocks.storeAgentRunContext).not.toHaveBeenCalled()
+    expect(mocks.replaceAgentPayloadsForRun).not.toHaveBeenCalled()
+    expect(mocks.storeAgentRunContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ materialIds: ['material-1', 'material-2'] }))
   })
 
   it('can explicitly remove all previously selected input materials', async () => {
@@ -244,9 +243,9 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.replaceAgentPayloadsForRun).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.storeAgentRunContext).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       userId: 'user-1', projectId: 'project-1', runId: 'run-1', materialIds: [],
-    })
+    }))
     expect(mocks.storeAgentRunContext).toHaveBeenCalled()
   })
 })

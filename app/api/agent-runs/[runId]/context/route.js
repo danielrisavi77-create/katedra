@@ -3,7 +3,6 @@ import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-s
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
 import { validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
-import { replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
 import { canEditAgentRunContext } from '@/lib/agents/run-context-policy'
 import { privateJson } from '@/lib/observability/private-response.js'
@@ -72,26 +71,13 @@ async function handlePost(req, { params }) {
   if (!Array.isArray(materialIds) || materialIds.length > 100 || materialIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 200)) {
     return Response.json({ error: 'Popis materijala nije valjan.' }, { status: 400 })
   }
-  {
-    const attached = await replaceAgentPayloadsForRun(supabase, {
-      userId: user.id,
-      projectId: run.project_id,
-      runId,
-      materialIds: [...new Set(materialIds)],
-    })
-    if (!attached.ok) return Response.json({ error: 'Odabrani materijali nisu mogli biti vezani uz run.' }, { status: 503 })
-    const requested = [...new Set(materialIds)].sort()
-    const received = [...attached.value.materialIds].sort()
-    if (requested.length !== received.length || requested.some((id, index) => id !== received[index])) {
-      return Response.json({ error: 'Svi odabrani materijali nisu potvrđeni za ovaj run.' }, { status: 409 })
-    }
-  }
 
   const stored = await storeAgentRunContext(supabase, {
     userId: user.id,
     projectId: run.project_id,
     runId,
     manuscript: validatedContext.manuscript,
+    materialIds: [...new Set(materialIds)],
     bucket: BUCKET,
   })
   if (!stored.ok) return Response.json({ error: stored.error }, { status: stored.status })
