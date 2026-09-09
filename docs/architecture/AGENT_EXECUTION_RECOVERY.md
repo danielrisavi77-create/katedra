@@ -44,3 +44,10 @@ Validation for implementation277a48d: typecheck, lint and build passed;
 Studio browser smoke passed; the inactive worker returnedHTTP503. Canonical
 staging0114 was applied separately from Lekta and its five service-only RPCs,
 RLS and denied direct writes were inspected. Authenticated staging remains unproven.
+
+The subsequent GitHub audit reported newly available high/critical dependency
+advisories. Targeted existing-package updates resolve them: Next/eslint-config-next
+16.3.4, sharp0.35.4, xmldom0.8.15, Tiptap3.31.3 and compatible React types19.3.0.
+No direct dependency was added. The production dependency audit reports0findings.
+Typecheck, lint,104focused tests,1198full-suite tests (4existing skips), build and
+the Agent Studio browser smoke all passed again on the updated lockfile.
