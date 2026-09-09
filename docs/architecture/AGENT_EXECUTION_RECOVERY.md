@@ -38,3 +38,9 @@ original pricing; passage replay; fresh verification timestamps and changed
 findings. Database/Storage fixtures do not prove an authenticated paid staging
 journey. That requires the deployed canonical contract and configured staging
 account/provider/verifier, followed by a separate activation decision.
+
+Validation for implementation277a48d: typecheck, lint and build passed;
+104focused tests and1198full-suite tests passed (4existing skips). Local Agent
+Studio browser smoke passed; the inactive worker returnedHTTP503. Canonical
+staging0114 was applied separately from Lekta and its five service-only RPCs,
+RLS and denied direct writes were inspected. Authenticated staging remains unproven.
