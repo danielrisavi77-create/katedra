@@ -116,7 +116,7 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
     mocks.storeAgentStepResult.mockImplementation(actual.storeAgentStepResult)
     const { POST } = await loadRoute()
     await POST(request())
-    const { storeResult } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+    const { storeResult } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[0]
     await expect(storeResult({ step: { id: 'step-1', agent: 'writing', attempt: 1 }, result: { output: 'Private test result' }, verification: { status: 'verified' } })).rejects.toThrow()
     expect(db.rpc).toHaveBeenCalledWith('reserve_agent_result_payload', expect.objectContaining({ p_user_id: 'user-1', p_run_id: 'run-1', p_step_id: 'step-1' }))
   })
@@ -133,11 +133,19 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
     expect(executeProvider).not.toHaveBeenCalled()
   })
   it('loads manuscript context through canonical active-manifest authority', async () => {
+    const manuscript = { sections: [], sources: [] }
+    mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript, contextRevision: 'original-revision' })
+    mocks.loadAgentRunResults.mockResolvedValue([])
     const { POST } = await loadRoute()
     await POST(request())
+    const { execute } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+    await execute({ id: 'intake', agent: 'intake', order: 0 })
     const executorOptions = mocks.createProviderBackedExecutor.mock.calls[0][0]
-    await executorOptions.loadContext()
-    expect(mocks.loadActiveRunManuscriptContext).toHaveBeenCalledWith(
+    expect(await executorOptions.loadContext()).toBe(manuscript)
+    expect(executorOptions.contextRevision).toBe('original-revision')
+    expect(mocks.loadAgentRunResults).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ excludeStepId: 'intake' }))
+    expect(mocks.loadActiveRunContextSnapshot).toHaveBeenCalledTimes(1)
+    expect(mocks.loadActiveRunContextSnapshot).toHaveBeenCalledWith(
       mocks.manifestStore,
       expect.objectContaining({ download: expect.any(Function) }),
       { runId: run.run_id, projectId: run.project_id, userId: run.user_id, bucket: 'katedra-temporary-materials' },
@@ -158,8 +166,8 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
       timeoutMs: 150_000,
     }))
     expect(mocks.runAgentWorkerLoop).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'run-1', workerId: expect.any(String) }),
-      expect.objectContaining({ execute: expect.any(Function), verify: expect.any(Function), storeResult: expect.any(Function) }),
+      expect.objectContaining({ runId: 'run-1', workerId: expect.any(String), storeResult: expect.any(Function) }),
+      expect.objectContaining({ execute: expect.any(Function), verify: expect.any(Function) }),
       { maxSteps: 1 },
     )
   })
@@ -314,12 +322,13 @@ it('requires explicit plan approval before provider execution even in autonomous
   expect(executeProvider).not.toHaveBeenCalled()
   const review = buildPlanReview(manuscript, selectVerifiedAgentArtifacts([saved], { order: 4 }))
   const planApproval = { schemaVersion: 1, projectId: 'project-1', runId: 'run-1', approvedBy: 'user-1', planRevision: review.planRevision, approvedAt: '2026-09-01T00:00:00Z' }
-  mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript, planApproval })
+  mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript, planApproval, contextRevision: 'approved-context-revision' })
   // A context request admitted while blocked finishes after the approval check.
   // The billed provider must still receive the approved snapshot, not that later upload.
   mocks.loadRunManuscriptContext.mockResolvedValue({ ...manuscript, title: 'Unapproved concurrent upload' })
   executeProvider.mockImplementation(async () => {
     const options = mocks.createProviderBackedExecutor.mock.calls.at(-1)[0]
+    expect(options.contextRevision).toBe('approved-context-revision')
     mocks.loadAgentRunResults.mockResolvedValueOnce([{ ...saved, output: 'Unapproved replacement plan' }])
     expect(await options.loadContext()).toEqual(manuscript)
     expect(await options.loadResults()).toEqual([saved])

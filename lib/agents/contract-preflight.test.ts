@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { inspectAgenticContract, REQUIRED_AGENTIC_FUNCTIONS, REQUIRED_AGENTIC_TABLES } from './contract-preflight'
 
 describe('agentic contract preflight', () => {
+  it('rejects a pre-recovery schema even when every earlier staging contract exists', async () => {
+    const recoveryFunctions = ['claim_agent_provider_execution', 'start_agent_provider_execution',
+      'record_agent_provider_response', 'commit_agent_provider_response', 'settle_agent_provider_execution']
+    const result = await inspectAgenticContract({
+      hasTable: async name => name !== 'agent_provider_executions',
+      hasFunction: async name => !recoveryFunctions.includes(name),
+    })
+    expect(result.ready).toBe(false)
+    expect(result.missingTables).toEqual(['agent_provider_executions'])
+    expect(result.missingFunctions).toEqual(recoveryFunctions)
+  })
   it('blocks activation without atomic consent withdrawal', async () => {
     const result = await inspectAgenticContract({ hasTable: async () => true, hasFunction: async name => name !== 'revoke_agent_run_consent' })
     expect(result).toEqual({ ready: false, missingTables: [], missingFunctions: ['revoke_agent_run_consent'] })

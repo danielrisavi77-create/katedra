@@ -1,6 +1,8 @@
 import type { ClaimEvidence, ClaimSupport, CitationEvidence, ClaimSupportAssessment, ClaimSupportVerificationStatus, UsageRecord } from './contracts'
 import { executeBilledOperation, type BillingDatabase } from './billed-provider-execution'
 
+import type { ProviderExecutionContext } from './provider-execution-recovery.server'
+
 const DEFAULT_TIMEOUT_MS = 20_000
 const MAX_RESPONSE_BYTES = 1_500_000
 const MAX_CLAIMS = 200
@@ -73,12 +75,7 @@ export function createGatewayPassageVerifier({
           model,
           fetchImpl,
           timeoutMs,
-          payload: {
-            schemaVersion: 1,
-            task: 'verify_claim_passages',
-            citations: input.citations.slice(0, 100).map(publicCitation),
-            claims: originalClaims.map(publicClaim),
-          },
+          payload: passagePayload(input),
           projectId: input.projectId,
           runId: input.runId,
         })
@@ -105,11 +102,14 @@ export async function executeBilledPassageVerification(
     requestId: string
     agent: string
     attempt: number
+    execution: ProviderExecutionContext
     claims: ClaimEvidence[]
     citations: CitationEvidence[]
   },
 ): Promise<PassageVerificationResult> {
   const billed = await executeBilledOperation(db, {
+    operation: 'passage',
+    execution: input.execution,
     provider: input.provider,
     model: input.model,
     userId: input.userId,
@@ -118,11 +118,7 @@ export async function executeBilledPassageVerification(
     requestId: input.requestId,
     agent: input.agent,
     attempt: input.attempt,
-    payload: {
-      task: 'verify_claim_passages',
-      claims: input.claims,
-      citations: input.citations,
-    },
+    payload: passagePayload(input),
     execute: async () => {
       const result = await input.verifier.verify({
         projectId: input.projectId,
@@ -178,6 +174,12 @@ async function requestGateway(input: {
   } finally {
     clearTimeout(timer)
   }
+}
+
+function passagePayload(input: PassageVerifierInput) {
+  return { schemaVersion: 1, task: 'verify_claim_passages',
+    citations: input.citations.slice(0, 100).map(publicCitation),
+    claims: input.claims.slice(0, MAX_CLAIMS).map(publicClaim) }
 }
 
 function publicCitation(citation: CitationEvidence): Record<string, unknown> {

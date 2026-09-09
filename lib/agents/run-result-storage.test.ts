@@ -14,6 +14,16 @@ const verification: VerificationResultV1 = { status: 'verified', issues: [], evi
 const allocation = { manifest_id: 'manifest-result-1', storage_path: 'user-1/project-1/run-1/results/run-1_writing_section-1-1.json', manifest_path: 'user-1/project-1/run-1/results/run-1_writing_section-1-1.manifest.json', created_at: '2026-08-14T10:00:00.000Z', expires_at: '2026-08-17T10:00:00.000Z' }
 
 describe('agent result payload storage', () => {
+  it('excludes the current step from dependency reads without hiding broken prior artifacts', async () => {
+    const entry = { materialId: 'agent-result:current-step:1', userId: 'user-1', projectId: 'project-1', runId: 'run-1',
+      storageBucket: 'katedra-temporary-materials', storagePath: 'user-1/project-1/run-1/results/current-step-1.json',
+      manifestPath: 'user-1/project-1/run-1/results/current-step-1.manifest.json' }
+    const download = vi.fn(async () => { throw Error('descriptor incomplete') })
+    const scope = { userId: 'user-1', projectId: 'project-1', runId: 'run-1', bucket: 'katedra-temporary-materials', excludeStepId: 'current-step' }
+    await expect(loadAgentRunResults({ list: async () => [entry] }, { download }, scope)).resolves.toEqual([])
+    expect(download).not.toHaveBeenCalled()
+    await expect(loadAgentRunResults({ list: async () => [{ ...entry, materialId: 'agent-result:prior-step:1' }] }, { download }, scope)).rejects.toThrow()
+  })
   it('never uploads bytes when canonical allocation fails', async () => {
     const upload = vi.fn(async () => ({ error: null }))
     const rpc = vi.fn(async () => ({ error: { message: 'consent revoked' } }))
@@ -46,17 +56,28 @@ describe('agent result payload storage', () => {
     })
     const download = vi.fn(async (path: string) => ({ data: objects.get(path) }))
     const db = { rpc, storage: { from: () => ({ upload, remove, download }) } }
-    const initial = await storeAgentStepResult(db, { userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification, now: () => Date.parse('2026-08-14T10:00:00.000Z') })
+    const checkedResult = { ...result, citations: result.citations.map(citation => ({ ...citation,
+      verification: { status: 'verified' as const, method: 'crossref' as const, checkedAt: '2026-08-14T10:00:00.000Z' },
+    })) }
+    const initial = await storeAgentStepResult(db, { userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result: checkedResult, verification, now: () => Date.parse('2026-08-14T10:00:00.000Z') })
     expect(initial.ok).toBe(true)
 
     const stored = await storeAgentStepResult({ rpc, storage: { from: vi.fn(() => ({ upload, remove, download })) } }, {
-      userId: 'user-1', projectId: 'project-1', runId: 'run-1', step, result, verification,
+      userId: 'user-1', projectId: 'project-1', runId: 'run-1', step,
+      result: { ...checkedResult, citations: checkedResult.citations.map(citation => ({ ...citation,
+        verification: { ...citation.verification, checkedAt: '2026-08-16T10:00:00.000Z' },
+      })) }, verification,
       now: () => Date.parse('2026-08-16T10:00:00.000Z'),
     })
 
     expect(stored).toEqual({ ok: true, value: { manifestId: 'manifest-result-1', materialId: 'agent-result:run-1_writing_section-1:1', expiresAt: '2026-08-17T10:00:00.000Z' } })
     expect(upload).toHaveBeenCalledTimes(2)
     expect(remove).not.toHaveBeenCalled()
+    const changedVerdict = await storeAgentStepResult(db, { userId: 'user-1', projectId: 'project-1', runId: 'run-1',
+      step, result: checkedResult, verification: { status: 'blocked', issues: [], evidence: [] },
+      now: () => Date.parse('2026-08-16T10:00:00.000Z') })
+    expect(changedVerdict.ok).toBe(false)
+    expect(upload).toHaveBeenCalledTimes(2)
   })
 
   it('rejects a result that targets a different section than the claimed step', async () => {
