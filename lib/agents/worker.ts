@@ -1,3 +1,4 @@
+import { PlanApprovalRequiredError } from './plan-approval'
 import type { AgentResultV1, VerificationResultV1 } from './contracts'
 import { claimAgentStep, completeAgentStep, type AgentBackendResult, type AgentRunControlStatus } from './backend-contract'
 import type { AgentStepRecord } from './run-state'
@@ -18,7 +19,8 @@ export async function processClaimedAgentStep(
   dependencies: AgentWorkerDependencies,
   handlers: {
     execute: (step: AgentStepRecord) => Promise<Omit<AgentResultV1, 'agent'>>
-    verify: (result: AgentResultV1) => VerificationResultV1
+    /** Sinkroni ili async verifikator; od gate integracije dobiva i korak (za fazu, attempt, sectionId). */
+    verify: (result: AgentResultV1, context: { step: AgentStepRecord }) => VerificationResultV1 | Promise<VerificationResultV1>
   },
 ): Promise<{ status: WorkerStepStatus; stepId?: string; error?: string }> {
   const claimed = await claimAgentStep(dependencies.db, { runId: dependencies.runId, workerId: dependencies.workerId })
@@ -31,9 +33,11 @@ export async function processClaimedAgentStep(
   let verification: VerificationResultV1
   try {
     result = await handlers.execute(step)
-    verification = handlers.verify({ ...result, agent: step.agent })
+    verification = await handlers.verify({ ...result, agent: step.agent }, { step })
   } catch (error) {
-    verification = error instanceof AgentBillingReconciliationError
+    verification = error instanceof PlanApprovalRequiredError
+      ? { status: 'blocked', issues: [{ code: 'gate_finding', message: 'Pregledaj i izričito odobri plan prije nastavka pisanja.' }], evidence: [] }
+      : error instanceof AgentBillingReconciliationError
       ? {
         status: 'failed',
         billingState: error.billingState,

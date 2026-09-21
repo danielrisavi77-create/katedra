@@ -60,3 +60,17 @@ describe('AI event telemetry', () => {
     expect(safeErrorCode({ code: 'bad code with spaces' })).toBe('bad_code_with_spaces')
   })
 })
+
+
+it('retains only gate operational fields in the actual log', () => {
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+  try {
+    logAiEvent({ eventName: 'agent_gate_verified', requestId: 'r', userId: 'u', projectId: 'p', gate: {
+      faza: 'pisanje', prolaz: false, exitCode: 1, manuscript: 'PRIVATE', issues: ['PRIVATE'],
+      koraci: [{ korak: 'argument', stanje: 'nalaz', blokira: true, naziv: 'PRIVATE', izlaz: 'PRIVATE' }],
+    } })
+    const line = String(info.mock.calls[0][0])
+    expect(JSON.parse(line).gate).toEqual({ faza: 'pisanje', prolaz: false, exitCode: 1, koraci: [{ korak: 'argument', stanje: 'nalaz', blokira: true }] })
+    expect(line).not.toContain('PRIVATE')
+  } finally { info.mockRestore() }
+})

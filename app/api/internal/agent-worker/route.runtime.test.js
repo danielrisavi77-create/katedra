@@ -8,10 +8,13 @@ const mocks = vi.hoisted(() => ({
   createProviderBackedExecutor: vi.fn(),
   runAgentWorkerLoop: vi.fn(),
   loadRunManuscriptContext: vi.fn(),
+  loadRunContextSnapshot: vi.fn(),
   loadRunMaterialContexts: vi.fn(),
   runContextStoragePaths: vi.fn(),
   verifyAgentResult: vi.fn(),
   storeAgentStepResult: vi.fn(),
+  loadAgentRunResults: vi.fn(),
+  packProfileHint: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
@@ -21,13 +24,15 @@ vi.mock('@/lib/agents/provider-router', () => ({ createProviderRouter: mocks.cre
 vi.mock('@/lib/agents/provider-worker', () => ({ createProviderBackedExecutor: mocks.createProviderBackedExecutor }))
 vi.mock('@/lib/agents/worker-loop', () => ({ runAgentWorkerLoop: mocks.runAgentWorkerLoop }))
 vi.mock('@/lib/agents/run-context-loader', () => ({
-  createSupabaseRunPayloadManifestStore: vi.fn(),
+  createSupabaseRunPayloadManifestStore: vi.fn(() => ({})),
   loadRunManuscriptContext: mocks.loadRunManuscriptContext,
+  loadRunContextSnapshot: mocks.loadRunContextSnapshot,
   loadRunMaterialContexts: mocks.loadRunMaterialContexts,
 }))
 vi.mock('@/lib/agents/run-context', () => ({ runContextStoragePaths: mocks.runContextStoragePaths }))
 vi.mock('@/lib/agents/verifier', () => ({ verifyAgentResult: mocks.verifyAgentResult }))
-vi.mock('@/lib/agents/run-result-storage', () => ({ storeAgentStepResult: mocks.storeAgentStepResult }))
+vi.mock('@/lib/agents/run-result-storage', () => ({ storeAgentStepResult: mocks.storeAgentStepResult, loadAgentRunResults: mocks.loadAgentRunResults }))
+vi.mock('@/lib/agents/pack-profile.server', () => ({ packProfileHint: mocks.packProfileHint }))
 
 const run = {
   run_id: 'run-1',
@@ -67,6 +72,9 @@ async function loadRoute() {
 }
 
 beforeEach(() => {
+  vi.stubEnv('KATEDRA_GATE_VERIFIER_URL', '')
+  vi.stubEnv('KATEDRA_GATE_VERIFIER_TOKEN', '')
+  vi.stubEnv('KATEDRA_GATE_VERIFIER_REQUIRED', 'false')
   vi.stubEnv('KATEDRA_AGENT_RUNS_ENABLED', 'true')
   vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
   vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
@@ -89,6 +97,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   vi.clearAllMocks()
   vi.unstubAllEnvs()
 })
@@ -196,4 +206,87 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
     expect(mocks.createAnthropicAgentProvider).not.toHaveBeenCalled()
     expect(mocks.runAgentWorkerLoop).not.toHaveBeenCalled()
   })
+})
+
+
+it('wires the export gate to the verified plan, scoped loaders and text-free log', async () => {
+  vi.stubEnv('KATEDRA_GATE_VERIFIER_URL', 'https://gate.example')
+  vi.stubEnv('KATEDRA_GATE_VERIFIER_TOKEN', 'gate-fixture-token')
+  const manuscript = { version: 1, id: 'm', title: 'PRIVATE manuscript', workType: 'd', meta: { profileId: 'known' }, sections: [], sources: [] }
+  const makeArtifact = (agent, order, plan, extra = {}) => ({
+    materialId: agent, stepId: agent, agent, verifier: `${agent}_verifier`, stepOrder: order, attempt: 1,
+    projectId: 'project-1', runId: 'run-1', verification: { status: 'verified', issues: [], evidence: [] },
+    citations: [], createdAt: '2026-09-07T00:00:00Z', output: `<!-- PLAN:JSON -->${JSON.stringify(plan)}<!-- /PLAN:JSON -->`, ...extra,
+  })
+  mocks.loadRunManuscriptContext.mockResolvedValue(manuscript)
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript })
+  mocks.loadAgentRunResults.mockResolvedValue([
+    makeArtifact('structure', 2, { thesis: 'PRIVATE thesis', perspectives: [{ label: 'a', position: 'a', why: 'a' }, { label: 'b', position: 'b', why: 'b' }], chapters: [{ sectionId: 's1', title: 'Chapter', pages: 2 }] }),
+    makeArtifact('planning', 3, { chapters: [{ sectionId: 's1', content: 'PRIVATE program', sources: ['source-1'] }] }),
+    makeArtifact('planning', 3, { thesis: 'OTHER RUN' }, { stepId: 'foreign-run', runId: 'other' }),
+    makeArtifact('planning', 3, { thesis: 'OTHER PROJECT' }, { stepId: 'foreign-project', projectId: 'other' }),
+    makeArtifact('planning', 3, { thesis: 'REJECTED' }, { stepId: 'rejected', verification: { status: 'blocked' } }),
+    makeArtifact('planning', 8, { thesis: 'FUTURE' }, { stepId: 'future' }),
+  ])
+  mocks.packProfileHint.mockResolvedValue({ name: 'Known', citation: 'APA' })
+  mocks.verifyAgentResult.mockReturnValue({ status: 'verified', issues: [], evidence: [] })
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 'done', result: {
+    status: 'needs_revision', issues: [{ code: 'gate_finding', message: 'PRIVATE finding', blocking: true }],
+    gate: { faza: 'predaja', prolaz: false, koraci: [{ korak: 'argument', stanje: 'nalaz', blokira: true, naziv: 'PRIVATE title' }] }, gateExitCode: 1,
+  } })))
+  vi.stubGlobal('fetch', fetchMock)
+  const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+  const { POST } = await loadRoute()
+  expect((await POST(request())).status).toBe(200)
+  const { verify } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+  const agentResult = { agent: 'export', output: 'PRIVATE output', citations: [], provider: 'fixture', usage: { inputTokens: 1, outputTokens: 1 } }
+  expect((await verify(agentResult, { step: { id: 'export', order: 7, agent: 'export', attempt: 2 } })).status).toBe('needs_revision')
+  const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+  expect(body).toMatchObject({ runId: 'run-1', stepId: 'export', agent: 'export', attempt: 2, manuscript, profile: { citation: 'APA' }, agentResult, planReady: true, planApproved: false,
+    plan: { thesis: 'PRIVATE thesis', chapters: [{ sectionId: 's1', title: 'Chapter', content: 'PRIVATE program', sources: ['source-1'] }] },
+  })
+  expect(body.plan.chapters).toHaveLength(1)
+  expect(mocks.packProfileHint).toHaveBeenCalledWith('known')
+  expect(mocks.loadAgentRunResults).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ runId: 'run-1', projectId: 'project-1', userId: 'user-1' }))
+  expect(mocks.verifyAgentResult).toHaveBeenCalledWith(agentResult, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true })
+  const log = String(info.mock.calls.at(-1)[0])
+  expect(log).not.toContain('PRIVATE')
+  expect(JSON.parse(log)).toMatchObject({ eventName: 'agent_gate_verified', requestId: 'worker-request-1', gate: { faza: 'predaja', prolaz: false, exitCode: 1 } })
+})
+
+it('requires explicit plan approval before provider execution even in autonomous mode with an optional service', async () => {
+  const { buildPlanReview } = await import('@/lib/agents/plan-approval')
+  const { selectVerifiedAgentArtifacts } = await import('@/lib/agents/artifact-chain')
+  const manuscript = { schemaVersion: 1, projectId: 'project-1', title: 'Topic', workType: 's', sections: [], sources: [], meta: {} }
+  const saved = { materialId: 'plan-1', stepId: 'planning', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, attempt: 1, projectId: 'project-1', runId: 'run-1', createdAt: '2026-09-01T00:00:00Z', citations: [], verification: { status: 'verified' },
+    output: '<!-- PLAN:JSON -->{"thesis":"Thesis","chapters":[{"sectionId":"s1","content":"Program","sources":["src1"]}]}<!-- /PLAN:JSON -->' }
+  mocks.loadAgentRunResults.mockResolvedValue([saved])
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript })
+  mocks.createAdminClient.mockReturnValue(database({ ...run, mode: 'autonomous' }))
+  const executeProvider = vi.fn().mockResolvedValue({ output: 'Generated' })
+  mocks.createProviderBackedExecutor.mockReturnValue(executeProvider)
+  const { POST } = await loadRoute()
+  expect((await POST(request())).status).toBe(200)
+  const { execute } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+  const step = { id: 'writing', agent: 'writing', order: 4, attempt: 1 }
+  await expect(execute(step)).rejects.toThrow('Plan approval required')
+  expect(executeProvider).not.toHaveBeenCalled()
+  const review = buildPlanReview(manuscript, selectVerifiedAgentArtifacts([saved], { order: 4 }))
+  const planApproval = { schemaVersion: 1, projectId: 'project-1', runId: 'run-1', approvedBy: 'user-1', planRevision: review.planRevision, approvedAt: '2026-09-01T00:00:00Z' }
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript, planApproval })
+  // A context request admitted while blocked finishes after the approval check.
+  // The billed provider must still receive the approved snapshot, not that later upload.
+  mocks.loadRunManuscriptContext.mockResolvedValue({ ...manuscript, title: 'Unapproved concurrent upload' })
+  executeProvider.mockImplementation(async () => {
+    const options = mocks.createProviderBackedExecutor.mock.calls.at(-1)[0]
+    mocks.loadAgentRunResults.mockResolvedValueOnce([{ ...saved, output: 'Unapproved replacement plan' }])
+    expect(await options.loadContext()).toEqual(manuscript)
+    expect(await options.loadResults()).toEqual([saved])
+    return { output: 'Generated' }
+  })
+  await expect(execute(step)).resolves.toEqual({ output: 'Generated' })
+  expect(executeProvider).toHaveBeenCalledOnce()
+  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript: { ...manuscript, title: 'Changed plan topic' }, planApproval })
+  await expect(execute(step)).rejects.toThrow('Plan approval required')
+  expect(executeProvider).toHaveBeenCalledOnce()
 })
