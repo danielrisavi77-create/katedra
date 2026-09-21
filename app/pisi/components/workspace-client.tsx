@@ -15,12 +15,14 @@ import { shouldShowManuscriptOnboarding } from '../../../lib/manuscript/onboardi
 import { buildAiMessages, capabilityForAction, type ManuscriptAiAction, type ManuscriptMaterialContext } from '../../../lib/manuscript/context'
 import { exportManuscriptDocx } from '../../../lib/manuscript/export-docx'
 import { migrateLegacyProject } from '../../../lib/manuscript/migration'
-import { serverStateToManifest } from '../../../lib/manuscript/server-project'
+import { loadServerProjectSnapshot } from '../../../lib/manuscript/server-hydration'
 import { appendPlainText, countDocumentWords, createSection, moveSection, plainTextDocument, removeSection } from '../../../lib/manuscript/model'
 import { createAutosaveController } from '../../../lib/manuscript/autosave'
 import { validateImportedText, validateTextImport } from '../../../lib/manuscript/import-validation'
 import { validateManuscriptBackup } from '../../../lib/manuscript/backup-validation'
-import { createAiProposal, proposalApplyTarget } from '../../../lib/manuscript/proposals'
+import { createAiProposal } from '../../../lib/manuscript/proposals'
+import { createAiLedgerAttempt, exportAiLedger, readAiLedger } from '../../../lib/manuscript/ai-ledger'
+import { prepareProposalApplication } from '../../../lib/manuscript/proposal-application'
 import { canApplyProposal, isCurrentAiRequest } from '../../../lib/manuscript/proposal-guards'
 import { createManuscriptStore } from '../../../lib/manuscript/storage'
 import { getBrowserStorage, readStorage, writeStorage } from '../../../lib/manuscript/browser-storage'
@@ -38,6 +40,8 @@ import type {
   TiptapNode,
 } from '../../../lib/manuscript/types'
 import { AssistantPanel } from './assistant-panel'
+import { useManuscriptState } from './use-manuscript-state'
+import { useProposalExpiry } from './use-proposal-expiry'
 import { AgentStudioShell } from './agent-studio-shell'
 import { ManuscriptEditor, type EditorApplyRequest, type EditorSelection } from './manuscript-editor'
 import { OnboardingFlow, type OnboardingInitialValues, type OnboardingResult } from './onboarding-flow'
@@ -76,8 +80,10 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   const localManuscriptFoundRef = useRef(false)
   const serverProjectHydratedRef = useRef<string | null>(null)
   const aiRequestRef = useRef<{ id: string; sectionId: string; controller: AbortController } | null>(null)
+  const aiLedgerAttemptRef = useRef<ReturnType<typeof createAiLedgerAttempt> | null>(null)
   const activeSectionIdRef = useRef<string | null>(null)
   const manuscriptRef = useRef<ManuscriptV1 | null>(null)
+  const proposalRef = useRef<AiProposalV1 | null>(null)
   const bootingRef = useRef(true)
   const onboardingRef = useRef(true)
   const autosaveRef = useRef<ReturnType<typeof createAutosaveController<ManuscriptV1>> | null>(null)
@@ -88,7 +94,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   const [scanMode, setScanMode] = useState(false)
   const [completionScan, setCompletionScan] = useState<ReturnType<typeof createCompletionScan> | null>(null)
   const [projectHome, setProjectHome] = useState(false)
-  const [manuscript, setManuscript] = useState<ManuscriptV1 | null>(null)
+  const [manuscript, setManuscript, manuscriptRevisionRef] = useManuscriptState()
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local_only')
   const [mobileView, setMobileView] = useState<MobileView>('editor')
@@ -102,9 +108,17 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   const [proposal, setProposal] = useState<AiProposalV1 | null>(null)
   const [assistantBusy, setAssistantBusy] = useState(false)
   const [assistantError, setAssistantError] = useState('')
+  const [, setLedgerRevision] = useState(0)
+  const [ledgerWarning, setLedgerWarning] = useState('')
+  const refreshLedger = useCallback((attempt: ReturnType<typeof createAiLedgerAttempt>) => {
+    setLedgerRevision(value => value + 1)
+    if (!attempt.saved) setLedgerWarning('Zapis AI aktivnosti nije spremljen na ovom uređaju. Evidencija može biti nepotpuna.')
+  }, [])
+  const ledgerProjectId = manuscript?.projectId
+  const localAiLedger = ledgerProjectId && drawerOpen && drawerTab === 'history' ? readAiLedger(getBrowserStorage(), ledgerProjectId) : null
   const [composerMaterials, setComposerMaterials] = useState<ManuscriptMaterialContext[]>([])
   const [applyRequest, setApplyRequest] = useState<EditorApplyRequest | null>(null)
-  const [acceptedFlash, setAcceptedFlash] = useState(false)
+  const acceptedFlash = useProposalExpiry(proposal, setProposal)
   const [mentorTasks, setMentorTasks] = useState<MentorTask[]>([])
   const [legacyChecks, setLegacyChecks] = useState<Record<string, boolean>>({})
   const [passStatus, setPassStatus] = useState<PassStatus>('idle')
@@ -123,9 +137,10 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
 
   useEffect(() => {
     manuscriptRef.current = manuscript
+    proposalRef.current = proposal
     bootingRef.current = booting
     onboardingRef.current = showOnboarding
-  }, [booting, manuscript, showOnboarding])
+  }, [booting, manuscript, proposal, showOnboarding])
 
   const flushCurrentManuscript = useCallback(() => {
     const value = !bootingRef.current && !onboardingRef.current ? manuscriptRef.current : null
@@ -214,32 +229,32 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     })
     return () => {
       cancelled = true
+      aiLedgerAttemptRef.current?.cancel()
       aiRequestRef.current?.controller.abort()
       aiRequestRef.current = null
       void flushCurrentManuscript().catch(() => undefined).finally(() => storeRef.current?.close())
     }
-  }, [agenticAvailable, flushCurrentManuscript])
+  }, [agenticAvailable, flushCurrentManuscript, setManuscript])
 
   useEffect(() => {
     const projectId = manuscript?.projectId
     if (booting || authLoading || !user || !projectId || localManuscriptFoundRef.current || serverProjectHydratedRef.current === projectId) return
     serverProjectHydratedRef.current = projectId
+    const initial = manuscriptRef.current
+    if (!initial) return
+    const initialRevision = manuscriptRevisionRef.current
     let cancelled = false
     const hydrate = async () => {
       try {
-        const response = await fetch(`/api/state?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
-        if (!response.ok) return
-        const state = await response.json().catch(() => null)
-        const manifest = serverStateToManifest(projectId, state)
-        if (!manifest || cancelled) return
-        const current = manuscriptRef.current
-        if (!current || current.projectId !== projectId) return
-        const hydrated = migrateLegacyProject({ manifest })
+        const hydrated = await loadServerProjectSnapshot(initial, () => cancelled || manuscriptRevisionRef.current !== initialRevision ? null : manuscriptRef.current)
+        if (!hydrated || cancelled || manuscriptRef.current !== initial || manuscriptRevisionRef.current !== initialRevision) return
         const storage = getBrowserStorage()
         writeStorage(storage, `${READY_PREFIX}${projectId}`, '1')
         writeStorage(storage, `${PROJECT_SETUP_PREFIX}${projectId}`, '1')
         persistManifest(hydrated)
-        setManuscript(hydrated)
+        // Also protect edits already queued in React but not yet mirrored in
+        // manuscriptRef by the next committed render.
+        setManuscript((current) => current === initial ? hydrated : current)
         setShowOnboarding(false)
         setProjectHome(true)
       } catch {
@@ -248,7 +263,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     }
     void hydrate()
     return () => { cancelled = true }
-  }, [authLoading, booting, manuscript?.projectId, user])
+  }, [authLoading, booting, manuscript?.projectId, manuscriptRevisionRef, setManuscript, user])
 
   useEffect(() => {
     const autosave = autosaveRef.current
@@ -347,13 +362,16 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   const updateManuscript = useCallback((recipe: (current: ManuscriptV1) => ManuscriptV1) => {
     setSaveStatus('saving')
     setManuscript((current) => current ? { ...recipe(current), updatedAt: new Date().toISOString() } : current)
-  }, [])
+  }, [setManuscript])
 
   const activeSection = useMemo(() => manuscript?.sections.find((section) => section.id === manuscript.activeSectionId) || manuscript?.sections[0], [manuscript])
   useEffect(() => {
     activeSectionIdRef.current = activeSection?.id || null
   }, [activeSection?.id])
   const clearAiContext = useCallback(() => {
+    const attempt = aiLedgerAttemptRef.current
+    if (attempt) { attempt.cancel(); attempt.decide('discarded'); refreshLedger(attempt) }
+    proposalRef.current = null
     aiRequestRef.current?.controller.abort()
     aiRequestRef.current = null
     setAssistantBusy(false)
@@ -361,7 +379,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     setProposal(null)
     setApplyRequest(null)
     setSelection(null)
-  }, [])
+  }, [refreshLedger])
   const visibleProposal = useMemo(() => {
     if (!proposal || !activeSection || proposal.sectionId !== activeSection.id) return null
     if (proposal.status !== 'ready') return proposal
@@ -500,6 +518,13 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       selectedFrom: selection?.from,
       selectedTo: selection?.to,
     })
+    const previousAttempt = aiLedgerAttemptRef.current
+    if (previousAttempt) { previousAttempt.cancel(); previousAttempt.decide('discarded') }
+    const ledgerAttempt = createAiLedgerAttempt(getBrowserStorage(), {
+      projectId: manuscript.projectId, proposalId: base.id, sectionId: requestSectionId, action,
+    })
+    aiLedgerAttemptRef.current = ledgerAttempt
+    refreshLedger(ledgerAttempt)
     setProposal(base)
     try {
       const response = await fetch('/api/chat', {
@@ -512,6 +537,8 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
           capability: capabilityForAction(action),
         }),
       })
+      if (!isCurrentAiRequest(requestId, aiRequestRef.current?.id || null, requestSectionId, activeSectionIdRef.current || '')) return
+      ledgerAttempt.setResponseIdentity(response.headers.get('x-katedra-model'), response.headers.get('x-request-id'))
       if (response.status === 402) setPassOpen(true)
       if (!response.ok || !response.body) throw new Error(await responseMessage(response))
       const reader = response.body.getReader()
@@ -528,18 +555,35 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       if (!isCurrentAiRequest(requestId, aiRequestRef.current?.id || null, requestSectionId, activeSectionIdRef.current || '')) return
       full += parser.push(decoder.decode()) + parser.flush()
       if (!full.trim()) throw new Error('Katedra nije vratila tekst. Pokušaj ponovno.')
+      ledgerAttempt.complete()
       setProposal({ ...base, proposedText: full.trim(), status: 'ready' })
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
       if (!isCurrentAiRequest(requestId, aiRequestRef.current?.id || null, requestSectionId, activeSectionIdRef.current || '')) return
+      ledgerAttempt.fail()
       setProposal(null)
       setAssistantError(error instanceof Error ? error.message : 'AI prijedlog nije uspio.')
     } finally {
+      // Early stale-response exits and aborts terminate only a pending attempt;
+      // this cannot overwrite a completed/failed outcome or user decision.
+      ledgerAttempt.cancel()
+      refreshLedger(ledgerAttempt)
       if (aiRequestRef.current?.id === requestId) {
         aiRequestRef.current = null
         setAssistantBusy(false)
       }
     }
+  }
+
+  const rejectProposal = () => {
+    const attempt = aiLedgerAttemptRef.current
+    if (attempt?.proposalId === proposal?.id && attempt.projectId === manuscript?.projectId) {
+      attempt.decide('rejected')
+      refreshLedger(attempt)
+    }
+    proposalRef.current = null
+    setProposal(null)
+    setApplyRequest(null)
   }
 
   const applyProposal = async (mode: 'replace' | 'append') => {
@@ -552,23 +596,16 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       return
     }
     try {
-      await storeRef.current?.snapshot(manuscript, `AI prijedlog: ${proposal.action}`)
+      const request = await prepareProposalApplication({
+        manuscript, proposal, mode,
+        snapshot: async (value, reason) => { await storeRef.current?.snapshot(value, reason) },
+        readCurrent: () => ({ manuscript: manuscriptRef.current, proposal: proposalRef.current }),
+      })
+      if (request) setApplyRequest(request)
+      else setProposal((current) => current === proposal ? { ...current, status: 'stale' } : current)
     } catch {
-      setAssistantError('Prijedlog nije moguće spremiti u lokalnu verziju.')
-      return
+      if (proposalRef.current === proposal) setAssistantError('Prijedlog nije moguće spremiti u lokalnu verziju.')
     }
-    const target = proposalApplyTarget(proposal, mode, activeSection.content)
-    if (!target) {
-      setProposal({ ...proposal, status: 'stale' })
-      return
-    }
-    setApplyRequest({
-      id: proposal.id,
-      sectionId: activeSection.id,
-      mode: target.mode,
-      text: proposal.proposedText,
-      ...(target.from != null && target.to != null ? { from: target.from, to: target.to } : {}),
-    })
   }
 
   const onApplied = (content: TiptapNode) => {
@@ -578,10 +615,13 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     }
     updateSectionContent(content)
     appendProcessLog(manuscript?.projectId || '', proposal?.action || 'AI prijedlog', activeSection?.id || '')
+    const attempt = aiLedgerAttemptRef.current
+    if (attempt?.proposalId === proposal.id && attempt.projectId === manuscript?.projectId) {
+      attempt.decide('accepted')
+      refreshLedger(attempt)
+    }
     setProposal((current) => current ? { ...current, status: 'accepted' } : current)
     setApplyRequest(null)
-    setAcceptedFlash(true)
-    setTimeout(() => { setAcceptedFlash(false); setProposal(null) }, 900)
   }
 
   const exportDocx = async () => {
@@ -820,10 +860,14 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
           />
         }
         editor={<>
-          <WritingComposer sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} materials={composerMaterials} onRun={(action, instruction) => void runAi(action, instruction)} onUpload={uploadComposerMaterial} onRemoveUpload={(name) => setComposerMaterials((current) => current.filter((material) => material.name !== name))} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />
-          <ManuscriptEditor section={activeSection} acceptedFlash={acceptedFlash} onChange={updateSectionContent} onSelectionChange={setSelection} applyRequest={applyRequest} onApplied={onApplied} />
+          <WritingComposer sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} materials={composerMaterials} onRun={(action, instruction) => void runAi(action, instruction)} onUpload={uploadComposerMaterial} onRemoveUpload={(name) => setComposerMaterials((current) => current.filter((material) => material.name !== name))} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={rejectProposal} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />
+          <ManuscriptEditor section={activeSection} acceptedFlash={acceptedFlash} onChange={updateSectionContent} onSelectionChange={setSelection} applyRequest={applyRequest} onApplied={onApplied} onApplyRejected={() => {
+            setProposal((current) => current?.id === applyRequest?.id ? { ...current, status: 'stale' } : current)
+            setApplyRequest(null)
+            setAssistantError('Prijedlog nije primijenjen. Provjeri aktualni tekst i zatraži novi prijedlog.')
+          }} />
         </>}
-         assistant={<AssistantPanel sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} error={assistantError} initialTab="helpers" showProposal={false} showPrompt={false} onToggleFocus={() => setFocusMode((current) => !current)} onRun={(action, instruction) => void runAi(action, instruction)} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />}
+         assistant={<AssistantPanel sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} error={assistantError} initialTab="helpers" showProposal={false} showPrompt={false} onToggleFocus={() => setFocusMode((current) => !current)} onRun={(action, instruction) => void runAi(action, instruction)} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={rejectProposal} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />}
       />
       <ProjectDrawer
         open={drawerOpen}
@@ -855,6 +899,14 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
         requestedTab={drawerTab}
         onTabChange={setDrawerTab}
         historyEntries={(readJson<Array<{ occurredAt?: unknown; action?: unknown; sectionId?: unknown }>>(`katedra_manuscript_log:${manuscript.projectId}`) || []).flatMap((entry) => typeof entry.occurredAt === 'string' && typeof entry.action === 'string' && typeof entry.sectionId === 'string' ? [{ occurredAt: entry.occurredAt, action: entry.action, sectionId: entry.sectionId }] : [])}
+        aiLedger={localAiLedger || undefined}
+        ledgerWarning={ledgerWarning}
+        onExportAiLedger={() => {
+          const snapshot = readAiLedger(getBrowserStorage(), manuscript.projectId)
+          if (snapshot.status !== 'available') { window.alert('Lokalna AI evidencija nije dostupna za izvoz.'); return }
+          const url = URL.createObjectURL(new Blob([exportAiLedger(getBrowserStorage(), manuscript.projectId)], { type: 'application/json' }))
+          const anchor = document.createElement('a'); anchor.href = url; anchor.download = `katedra-ai-ledger-${manuscript.projectId}.json`; anchor.click(); URL.revokeObjectURL(url)
+        }}
       />
       {checkoutNotice && <div className="pis-checkout-notice" role="status"><span>{checkoutNotice}</span><button type="button" onClick={() => setCheckoutNotice('')} aria-label="Zatvori obavijest">×</button></div>}
       <PassDialog

@@ -12,6 +12,8 @@ page.on('pageerror', (error) => pageErrors.push(String(error)))
 
 try {
   await page.addInitScript(({ projectId }) => {
+    // Playwright also runs this script in opaque preview/toolbar frames.
+    if (window.top !== window.self) return
     window.localStorage.setItem('rp_manifest', JSON.stringify({
       v: 1,
       projectId,

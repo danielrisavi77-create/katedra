@@ -2,9 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
 import { lookupActiveProjectPassForProduct } from '@/lib/academic-suite/repositories/entitlements'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
-import { createSupabaseRunPayloadManifestStore, loadRunContextSnapshot } from '@/lib/agents/run-context-loader'
+import { createSupabaseRunPayloadManifestStore } from '@/lib/agents/run-context-loader'
+import { loadActiveRunContextSnapshot } from '@/lib/agents/run-context-access'
 import { loadAgentRunResults } from '@/lib/agents/run-result-storage'
-import { runContextStoragePaths } from '@/lib/agents/run-context'
 import { storePlanApproval } from '@/lib/agents/run-context-storage'
 import { canEditAgentRunContext } from '@/lib/agents/run-context-policy'
 import { selectVerifiedAgentArtifacts } from '@/lib/agents/artifact-chain'
@@ -68,9 +68,10 @@ async function handle(req, { params }, approve) {
     if (downloaded.error || !downloaded.data) throw new Error('Private context unavailable')
     return downloaded.data.arrayBuffer()
   } }
-  const paths = runContextStoragePaths(user.id, run.project_id, runId)
-  const { manuscript, contextRevision, planApproval } = await loadRunContextSnapshot(payloadStorage, { ...paths, runId, projectId: run.project_id })
-  const results = await loadAgentRunResults(createSupabaseRunPayloadManifestStore(db), payloadStorage, { runId, projectId: run.project_id, userId: user.id, bucket })
+  const manifestStore = createSupabaseRunPayloadManifestStore(db)
+  const scope = { runId, projectId: run.project_id, userId: user.id, bucket }
+  const { manuscript, contextRevision, planApproval } = await loadActiveRunContextSnapshot(manifestStore, payloadStorage, scope)
+  const results = await loadAgentRunResults(manifestStore, payloadStorage, scope)
   const artifacts = selectVerifiedAgentArtifacts(results, { order: Number.MAX_SAFE_INTEGER, projectId: run.project_id, runId })
   const review = buildPlanReview(manuscript, artifacts)
   if (!approve) return privateJson({ ...review,

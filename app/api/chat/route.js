@@ -172,13 +172,15 @@ async function handlePOST(req, requestContext = {}) {
   })
   if (!inputPolicy.ok) return json(inputPolicy.status, { error: 'Zahtjev je prevelik.', reason: inputPolicy.reason })
 
-  // Reserve a bounded baseline before the wallet lookup. The final provider
-  // output limit is tightened to the actual project balance below.
+  // Reserve the full permitted output before wallet/starter side effects.
+  // The later wallet limit can only reduce provider output. Reserving a
+  // smaller baseline would understate the atomic cross-instance daily cap
+  // and the pending-reconciliation estimate when usage is unavailable.
   const reservationEstimatedCharge = estimateChatCharge({
     inputChars,
     model,
     attachmentChars,
-    maxOutputTokens: 512,
+    maxOutputTokens: MAX_TOKENS,
     outputWeight: OUTPUT_WEIGHT,
   })
   const billingContractEnabled = process.env.KATEDRA_BILLING_RPC_CONTRACT === KATEDRA_BILLING_RPC_CONTRACT
@@ -594,7 +596,7 @@ async function handlePOST(req, requestContext = {}) {
   return new Response(counted, {
     headers: {
       'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache',
+      'cache-control': 'private, no-store',
       'x-katedra-balance-before': adminOverride ? 'unlimited' : String(balance),
       // Klijent nikad ne šalje model (v. MODELS default gore) — ovo mu javlja
       // koji je STVARNO odgovorio, za lokalni AI ledger, umjesto da

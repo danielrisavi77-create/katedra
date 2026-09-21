@@ -17,7 +17,7 @@ describe('agent run route contract', () => {
     expect(source).toContain('storeAgentRunContext')
     expect(source).toContain('Snapshot rukopisa je obavezan')
     expect(source).toContain('cancelAgentRun')
-    expect(source).toContain('replaceAgentPayloadsForRun')
+    expect(source).toContain('materialIds: parsed.value.materialIds ?? []')
     expect(source).toContain('resolveCanonicalProjectPass')
     expect(source).toContain('resolveProjectCapability')
     expect(source).toContain("'autonomous_run'")
@@ -33,9 +33,9 @@ describe('agent run route contract', () => {
     expect(source.indexOf('await storeAgentRunContext')).toBeLessThan(source.indexOf('await activateAgentRun'))
   })
 
-  it('attaches selected materials before exposing the run to workers', () => {
-    expect(source).toContain('replaceAgentPayloadsForRun')
-    expect(source.indexOf('await replaceAgentPayloadsForRun')).toBeLessThan(source.indexOf('await activateAgentRun'))
+  it('commits selected materials with context before exposing the run to workers', () => {
+    expect(source).toContain('materialIds: parsed.value.materialIds ?? []')
+    expect(source.indexOf('await storeAgentRunContext')).toBeLessThan(source.indexOf('await activateAgentRun'))
   })
 
   it('uses the configured private bucket for the run manuscript snapshot', () => {

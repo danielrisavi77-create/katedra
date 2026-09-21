@@ -11,7 +11,7 @@ import { ThemeToggle } from './theme-toggle'
 const PASSES = [
   { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: 'plan, izvori, pisanje i sadržajna revizija', days: 120, includes: ['Plan i literatura', 'Pisanje po sekcijama', 'Sadržajna revizija'] },
   { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: 'istraživačko pitanje, metodologija i mentorov workflow', days: 240, includes: ['Istraživačko pitanje i metodologija', 'Literatura i pisanje', 'Mentorov workflow i obrana'] },
-  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'istraživački dizajn, više revizija i priprema obrane', days: 365, includes: ['Istraživački dizajn i literatura', 'Pisanje i više revizija', 'Priprema obrane'] },
+  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'plan istraživanja, sadržajne revizije i priprema obrane', days: 365, includes: ['Plan istraživanja i literatura', 'Pisanje i sadržajne revizije', 'Priprema obrane'] },
 ]
 
 export default function LandingPage() {
@@ -37,8 +37,8 @@ export default function LandingPage() {
             Završi rad bez nagađanja.
           </h2>
           <p style={{ fontSize: 16, color: 'var(--mut)', marginTop: 16, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.55 }}>
-            Katedra te vodi od teme do obrane, prati što je još otvoreno, što tvoj fakultet
-            dopušta uz AI i što mentor čeka. Lekta provjerava stvarni dokument prije predaje.
+            Katedra te vodi od teme do obrane, prati otvorene zadatke i mentorove povratne
+            informacije te pomaže provjeriti uvjete uporabe AI-ja. Lekta provjerava stvarni dokument prije predaje.
           </p>
           <div className="landing-actions" style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' }}>
             {/* Obični <a>, ne next/link: /pisi ima BOOT <script> koji čita ?screen=/
@@ -62,9 +62,9 @@ export default function LandingPage() {
          <section className="landing-trust" data-reveal="true" style={{ textAlign: 'center', marginBottom: 40, padding: '22px 16px', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
           <h3 style={{ fontSize: 16.5 }}>AI se prilagođava pravilima tvog projekta, ne obrnuto.</h3>
           <p style={{ fontSize: 13.5, color: 'var(--mut)', marginTop: 6, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
-            Katedra prvo provjerava što ti je dopušteno prema objavljenim pravilima tvog
-            fakulteta. Tek onda uključuje AI. Kad pravilo nije potvrđeno, Katedra ostaje na
-            sigurnijoj strani i vodi te pitanjima umjesto da piše umjesto tebe.
+            Katedra primjenjuje potvrđena institucionalna pravila kad su dostupna.
+            Generiranje teksta za predaju zahtijeva potvrđeno dopuštenje.
+            Dostupna je i pomoć u planiranju, razumijevanju i uređivanju tvog teksta.
           </p>
          </section>
 
@@ -128,7 +128,7 @@ export default function LandingPage() {
               <div style={{ width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--acc)', color: 'var(--acc)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, marginBottom: 10 }}>3</div>
               <p style={{ fontSize: 13.8, lineHeight: 1.5 }}>
                 <b>Pišeš ovdje:</b> prvo detaljan plan, zatim pisanje uz tvoje odobravanje svakog
-                koraka, prilagođeno AI pravilima tvog fakulteta. Prije predaje, Lekta provjerava
+                koraka i uz dostupna potvrđena pravila. Prije predaje, Lekta provjerava
                 stvarni dokument.
               </p>
             </div>

@@ -485,7 +485,11 @@ describe('POST /api/chat runtime guards', () => {
     expect(mocks.isDistributedRateLimitConfigured).not.toHaveBeenCalled()
   })
 
-  it('streams an authenticated response and settles billing with request identity exactly once', async () => {
+  it.each([1_024, 8_192])('reserves the provider budget and settles each authenticated stream once (output limit %i)', async (outputLimit) => {
+    const { estimateChatCharge } = await vi.importActual('@/lib/ai/cost-policy')
+    mocks.estimateChatCharge.mockImplementation(estimateChatCharge)
+    mocks.maxAffordableOutputTokens.mockReturnValue(outputLimit)
+    mocks.validateCostCeiling.mockReturnValue({ ok: true })
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_BILLING_RPC_CONTRACT', 'v2')
@@ -559,9 +563,20 @@ describe('POST /api/chat runtime guards', () => {
 
     const reservationInputs = mocks.reserveDistributedRequest.mock.calls.map(([, input]) => input)
     expect(reservationInputs).toHaveLength(2)
-    expect(reservationInputs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ userId: 'user-1', requestId: expect.any(String), estimatedCharge: 1_000 }),
-    ]))
+    const providerPayloads = globalThis.fetch.mock.calls.map(([, init]) => JSON.parse(init.body))
+    expect(providerPayloads).toHaveLength(2)
+    providerPayloads.forEach((payload, index) => {
+      expect(payload.max_tokens).toBe(outputLimit)
+      expect(reservationInputs[index].estimatedCharge).toBeGreaterThanOrEqual(estimateChatCharge({
+        inputChars: 3,
+        attachmentChars: 0,
+        model: payload.model,
+        maxOutputTokens: payload.max_tokens,
+        outputWeight: 5,
+      }))
+    })
+    expect(response.headers.get('cache-control')).toContain('private')
+    expect(response.headers.get('cache-control')).toContain('no-store')
     const reservationIds = reservationInputs.map(input => input.requestId)
     expect(reservationIds.every(id => id !== 'reused-client-id')).toBe(true)
     expect(new Set(reservationIds).size).toBe(2)

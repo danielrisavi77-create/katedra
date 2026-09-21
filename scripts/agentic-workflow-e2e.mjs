@@ -89,6 +89,7 @@ try {
   await page.getByRole('heading', { name: 'Priprema rada' }).waitFor({ state: 'visible', timeout: 30_000 })
   const pass = page.getByText('Pass aktivan', { exact: true })
   await pass.waitFor({ state: 'visible', timeout: 30_000 })
+  await page.getByRole('checkbox', { name: /Pristajem na privatnu privremenu pohranu/ }).check()
   await page.getByRole('button', { name: /Pokreni (autonomni )?tijek/i }).click()
 
   let terminalText = await waitForTerminalRun()

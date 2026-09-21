@@ -1,9 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { createManuscript } from '@/lib/manuscript/model'
 
-const mocks = vi.hoisted(() => ({ createClient: vi.fn(), loadRunContextSnapshot: vi.fn(), loadAgentRunResults: vi.fn(), storePlanApproval: vi.fn(), readProjectLock: vi.fn(), lookupActiveProjectPassForProduct: vi.fn() }))
+const mocks = vi.hoisted(() => ({ createClient: vi.fn(), loadActiveRunContextSnapshot: vi.fn(), loadAgentRunResults: vi.fn(), storePlanApproval: vi.fn(), readProjectLock: vi.fn(), lookupActiveProjectPassForProduct: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
-vi.mock('@/lib/agents/run-context-loader', () => ({ loadRunContextSnapshot: mocks.loadRunContextSnapshot, createSupabaseRunPayloadManifestStore: vi.fn(() => ({})) }))
+vi.mock('@/lib/agents/run-context-access', () => ({ loadActiveRunContextSnapshot: mocks.loadActiveRunContextSnapshot }))
+vi.mock('@/lib/agents/run-context-loader', () => ({ createSupabaseRunPayloadManifestStore: vi.fn(() => ({})) }))
 vi.mock('@/lib/agents/run-result-storage', () => ({ loadAgentRunResults: mocks.loadAgentRunResults }))
 vi.mock('@/lib/agents/run-context-storage', () => ({ storePlanApproval: mocks.storePlanApproval }))
 vi.mock('@/lib/academic-suite/project-lock', () => ({ readProjectLock: mocks.readProjectLock, validateLockedProjectMutation: vi.fn(() => ({ ok: true })) }))
@@ -24,7 +25,7 @@ beforeEach(() => {
   user = { id: 'user-1' }
   query = { select: vi.fn(() => query), eq: vi.fn(() => query), maybeSingle: vi.fn(async () => ({ data: run, error: null })) }
   mocks.createClient.mockResolvedValue({ auth: { getUser: async () => ({ data: { user } }) }, from: () => query, storage: { from: () => ({ download: vi.fn() }) } })
-  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript, contextRevision: 'context-1' })
+  mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript, contextRevision: 'context-1' })
   mocks.loadAgentRunResults.mockResolvedValue([saved])
   mocks.readProjectLock.mockResolvedValue({ ok: true, lock: { workType: 's', productKey: 'seminarski' } })
   mocks.lookupActiveProjectPassForProduct.mockResolvedValue({ ok: true, active: true })
@@ -33,6 +34,14 @@ beforeEach(() => {
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs() })
 
 describe('explicit plan approval API', () => {
+  it.each(['GET', 'POST'])('rejects expired or revoked context in %s without granting approval', async (method) => {
+    mocks.loadActiveRunContextSnapshot.mockRejectedValueOnce(new Error('Context expired'))
+    const response = method === 'GET' ? await GET(request(), params)
+      : await POST(request({ approve: true, projectId: 'project-1', planRevision: 'a'.repeat(64) }), params)
+    expect(response.status).toBe(503)
+    expect(mocks.storePlanApproval).not.toHaveBeenCalled()
+    expect(mocks.loadAgentRunResults).not.toHaveBeenCalled()
+  })
   it('GET previews a verified plan without recording approval', async () => {
     const response = await GET(request(), params)
     expect(response.headers.get('cache-control')).toContain('no-store')

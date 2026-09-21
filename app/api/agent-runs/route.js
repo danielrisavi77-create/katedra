@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
-import { activateAgentRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun, replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
+import { activateAgentRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun } from '@/lib/agents/backend-contract'
 import { parseAgentRunRequest, validateAgentRunSectionSelection } from '@/lib/agents/run-request'
 import { validateAgentRunContext } from '@/lib/agents/run-context'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
+import { hasSnapshotConsent, recordSnapshotConsent } from '@/lib/agents/snapshot-consent'
 import { resolveCanonicalProjectPass, resolveProjectCapability } from '@/lib/product/server-capabilities'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
@@ -95,6 +97,10 @@ async function handlePost(req) {
       : 'Ova agenticna mogućnost nije dostupna za ovaj projekt.' }, { status })
   }
 
+  if (!hasSnapshotConsent(body.value.snapshotConsent)) {
+    return Response.json({ error: 'Za ovaj tijek potreban je izričit pristanak na privremenu pohranu sadržaja.' }, { status: 400 })
+  }
+
   const recovered = await cleanupStaleInitializingAgentRun(supabase, {
     userId: user.id,
     projectId: project.projectId,
@@ -116,32 +122,28 @@ async function handlePost(req) {
     return Response.json({ error: 'Pokretanje agenta trenutno nije dostupno.' }, { status: 503 })
   }
 
+  const consentRecorded = await recordSnapshotConsent(supabase, {
+    userId: user.id, projectId: project.projectId, runId: created.runId,
+  })
+  if (!consentRecorded) {
+    await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, 'Pristanak nije moguće zabilježiti.')
+    return Response.json({ error: 'Pristanak nije moguće zabilježiti. Sadržaj nije pohranjen.' }, { status: 503 })
+  }
+
   const context = await storeAgentRunContext(supabase, {
     userId: user.id,
     projectId: project.projectId,
     runId: created.runId,
     manuscript: validatedContext.manuscript,
+    materialIds: parsed.value.materialIds ?? [],
     bucket: BUCKET,
-  })
+  }, createAdminClient)
   if (!context.ok) {
     await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, context.error)
     return Response.json({ error: context.error }, { status: context.status })
   }
 
-  // Keep the run in `initializing` until every selected payload is attached.
-  // Otherwise a worker could claim the first step before its inputs exist.
-  if (parsed.value.materialIds?.length) {
-    const attached = await replaceAgentPayloadsForRun(supabase, {
-      userId: user.id,
-      projectId: project.projectId,
-      runId: created.runId,
-      materialIds: parsed.value.materialIds,
-    })
-    if (!attached.ok || attached.value.materialIds.length !== parsed.value.materialIds.length) {
-      await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, attached.ok ? 'material_selection_mismatch' : attached.error)
-      return Response.json({ error: attached.ok ? 'Jedan ili više materijala više nije dostupan.' : 'Povezivanje materijala nije uspjelo.' }, { status: attached.ok ? 409 : 503 })
-    }
-  }
+  // Context and materials were committed together while the run was initializing.
 
   const activated = await activateAgentRun(supabase, { userId: user.id, runId: created.runId })
   if (!activated.ok) {

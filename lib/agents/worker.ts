@@ -6,7 +6,7 @@ import { ProviderCapabilityError } from './provider-router'
 import { isRetryableAgentProviderError } from './provider-execution'
 import { AgentBillingReconciliationError } from './billed-provider-execution'
 
-export type WorkerStepStatus = 'idle' | 'verified' | 'retrying' | 'blocked' | 'failed' | AgentRunControlStatus
+export type WorkerStepStatus = 'idle' | 'verified' | 'retrying' | 'blocked' | 'failed' | 'reconciliation_pending' | AgentRunControlStatus
 
 export interface AgentWorkerDependencies {
   db: { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data?: unknown; error?: { message?: string } | null }> }
@@ -35,20 +35,14 @@ export async function processClaimedAgentStep(
     result = await handlers.execute(step)
     verification = await handlers.verify({ ...result, agent: step.agent }, { step })
   } catch (error) {
+    if (error instanceof AgentBillingReconciliationError) {
+      // Preserve this attempt for original-response recovery after lease expiry.
+      // Never publish an empty placeholder or terminal failure for uncertain billing.
+      return { status: 'reconciliation_pending', stepId: step.id,
+        error: 'Agent execution requires canonical reconciliation.' }
+    }
     verification = error instanceof PlanApprovalRequiredError
       ? { status: 'blocked', issues: [{ code: 'gate_finding', message: 'Pregledaj i izričito odobri plan prije nastavka pisanja.' }], evidence: [] }
-      : error instanceof AgentBillingReconciliationError
-      ? {
-        status: 'failed',
-        billingState: error.billingState,
-        issues: [{
-          code: error.billingState === 'pending_reconciliation' ? 'billing_reconciliation_pending' : 'billing_released',
-          message: error.billingState === 'pending_reconciliation'
-            ? 'Naplata rezultata čeka sigurnu uskladbu; korak se neće automatski ponoviti.'
-            : 'Naplata rezultata nije potvrđena; korak je zaustavljen.',
-        }],
-        evidence: [],
-      }
       : error instanceof ProviderCapabilityError
       ? { status: 'blocked', issues: [{ code: 'provider_capability_unavailable', message: 'Ovaj korak trenutno nije dostupan jer potreban AI alat nije konfiguriran.' }], evidence: [] }
       : isRetryableAgentProviderError(error)
@@ -68,14 +62,11 @@ export async function processClaimedAgentStep(
     try {
       const stored = await dependencies.storeResult({ step, result, verification })
       completionVerification = { ...verification, resultPayloadId: stored.manifestId }
-    } catch (error) {
-      const billingState = verification.billingState || result.billingState
-      completionVerification = {
-        status: 'failed',
-        issues: [...verification.issues, { code: 'invalid_output', message: 'Rezultat agenta nije moguće sigurno spremiti.' }],
-        evidence: verification.evidence,
-      }
-      if (billingState) completionVerification.billingState = billingState
+    } catch {
+      // A lost Storage acknowledgement does not invalidate the paid original.
+      // Leave its canonical lease/attempt recoverable without a terminal write.
+      return { status: 'reconciliation_pending', stepId: step.id,
+        error: 'Agent result storage requires canonical reconciliation.' }
     }
   }
   const hasUsage = Boolean(result.usage && (result.usage.inputTokens > 0 || result.usage.outputTokens > 0))

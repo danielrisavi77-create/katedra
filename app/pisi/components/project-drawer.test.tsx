@@ -47,7 +47,8 @@ describe('ProjectDrawer agentic entry point', () => {
     expect(screen.queryByRole('button', { name: 'Agenti' })).toBeNull()
   })
 
-  it('opens the requested local history and defense surfaces', () => {
+  it('opens local history, exports metadata and reports unavailable ledger storage', async () => {
+    const user = userEvent.setup()
     const manuscript = createManuscript({ projectId: 'project-1', workType: 'z' })
     const props = {
       open: true,
@@ -66,9 +67,16 @@ describe('ProjectDrawer agentic entry point', () => {
       onRestore: vi.fn(),
       onImportText: vi.fn(),
     }
-    const view = render(<ProjectDrawer {...props} requestedTab="history" />)
+    const onExportAiLedger = vi.fn()
+    const ledger = { schemaVersion: 1 as const, projectId: 'project-1', entries: [], status: 'available' as const }
+    const view = render(<ProjectDrawer {...props} requestedTab="history" aiLedger={ledger} onExportAiLedger={onExportAiLedger} />)
 
     expect(screen.getByRole('heading', { name: 'Lokalna povijest projekta' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Izvezi AI evidenciju' }))
+    expect(onExportAiLedger).toHaveBeenCalledOnce()
+    view.rerender(<ProjectDrawer {...props} requestedTab="history" aiLedger={{ ...ledger, status: 'unavailable' }} onExportAiLedger={onExportAiLedger} />)
+    expect((screen.getByRole('button', { name: 'Izvezi AI evidenciju' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('status').textContent).toContain('nije dostupna')
 
     view.rerender(<ProjectDrawer {...props} requestedTab="defense" />)
     expect(screen.getByText('Priprema obrane')).toBeTruthy()

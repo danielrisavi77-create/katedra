@@ -38,13 +38,14 @@
 // RPC radi "on conflict do nothing" na toj koloni za wallet dio. Za
 // entitlements idempotencija dolazi iz stvarnog unique(provider, order_id)
 // constrainta (provider='stripe', order_id=Stripe session id) — insert pa
-// 23505 = već grantano, nastavi na wallet dio.
+// Nakon 23505 potvrdi identitet postojeće kupnje prije wallet dijela.
 // ============================================================
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getKatedraPackage, PURCHASE_WINDOW_DAYS } from '@/lib/stripe/catalog'
 import { validateCheckoutConfirmation } from '../../../lib/stripe/checkout-validation.js'
 import { refundDuplicateProjectPass } from '../../../lib/stripe/duplicate-refund.js'
+import { isSameStripeEntitlementPurchase } from '../../../lib/stripe/entitlement-replay'
 import { katedraPassProductFilter, katedraPassProductId } from '../../../lib/katedra-pass-catalog.js'
 import { lockPaidProject, readProjectLock } from '../../../lib/academic-suite/project-lock'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
@@ -174,6 +175,28 @@ async function handlePOST(req) {
            return new Response('unknown product', { status: 400 }) // ne retry-aj, konfiguracijska greška
          }
 
+         // A recorded refund remains authoritative even if the original Pass has expired.
+         const refundState = await db.rpc('read_katedra_pass_refund', { p_session_id: s.id })
+         if (refundState.error || refundState.data === undefined) return new Response('refund state unavailable', { status: 500 })
+         let hasPriorRefund = refundState.data !== null
+         if (!hasPriorRefund) {
+           // Refunds created before the ledger rollout must also prevent a new grant.
+           const paymentIntentId = typeof s.payment_intent === 'string' ? s.payment_intent : s.payment_intent?.id
+           if (!paymentIntentId) return new Response('refund history unavailable', { status: 500 })
+           try {
+             const history = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 1 }, { timeout: 10_000, maxNetworkRetries: 0 })
+             if (!Array.isArray(history?.data) || typeof history.has_more !== 'boolean'
+               || (history.has_more && !history.data.length)) return new Response('refund history unavailable', { status: 500 })
+             hasPriorRefund = history.data.length > 0
+           } catch { return new Response('refund history unavailable', { status: 500 }) }
+         }
+         if (hasPriorRefund) {
+           const refund = await refundDuplicateProjectPass(stripe, {
+             sessionId: s.id, paymentIntent: s.payment_intent, userId, projectId, amount: s.amount_total, currency: s.currency,
+           }, db)
+           return new Response(refund.ok ? 'ok' : 'duplicate refund pending', { status: refund.ok ? 200 : 500 })
+         }
+
          // Checkout performs the same check optimistically, but Stripe can
          // deliver two paid sessions created by concurrent tabs. A different
          // active Pass for the same project must not receive another
@@ -199,7 +222,8 @@ async function handlePOST(req) {
            const refund = await refundDuplicateProjectPass(stripe, {
              sessionId: s.id,
              paymentIntent: s.payment_intent,
-           })
+             userId, projectId, amount: s.amount_total, currency: s.currency,
+           }, db)
            if (!refund.ok) {
              console.error(JSON.stringify({
                eventName: 'duplicate_project_pass_reconciliation_pending',
@@ -238,7 +262,8 @@ async function handlePOST(req) {
                const refund = await refundDuplicateProjectPass(stripe, {
                  sessionId: s.id,
                  paymentIntent: s.payment_intent,
-               })
+                 userId, projectId, amount: s.amount_total, currency: s.currency,
+               }, db)
                if (!refund.ok) {
                  console.error(JSON.stringify({
                    eventName: 'duplicate_project_lock_reconciliation_pending',
@@ -287,7 +312,14 @@ async function handlePOST(req) {
           purchase_expires_at: new Date(Date.now() + windowDays * 24 * 3600 * 1000).toISOString(),
           academic_project_id: UUID_RE.test(projectId) ? projectId : null,
         })
-        // 23505 = unique(provider, order_id) već pogođen (retry iste Stripe sesije) — grant je već izvršen.
+        // A unique conflict can involve another constraint or purchase. Prove
+        // the exact session identity before continuing the idempotent grant.
+        if (insertError?.code === '23505' && !await isSameStripeEntitlementPurchase(db, {
+          userId, projectId, sessionId: s.id, productId, workType: productKey,
+        })) {
+          logOperationalEvent({ eventName: 'entitlement_replay_unverified', sessionId: s.id, userId, projectId }, 'error')
+          return new Response('entitlement reconciliation pending', { status: 500 })
+        }
         if (insertError && insertError.code !== '23505') {
           logOperationalEvent({ eventName: 'entitlement_grant_failed', sessionId: s.id, userId, projectId, error: insertError }, 'error')
           return new Response('entitlement grant failed', { status: 500 }) // Stripe će retry-ati

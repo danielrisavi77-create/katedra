@@ -1,0 +1,56 @@
+import { runContextStoragePaths } from './run-context'
+import { isScopedAgentPayload, type AgentPayloadScope } from './payload-scope'
+import { loadRunContextSnapshot, type RunPayloadManifestStore, type RunPayloadStorage } from './run-context-loader'
+
+const MAX_DESCRIPTOR_BYTES = 1024 * 1024
+
+/** Worker entry point: retained Storage bytes alone never authorize a run. */
+export async function loadActiveRunManuscriptContext(
+  manifests: RunPayloadManifestStore,
+  storage: RunPayloadStorage,
+  scope: AgentPayloadScope & { now?: number },
+) {
+  return (await loadActiveRunContextSnapshot(manifests, storage, scope)).manuscript
+}
+
+export async function loadActiveRunContextSnapshot(
+  manifests: RunPayloadManifestStore,
+  storage: RunPayloadStorage,
+  scope: AgentPayloadScope & { now?: number },
+) {
+  const now = scope.now ?? Date.now()
+  const entries = (await manifests.list(scope.runId, scope.projectId))
+    .filter(entry => entry.materialId === 'run-context')
+  const entry = entries[0]
+  const paths = runContextStoragePaths(scope.userId, scope.projectId, scope.runId, entry?.contextRevision)
+  if (entries.length !== 1 || !entry || !isScopedAgentPayload(entry, scope)
+    || entry.storagePath !== paths.storagePath || entry.manifestPath !== paths.manifestPath
+    || !isActive(entry.expiresAt, now)) {
+    throw new Error('Aktivni kontekst rukopisa nije dostupan.')
+  }
+
+  const raw = await storage.download(entry.manifestPath)
+  const bytes = typeof raw === 'string' ? new TextEncoder().encode(raw) : raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw
+  if (bytes.byteLength > MAX_DESCRIPTOR_BYTES) throw new Error('Opis konteksta rukopisa je prevelik.')
+  const value: unknown = JSON.parse(new TextDecoder().decode(bytes))
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Opis konteksta rukopisa nije valjan.')
+  const descriptor = value as Record<string, unknown>
+  if (descriptor.schemaVersion !== 1 || descriptor.kind !== 'run-context' || descriptor.materialId !== entry.materialId
+    || descriptor.runId !== scope.runId || descriptor.projectId !== scope.projectId
+    || descriptor.storagePath !== entry.storagePath || !isActive(descriptor.expiresAt, now)) {
+    throw new Error('Opis konteksta rukopisa nije aktivan za ovaj run.')
+  }
+  const snapshot = await loadRunContextSnapshot(storage, { storagePath: entry.storagePath, projectId: scope.projectId })
+  if (entry.contextRevision && (entry.contextRevision !== snapshot.contextRevision || entry.contextRevision !== descriptor.contextRevision)) {
+    throw new Error('Revizija konteksta ne odgovara kanonskom zapisu.')
+  }
+  // Approval belongs to the descriptor already checked above. Never re-download
+  // it after reading the body: replacement must not mix two context revisions.
+  const planApproval = snapshot.contextRevision && descriptor.contextRevision === snapshot.contextRevision
+    ? (entry.contextRevision ? entry.planApproval : descriptor.planApproval) : undefined
+  return { ...snapshot, planApproval }
+}
+
+function isActive(value: unknown, now: number): boolean {
+  return typeof value === 'string' && Number.isFinite(now) && Date.parse(value) > now
+}

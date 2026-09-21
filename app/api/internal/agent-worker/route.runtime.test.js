@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   createProviderBackedExecutor: vi.fn(),
   runAgentWorkerLoop: vi.fn(),
   loadRunManuscriptContext: vi.fn(),
+  loadActiveRunManuscriptContext: vi.fn(),
+  loadActiveRunContextSnapshot: vi.fn(),
+  manifestStore: { list: vi.fn() },
   loadRunContextSnapshot: vi.fn(),
   loadRunMaterialContexts: vi.fn(),
   runContextStoragePaths: vi.fn(),
@@ -24,11 +27,12 @@ vi.mock('@/lib/agents/provider-router', () => ({ createProviderRouter: mocks.cre
 vi.mock('@/lib/agents/provider-worker', () => ({ createProviderBackedExecutor: mocks.createProviderBackedExecutor }))
 vi.mock('@/lib/agents/worker-loop', () => ({ runAgentWorkerLoop: mocks.runAgentWorkerLoop }))
 vi.mock('@/lib/agents/run-context-loader', () => ({
-  createSupabaseRunPayloadManifestStore: vi.fn(() => ({})),
+  createSupabaseRunPayloadManifestStore: () => mocks.manifestStore,
   loadRunManuscriptContext: mocks.loadRunManuscriptContext,
   loadRunContextSnapshot: mocks.loadRunContextSnapshot,
   loadRunMaterialContexts: mocks.loadRunMaterialContexts,
 }))
+vi.mock('@/lib/agents/run-context-access', () => ({ loadActiveRunManuscriptContext: mocks.loadActiveRunManuscriptContext, loadActiveRunContextSnapshot: mocks.loadActiveRunContextSnapshot }))
 vi.mock('@/lib/agents/run-context', () => ({ runContextStoragePaths: mocks.runContextStoragePaths }))
 vi.mock('@/lib/agents/verifier', () => ({ verifyAgentResult: mocks.verifyAgentResult }))
 vi.mock('@/lib/agents/run-result-storage', () => ({ storeAgentStepResult: mocks.storeAgentStepResult, loadAgentRunResults: mocks.loadAgentRunResults }))
@@ -104,6 +108,51 @@ afterEach(() => {
 })
 
 describe('POST /api/internal/agent-worker runtime contract', () => {
+  it('passes the actual service client through to canonical result allocation', async () => {
+    const db = database()
+    db.rpc = vi.fn(async () => ({ data: null, error: { code: '40901' } }))
+    mocks.createAdminClient.mockReturnValue(db)
+    const actual = await vi.importActual('@/lib/agents/run-result-storage')
+    mocks.storeAgentStepResult.mockImplementation(actual.storeAgentStepResult)
+    const { POST } = await loadRoute()
+    await POST(request())
+    const { storeResult } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[0]
+    await expect(storeResult({ step: { id: 'step-1', agent: 'writing', attempt: 1 }, result: { output: 'Private test result' }, verification: { status: 'verified' } })).rejects.toThrow()
+    expect(db.rpc).toHaveBeenCalledWith('reserve_agent_result_payload', expect.objectContaining({ p_user_id: 'user-1', p_run_id: 'run-1', p_step_id: 'step-1' }))
+  })
+  it('rejects revoked context before reading approval or invoking a provider', async () => {
+    mocks.loadActiveRunContextSnapshot.mockRejectedValueOnce(new Error('Context revoked'))
+    mocks.loadRunContextSnapshot.mockResolvedValueOnce({ manuscript: { sections: [], sources: [] } })
+    const executeProvider = vi.fn()
+    mocks.createProviderBackedExecutor.mockReturnValue(executeProvider)
+    const { POST } = await loadRoute()
+    await POST(request())
+    const { execute } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+    await expect(execute({ id: 'writing', agent: 'writing', order: 4 })).rejects.toThrow('Context revoked')
+    expect(mocks.loadRunContextSnapshot).not.toHaveBeenCalled()
+    expect(executeProvider).not.toHaveBeenCalled()
+  })
+  it('loads manuscript context through canonical active-manifest authority', async () => {
+    const manuscript = { sections: [], sources: [] }
+    mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript, contextRevision: 'original-revision' })
+    mocks.loadAgentRunResults.mockResolvedValue([])
+    const { POST } = await loadRoute()
+    await POST(request())
+    const { execute } = mocks.runAgentWorkerLoop.mock.calls.at(-1)[1]
+    await execute({ id: 'intake', agent: 'intake', order: 0 })
+    const executorOptions = mocks.createProviderBackedExecutor.mock.calls[0][0]
+    expect(await executorOptions.loadContext()).toBe(manuscript)
+    expect(executorOptions.contextRevision).toBe('original-revision')
+    expect(mocks.loadAgentRunResults).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ excludeStepId: 'intake' }))
+    expect(mocks.loadActiveRunContextSnapshot).toHaveBeenCalledTimes(1)
+    expect(mocks.loadActiveRunContextSnapshot).toHaveBeenCalledWith(
+      mocks.manifestStore,
+      expect.objectContaining({ download: expect.any(Function) }),
+      { runId: run.run_id, projectId: run.project_id, userId: run.user_id, bucket: 'katedra-temporary-materials' },
+    )
+    expect(mocks.loadRunManuscriptContext).not.toHaveBeenCalled()
+  })
+
   it('passes the 150 second provider timeout and returns the request id', async () => {
     const { POST } = await loadRoute()
 
@@ -117,8 +166,8 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
       timeoutMs: 150_000,
     }))
     expect(mocks.runAgentWorkerLoop).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'run-1', workerId: expect.any(String) }),
-      expect.objectContaining({ execute: expect.any(Function), verify: expect.any(Function), storeResult: expect.any(Function) }),
+      expect.objectContaining({ runId: 'run-1', workerId: expect.any(String), storeResult: expect.any(Function) }),
+      expect.objectContaining({ execute: expect.any(Function), verify: expect.any(Function) }),
       { maxSteps: 1 },
     )
   })
@@ -219,7 +268,7 @@ it('wires the export gate to the verified plan, scoped loaders and text-free log
     citations: [], createdAt: '2026-09-07T00:00:00Z', output: `<!-- PLAN:JSON -->${JSON.stringify(plan)}<!-- /PLAN:JSON -->`, ...extra,
   })
   mocks.loadRunManuscriptContext.mockResolvedValue(manuscript)
-  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript })
+  mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript })
   mocks.loadAgentRunResults.mockResolvedValue([
     makeArtifact('structure', 2, { thesis: 'PRIVATE thesis', perspectives: [{ label: 'a', position: 'a', why: 'a' }, { label: 'b', position: 'b', why: 'b' }], chapters: [{ sectionId: 's1', title: 'Chapter', pages: 2 }] }),
     makeArtifact('planning', 3, { chapters: [{ sectionId: 's1', content: 'PRIVATE program', sources: ['source-1'] }] }),
@@ -261,7 +310,7 @@ it('requires explicit plan approval before provider execution even in autonomous
   const saved = { materialId: 'plan-1', stepId: 'planning', agent: 'planning', verifier: 'planning_verifier', stepOrder: 3, attempt: 1, projectId: 'project-1', runId: 'run-1', createdAt: '2026-09-01T00:00:00Z', citations: [], verification: { status: 'verified' },
     output: '<!-- PLAN:JSON -->{"thesis":"Thesis","chapters":[{"sectionId":"s1","content":"Program","sources":["src1"]}]}<!-- /PLAN:JSON -->' }
   mocks.loadAgentRunResults.mockResolvedValue([saved])
-  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript })
+  mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript })
   mocks.createAdminClient.mockReturnValue(database({ ...run, mode: 'autonomous' }))
   const executeProvider = vi.fn().mockResolvedValue({ output: 'Generated' })
   mocks.createProviderBackedExecutor.mockReturnValue(executeProvider)
@@ -273,12 +322,13 @@ it('requires explicit plan approval before provider execution even in autonomous
   expect(executeProvider).not.toHaveBeenCalled()
   const review = buildPlanReview(manuscript, selectVerifiedAgentArtifacts([saved], { order: 4 }))
   const planApproval = { schemaVersion: 1, projectId: 'project-1', runId: 'run-1', approvedBy: 'user-1', planRevision: review.planRevision, approvedAt: '2026-09-01T00:00:00Z' }
-  mocks.loadRunContextSnapshot.mockResolvedValue({ manuscript, planApproval })
+  mocks.loadActiveRunContextSnapshot.mockResolvedValue({ manuscript, planApproval, contextRevision: 'approved-context-revision' })
   // A context request admitted while blocked finishes after the approval check.
   // The billed provider must still receive the approved snapshot, not that later upload.
   mocks.loadRunManuscriptContext.mockResolvedValue({ ...manuscript, title: 'Unapproved concurrent upload' })
   executeProvider.mockImplementation(async () => {
     const options = mocks.createProviderBackedExecutor.mock.calls.at(-1)[0]
+    expect(options.contextRevision).toBe('approved-context-revision')
     mocks.loadAgentRunResults.mockResolvedValueOnce([{ ...saved, output: 'Unapproved replacement plan' }])
     expect(await options.loadContext()).toEqual(manuscript)
     expect(await options.loadResults()).toEqual([saved])

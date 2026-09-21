@@ -9,8 +9,8 @@ import { packProfileHint } from '@/lib/agents/pack-profile.server'
 import { resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 import { runAgentWorkerLoop } from '@/lib/agents/worker-loop'
-import { createSupabaseRunPayloadManifestStore, loadRunContextSnapshot, loadRunManuscriptContext, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
-import { runContextStoragePaths } from '@/lib/agents/run-context'
+import { createSupabaseRunPayloadManifestStore, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
+import { loadActiveRunContextSnapshot } from '@/lib/agents/run-context-access'
 import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
 import { createGateBackedVerifier, resolveGateVerifierConfig, GATE_PHASE_FOR_AGENT } from '@/lib/agents/gate-verifier'
@@ -144,7 +144,6 @@ async function handlePost(req) {
     },
   }
   const manifestStore = createSupabaseRunPayloadManifestStore(db)
-  const paths = runContextStoragePaths(run.user_id, run.project_id, runId)
   const executorOptions = {
     projectId: run.project_id,
     runId,
@@ -157,12 +156,11 @@ async function handlePost(req) {
       return resolved.effective === 'blocked'
     },
     runMode: run.mode,
-    loadContext: () => loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
     loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     verifyCitations: citationVerifier.verify,
     verifyPassages: passageVerifier
-      ? ({ projectId, runId: currentRunId, claims, citations, requestId: passageRequestId, agent, attempt }) => executeBilledPassageVerification(db, {
+      ? ({ projectId, runId: currentRunId, claims, citations, requestId: passageRequestId, agent, attempt, execution }) => executeBilledPassageVerification(db, {
         verifier: passageVerifier,
         provider: 'configured-verifier-gateway',
         model: process.env.KATEDRA_VERIFIER_PROVIDER_MODEL,
@@ -172,6 +170,7 @@ async function handlePost(req) {
         requestId: passageRequestId,
         agent,
         attempt,
+        execution,
         claims,
         citations,
       })
@@ -179,8 +178,7 @@ async function handlePost(req) {
     router,
     billing: { db, userId: run.user_id, model: workerConfig.model },
   }
-  const execute = createProviderBackedExecutor(executorOptions)
-  const storeResult = ({ step, result, verification }) => storeAgentStepResult({ db, storage }, {
+  const storeResult = ({ step, result, verification }) => storeAgentStepResult(db, {
     userId: run.user_id,
     projectId: run.project_id,
     runId,
@@ -194,10 +192,14 @@ async function handlePost(req) {
   })
   const gateConfig = resolveGateVerifierConfig(process.env)
   const loadGateContext = async ({ step }) => {
-    const { manuscript, planApproval } = await loadRunContextSnapshot(payloadStorage, { ...paths, runId, projectId: run.project_id })
-    const results = await loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET })
+    const { manuscript, planApproval, contextRevision } = await loadActiveRunContextSnapshot(manifestStore, payloadStorage, {
+      runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET,
+    })
+    // The current attempt is not a dependency; its partially uploaded result is
+    // completed by recovery below. Prior artifacts retain strict read checks.
+    const results = await loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET, excludeStepId: step.id })
     const artifacts = selectVerifiedAgentArtifacts(results, { order: step.order, projectId: run.project_id, runId })
-    return { manuscript, artifacts, planApproval, results }
+    return { manuscript, artifacts, planApproval, results, contextRevision }
   }
   const gateVerify = createGateBackedVerifier({
     config: gateConfig, runId, userId: run.user_id,
@@ -210,25 +212,25 @@ async function handlePost(req) {
     }),
   })
   const executeWithApproval = async (step) => {
+    const { manuscript, artifacts, planApproval, results, contextRevision } = await loadGateContext({ step })
     if (GATE_PHASE_FOR_AGENT[step.agent] !== 'plan') {
-      const { manuscript, artifacts, planApproval, results } = await loadGateContext({ step })
       const review = buildPlanReview(manuscript, artifacts)
       if (!review.ready || !isPlanApprovalCurrent(planApproval, {
         userId: run.user_id, projectId: run.project_id, runId, planRevision: review.planRevision,
       })) throw new PlanApprovalRequiredError()
-      // Use the approved snapshot throughout execution: a concurrent context upload
-      // must not replace the plan between this check and the billed provider call.
-      return createProviderBackedExecutor({
-        ...executorOptions,
-        loadContext: async () => manuscript,
-        loadResults: async () => results,
-      })(step)
     }
-    return execute(step)
+    // Bind every start to this same approved/plan snapshot. The canonical start
+    // rejects a context replacement between this read and the provider call.
+    return createProviderBackedExecutor({
+      ...executorOptions,
+      contextRevision,
+      loadContext: async () => manuscript,
+      loadResults: async () => results,
+    })(step)
   }
   const result = await runAgentWorkerLoop(
-    { db, workerId: process.env.KATEDRA_AGENT_WORKER_ID || 'katedra-web-worker', runId },
-    { execute: executeWithApproval, verify: gateVerify, storeResult },
+    { db, workerId: process.env.KATEDRA_AGENT_WORKER_ID || 'katedra-web-worker', runId, storeResult },
+    { execute: executeWithApproval, verify: gateVerify },
     { maxSteps: 1 },
   )
   if (result.error) return privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 })

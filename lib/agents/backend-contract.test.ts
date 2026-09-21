@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, cleanupStaleInitializingAgentRun, completeAgentStep, createAgentRun, pauseAgentRun, registerAgentPayload, replaceAgentPayloadsForRun, resumeAgentRun } from './backend-contract'
 
 describe('canonical agent backend contract', () => {
+  it('preserves the exact canonical step lease timestamp for provider start authorization', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: {
+      step_id: 'step-1', agent: 'intake', verifier: 'intake_verifier', step_order: 0, attempt: 1, status: 'running',
+      lease_owner: 'worker-1', claimed_at: '2026-09-08T18:00:00.123456+00:00',
+    } })
+    await expect(claimAgentStep({ rpc }, { runId: 'run-1', workerId: 'worker-1' })).resolves.toMatchObject({
+      ok: true, value: { executionLease: { workerId: 'worker-1', claimedAt: '2026-09-08T18:00:00.123456+00:00' } },
+    })
+  })
   it('creates a run through the Lekta RPC and normalizes its id', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: { run_id: 'run-1' }, error: null })
     await expect(createAgentRun({ rpc }, {

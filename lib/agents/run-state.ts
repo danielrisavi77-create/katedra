@@ -14,6 +14,7 @@ export interface AgentStepRecord {
   attempt: 1 | 2 | 3
   status: AgentStepStatus
   lastVerification?: VerificationResultV1
+  executionLease?: { workerId: string; claimedAt: string }
 }
 
 export interface AgentRunState {

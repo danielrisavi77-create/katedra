@@ -111,9 +111,8 @@ async function handlePOST(req) {
     )
   }
 
-  // Automatska potvrda na trajnom mediju (zakonski zahtjev) — šalje se prije
-  // vraćanja odgovora, tako da confirmed_at točno odražava kad je stvarno
-  // otišla, ne kad je enqueued.
+  // Keep the durable receipt independently of email or reservation failures.
+  // Provider acceptance is not proof of delivery to the recipient's inbox.
   let reservationCommitPending = false
   try {
     await reservation.commit(row.id)
@@ -125,27 +124,40 @@ async function handlePOST(req) {
   }
 
   let confirmedAt = null
+  let confirmationPending = false
   if (process.env.RESEND_API_KEY) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY)
       const fmt = requestedAt.toLocaleString('hr-HR', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Europe/Zagreb' })
-      await resend.emails.send({
+      const sent = await resend.emails.send({
         from: FROM_EMAIL,
         to: user.email,
         subject: 'Potvrda zaprimljenog zahtjeva za raskid ugovora — Katedra',
         text: `Zaprimili smo tvoj zahtjev za jednostrani raskid ugovora.\n\nVrijeme primitka: ${fmt}\nBroj zahtjeva: ${row.id}\n\nObradit ćemo zahtjev i javiti se na ovu adresu. Ako imaš pitanja, odgovori na ovaj e-mail ili piši na podrska@katedra.hr.\n\n— Katedra`,
       })
+      // Resend resolves API failures as { data: null, error }; awaiting alone
+      // does not establish that the provider accepted this confirmation.
+      if (sent?.error || !sent?.data?.id) {
+        throw sent?.error || new Error('Email acceptance unavailable')
+      }
       confirmedAt = new Date()
-      await db.from('withdrawal_requests')
+      const confirmation = await db.from('withdrawal_requests')
         .update({ status: 'confirmed', confirmed_at: confirmedAt.toISOString() })
         .eq('id', row.id)
+      if (confirmation?.error) throw confirmation.error
     } catch (emailError) {
+      confirmationPending = true
       // Zahtjev je već spremljen (ima requested_at) — propust slanja e-maila
       // ne smije izgubiti sam zahtjev. Zabilježi i nastavi; podrška može
       // ručno potvrditi korisniku.
-      logOperationalEvent({ eventName: 'withdrawal_confirmation_email_failed', userId: user.id, error: emailError }, 'error')
+      logOperationalEvent({
+        eventName: confirmedAt ? 'withdrawal_confirmation_persistence_pending' : 'withdrawal_confirmation_email_failed',
+        userId: user.id,
+        error: emailError,
+      }, 'error')
     }
   } else {
+    confirmationPending = true
     console.error('[withdrawal] RESEND_API_KEY nije postavljen — automatska potvrda NIJE poslana (zakonski zahtjev nije u potpunosti zadovoljen dok se ne postavi)')
   }
 
@@ -154,7 +166,7 @@ async function handlePOST(req) {
     requestId: row.id,
     requestedAt: row.requested_at,
     emailSent: !!confirmedAt,
-    reconciliationPending: reservationCommitPending,
+    reconciliationPending: reservationCommitPending || confirmationPending,
   })
 }
 

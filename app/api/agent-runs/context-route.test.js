@@ -12,7 +12,7 @@ describe('agent run context route contract', () => {
     expect(source).toContain('readJsonBody')
     expect(source).toContain('JSON_BODY_LIMITS.agentRun')
     expect(source).not.toContain('req.arrayBuffer()')
-    expect(source).toContain('replaceAgentPayloadsForRun')
+    expect(source).toContain('materialIds: [...new Set(materialIds)]')
     expect(source).toContain('materialIds')
   })
 
@@ -25,7 +25,8 @@ describe('agent run context route contract', () => {
   it('allows blocked runs to receive a revised context before resume', () => {
     expect(source).toContain('canEditAgentRunContext')
     expect(source).not.toContain("['completed', 'failed', 'cancelled']")
-    expect(source).toContain('Svi odabrani materijali nisu potvrđeni')
+    expect(source).toContain('if (!stored.ok)')
+    expect(source).toContain('status: stored.status')
   })
 
   it('keeps a revised run context on the locked topic and work type', () => {
