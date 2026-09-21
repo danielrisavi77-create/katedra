@@ -1,4 +1,4 @@
-import { registerAgentPayload } from './backend-contract'
+import { trackedPayloadUpload } from './tracked-upload'
 import { isAgentId, type AgentResultV1, type CitationEvidence, type ClaimEvidence, type ClaimSupportVerification, type UsageRecord, type VerificationResultV1 } from './contracts'
 import type { AgentStepRecord } from './run-state'
 import type { RunPayloadManifest, RunPayloadManifestStore, RunPayloadStorage } from './run-context-loader'
@@ -75,12 +75,26 @@ export async function storeAgentStepResult(
   }
   const output = typeof input.result.output === 'string' ? input.result.output : JSON.stringify(input.result.output ?? '')
   const now = (input.now || Date.now)()
-  const createdAt = new Date(now).toISOString()
-  const expiresAt = new Date(now + RESULT_TTL_MS).toISOString()
   const materialId = `${RESULT_PREFIX}${safeSegment(input.step.id)}:${input.step.attempt}`
   const basePath = `${safeSegment(input.userId)}/${safeSegment(input.projectId)}/${safeSegment(input.runId)}/results`
   const storagePath = `${basePath}/${safeSegment(input.step.id)}-${input.step.attempt}.json`
   const manifestPath = `${basePath}/${safeSegment(input.step.id)}-${input.step.attempt}.manifest.json`
+  let allocation
+  try {
+    const reserved = await db.rpc('reserve_agent_result_payload', {
+      p_user_id: input.userId, p_project_id: input.projectId, p_run_id: input.runId,
+      p_step_id: input.step.id, p_attempt: input.step.attempt,
+    })
+    allocation = !reserved.error && Array.isArray(reserved.data) && reserved.data.length === 1 ? reserved.data[0] : null
+  } catch { allocation = null }
+  if (!allocation || typeof allocation.manifest_id !== 'string' || !allocation.manifest_id
+    || allocation.storage_path !== storagePath || allocation.manifest_path !== manifestPath
+    || !Number.isFinite(Date.parse(allocation.created_at)) || !(Date.parse(allocation.expires_at) > now)
+    || Date.parse(allocation.expires_at) > Date.parse(allocation.created_at) + RESULT_TTL_MS) {
+    return { ok: false, error: 'Kanonska rezervacija rezultata nije dostupna.' }
+  }
+  const createdAt = allocation.created_at
+  const expiresAt = allocation.expires_at
   const payload: AgentStepResultPayloadV1 = {
     schemaVersion: 1,
     kind: 'agent-step-result',
@@ -107,62 +121,53 @@ export async function storeAgentStepResult(
     createdAt,
     expiresAt,
   }
-  const body = new TextEncoder().encode(JSON.stringify(payload))
+  let body: Uint8Array = new TextEncoder().encode(JSON.stringify(payload))
   if (body.byteLength > MAX_RESULT_BYTES) return { ok: false, error: 'Rezultat agenta je prevelik za privremenu pohranu.' }
   const bucket = input.bucket || DEFAULT_BUCKET
-  const manifest = { ...payload, storageBucket: bucket, storagePath, manifestPath }
-  const storage = db.storage.from(bucket)
-  const identity = { kind: 'agent-step-result', materialId, projectId: input.projectId, runId: input.runId, stepId: input.step.id }
-  const payloadUpload = await ensureImmutableObject(storage, storagePath, body, identity)
-  if (!payloadUpload.ok) return { ok: false, error: 'Spremanje rezultata agenta nije uspjelo.' }
+  if (bucket !== DEFAULT_BUCKET) return { ok: false, error: 'Privremeni bucket ne odgovara kanonskom ugovoru.' }
+  let storedPayload = payload
+  try {
+    const existing = await db.storage.from(bucket).download?.(storagePath)
+    if (existing?.data && !existing.error) {
+      if (existing.data instanceof Blob && existing.data.size > MAX_RESULT_BYTES) throw new Error('Result too large.')
+      const originalBytes = await storageValueToBytes(existing.data)
+      if (originalBytes.byteLength > MAX_RESULT_BYTES) throw new Error('Result too large.')
+      const original = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(originalBytes))
+      // Fresh verification still runs. Only its observation timestamps may differ;
+      // a changed verdict, source, quote, scope or output cannot reuse this artifact.
+      if (resultIdentity(original) !== resultIdentity(payload)) throw new Error('Result changed.')
+      storedPayload = original
+      body = originalBytes
+    }
+  } catch {
+    return { ok: false, error: 'Original result cannot be safely recovered.' }
+  }
+  const manifest = { ...storedPayload, storageBucket: bucket, storagePath, manifestPath }
+  const client = { rpc: (name: string, params: Record<string, unknown>) => db.rpc(name, params), storage: db.storage }
+  const payloadUploaded = await trackedPayloadUpload(client, { manifestId: allocation.manifest_id, kind: 'body', path: storagePath, body })
+  if (!payloadUploaded) return { ok: false, error: 'Spremanje rezultata agenta nije potvrđeno.' }
   const manifestBody = new TextEncoder().encode(JSON.stringify(manifest))
-  const manifestUpload = await ensureImmutableObject(storage, manifestPath, manifestBody, identity)
-  if (!manifestUpload.ok) {
-    if (payloadUpload.created) await storage.remove([storagePath])
+  const manifestUploaded = await trackedPayloadUpload(client, { manifestId: allocation.manifest_id, kind: 'manifest', path: manifestPath, body: manifestBody })
+  if (!manifestUploaded) {
     return { ok: false, error: 'Spremanje manifesta rezultata nije uspjelo.' }
   }
-  const persistedExpiresAt = readExpiresAt(manifestUpload.body) || expiresAt
-  const registered = await registerAgentPayload(db, {
-    userId: input.userId,
-    projectId: input.projectId,
-    runId: input.runId,
-    materialId,
-    storageBucket: bucket,
-    storagePath,
-    manifestPath,
-    expiresAt: persistedExpiresAt,
-  })
-  if (!registered.ok) {
-    if (payloadUpload.created || manifestUpload.created) await storage.remove([storagePath, manifestPath])
-    return { ok: false, error: 'Registracija rezultata agenta nije uspjela.' }
-  }
-  return { ok: true, value: { manifestId: registered.value.manifestId, materialId, expiresAt: persistedExpiresAt } }
+  return { ok: true, value: { manifestId: allocation.manifest_id, materialId, expiresAt } }
 }
 
-async function ensureImmutableObject(
-  storage: ResultStorageObjectClient,
-  path: string,
-  body: Uint8Array,
-  identity: { kind: string; materialId: string; projectId: string; runId: string; stepId: string },
-): Promise<{ ok: true; created: boolean; body: Uint8Array } | { ok: false }> {
-  const uploaded = await storage.upload(path, body, { contentType: 'application/json', cacheControl: '3600', upsert: false })
-  if (!uploaded.error) return { ok: true, created: true, body }
-  if (!storage.download) return { ok: false }
-  try {
-    const existing = await storage.download(path)
-    if (existing.error || existing.data === undefined || existing.data === null) return { ok: false }
-    const existingBytes = await storageValueToBytes(existing.data)
-    if (existingBytes.byteLength > MAX_RESULT_BYTES) return { ok: false }
-    const parsed = JSON.parse(new TextDecoder().decode(existingBytes)) as Record<string, unknown>
-    const matchesIdentity = parsed.kind === identity.kind
-      && parsed.materialId === identity.materialId
-      && parsed.projectId === identity.projectId
-      && parsed.runId === identity.runId
-      && parsed.stepId === identity.stepId
-    return matchesIdentity ? { ok: true, created: false, body: existingBytes } : { ok: false }
-  } catch {
-    return { ok: false }
+function resultIdentity(payload: AgentStepResultPayloadV1): string {
+  const copy = JSON.parse(JSON.stringify(payload)) as AgentStepResultPayloadV1
+  const stripCitationTime = (citation: CitationEvidence) => {
+    if (citation.verification) delete citation.verification.checkedAt
   }
+  copy.citations.forEach(stripCitationTime)
+  copy.verification.evidence.forEach(stripCitationTime)
+  copy.claims?.forEach(claim => claim.support?.forEach(support => {
+    if (support.verification) delete support.verification.checkedAt
+  }))
+  const ordered = (value: unknown): unknown => Array.isArray(value) ? value.map(ordered)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, ordered(entry)])) : value
+  return JSON.stringify(ordered(copy))
 }
 
 async function storageValueToBytes(value: unknown): Promise<Uint8Array> {
@@ -173,23 +178,15 @@ async function storageValueToBytes(value: unknown): Promise<Uint8Array> {
   throw new Error('Nepoznat format privatnog objekta.')
 }
 
-function readExpiresAt(body: Uint8Array): string | null {
-  try {
-    const parsed = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>
-    return typeof parsed.expiresAt === 'string' && Number.isFinite(Date.parse(parsed.expiresAt)) ? parsed.expiresAt : null
-  } catch {
-    return null
-  }
-}
-
 export async function loadAgentRunResults(
   manifests: RunPayloadManifestStore,
   storage: RunPayloadStorage,
-  input: { runId: string; projectId: string; userId?: string; bucket?: string; now?: number },
+  input: { runId: string; projectId: string; userId?: string; bucket?: string; now?: number; excludeStepId?: string },
 ): Promise<AgentStepResultPayloadV1[]> {
   if (!input.userId || !input.bucket) return []
   const entries = await manifests.list(input.runId, input.projectId)
   const resultEntries = entries.filter((entry) => entry.materialId.startsWith(RESULT_PREFIX)
+    && (!input.excludeStepId || !entry.materialId.startsWith(`${RESULT_PREFIX}${safeSegment(input.excludeStepId)}:`))
     && isScopedAgentPayload(entry, { userId: input.userId, projectId: input.projectId, runId: input.runId, bucket: input.bucket }))
   if (resultEntries.length > MAX_RESULT_ENTRIES) throw new Error('Popis rezultata agenta je prevelik za sigurno učitavanje.')
   const budget = { totalBytes: 0 }

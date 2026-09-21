@@ -1,6 +1,6 @@
 import { runContextStoragePaths } from './run-context'
 import { isScopedAgentPayload, type AgentPayloadScope } from './payload-scope'
-import { loadRunManuscriptContext, type RunPayloadManifestStore, type RunPayloadStorage } from './run-context-loader'
+import { loadRunContextSnapshot, type RunPayloadManifestStore, type RunPayloadStorage } from './run-context-loader'
 
 const MAX_DESCRIPTOR_BYTES = 1024 * 1024
 
@@ -10,11 +10,19 @@ export async function loadActiveRunManuscriptContext(
   storage: RunPayloadStorage,
   scope: AgentPayloadScope & { now?: number },
 ) {
+  return (await loadActiveRunContextSnapshot(manifests, storage, scope)).manuscript
+}
+
+export async function loadActiveRunContextSnapshot(
+  manifests: RunPayloadManifestStore,
+  storage: RunPayloadStorage,
+  scope: AgentPayloadScope & { now?: number },
+) {
   const now = scope.now ?? Date.now()
-  const paths = runContextStoragePaths(scope.userId, scope.projectId, scope.runId)
   const entries = (await manifests.list(scope.runId, scope.projectId))
     .filter(entry => entry.materialId === 'run-context')
   const entry = entries[0]
+  const paths = runContextStoragePaths(scope.userId, scope.projectId, scope.runId, entry?.contextRevision)
   if (entries.length !== 1 || !entry || !isScopedAgentPayload(entry, scope)
     || entry.storagePath !== paths.storagePath || entry.manifestPath !== paths.manifestPath
     || !isActive(entry.expiresAt, now)) {
@@ -32,7 +40,15 @@ export async function loadActiveRunManuscriptContext(
     || descriptor.storagePath !== entry.storagePath || !isActive(descriptor.expiresAt, now)) {
     throw new Error('Opis konteksta rukopisa nije aktivan za ovaj run.')
   }
-  return loadRunManuscriptContext(storage, { storagePath: entry.storagePath, projectId: scope.projectId })
+  const snapshot = await loadRunContextSnapshot(storage, { storagePath: entry.storagePath, projectId: scope.projectId })
+  if (entry.contextRevision && (entry.contextRevision !== snapshot.contextRevision || entry.contextRevision !== descriptor.contextRevision)) {
+    throw new Error('Revizija konteksta ne odgovara kanonskom zapisu.')
+  }
+  // Approval belongs to the descriptor already checked above. Never re-download
+  // it after reading the body: replacement must not mix two context revisions.
+  const planApproval = snapshot.contextRevision && descriptor.contextRevision === snapshot.contextRevision
+    ? (entry.contextRevision ? entry.planApproval : descriptor.planApproval) : undefined
+  return { ...snapshot, planApproval }
 }
 
 function isActive(value: unknown, now: number): boolean {

@@ -2,7 +2,7 @@ import { extractMaterial, type MaterialExtractionResult, type MaterialInput } fr
 import type { MaterialAssetV1, MaterialKind, OcrProvider } from './types'
 
 export const DEFAULT_MATERIAL_TTL_MS = 72 * 60 * 60 * 1000
-export const MAX_MATERIAL_TTL_MS = 7 * 24 * 60 * 60 * 1000
+export const MAX_MATERIAL_TTL_MS = 72 * 60 * 60 * 1000
 
 export interface MaterialProvider {
   extract(input: MaterialInput & { id: string; projectId: string; kind: MaterialKind }): Promise<MaterialAssetV1>

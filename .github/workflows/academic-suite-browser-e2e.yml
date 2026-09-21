@@ -219,6 +219,14 @@ jobs:
 
       - name: Require agentic staging worker configuration
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          KATEDRA_MATERIALS_ENABLED: ${{ vars.KATEDRA_MATERIALS_ENABLED }}
+          KATEDRA_MATERIAL_DELETE_RPC_CONTRACT: 'v1'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KATEDRA_VERIFIER_PROVIDER_URL: ${{ secrets.KATEDRA_VERIFIER_PROVIDER_URL }}
+          KATEDRA_VERIFIER_PROVIDER_KEY: ${{ secrets.KATEDRA_VERIFIER_PROVIDER_KEY }}
+          KATEDRA_VERIFIER_PROVIDER_MODEL: ${{ vars.KATEDRA_VERIFIER_PROVIDER_MODEL }}
+          KATEDRA_VERIFIER_POLICY_APPROVED: ${{ vars.KATEDRA_VERIFIER_POLICY_APPROVED }}
         run: npm run preflight:agentic
 
       - name: Run authenticated agentic-workflow browser gate

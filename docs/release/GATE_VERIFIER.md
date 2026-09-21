@@ -58,6 +58,13 @@ body and manifest revisions to match, with scope and expiry checks. A mismatched
 or legacy manifest requires re-uploading context before reviewing the plan again.
 No new object, table or database schema is needed.
 
+Integration with the hardening branch also requires an active canonical manifest
+before manuscript access in the approval API and worker gate. The same checked
+private descriptor supplies approval only if its context revision matches the
+downloaded body. Retained bytes, expired or revoked manifests cannot grant access
+merely because an approval record exists. See INTEGRATION_PROGRESS_2026-09-08.md
+for combined verification and the remaining canonical Storage work.
+
 Before calling a provider for writing, citation, review or export, the worker
 requires a current approval in every run mode, including bounded autonomous
 mode. This guard applies even when the external service is optional/unconfigured;

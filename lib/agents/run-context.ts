@@ -3,8 +3,9 @@ import type { ManuscriptV1 } from '../manuscript/types'
 
 export const MAX_AGENT_CONTEXT_BYTES = 5 * 1024 * 1024
 
-export function runContextStoragePaths(userId: string, projectId: string, runId: string): { storagePath: string; manifestPath: string } {
-  const prefix = `${userId}/${projectId}/${runId}`
+export function runContextStoragePaths(userId: string, projectId: string, runId: string, revision?: string): { storagePath: string; manifestPath: string } {
+  if (revision !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(revision)) throw new Error('Invalid context revision')
+  const prefix = `${userId}/${projectId}/${runId}${revision ? `/contexts/${revision}` : ''}`
   return {
     storagePath: `${prefix}/manuscript-context.json`,
     manifestPath: `${prefix}/manuscript-context.manifest.json`,

@@ -37,20 +37,25 @@ Engineering approval in this conversation authorizes implementation work. It is 
 
 PR [#36](https://github.com/danielrisavi77-create/katedra/pull/36) is parallel gate/explicit-approval work. It was not in this branch's master baseline. When integrating, retain both its revision-bound user approval verification and this branch's active-manifest/expiry check. A valid manifest proves temporary access eligibility, not plan approval; an approved plan does not override revoked/expired content. No service or agentic flag has been enabled by this hardening work.
 
-## OWNER_DECISION: DOCX ingestion and temporary content
+## Approved temporary-content policy
 
-The constitution says Katedra does not open DOCX and the shared backend must not store body text/raw DOCX. Existing semantic extraction and the agentic temporary-Storage contract do process or retain those bytes. General approval to execute an engineering plan does not settle this privacy authority conflict.
-
-1. **Apply the literal constitution:** move DOCX ingestion to Lekta and keep content local. This requires redesigning remote-worker input and preserving current users' material workflows during migration.
-2. **Permit transient semantic extraction only:** clarify that technical compliance remains Lekta's authority, while prohibiting retained server content. Remote asynchronous runs require a revised input transport.
-3. **Permit explicit bounded private temporary content:** define consent, purpose, retention, deletion and revocation in the constitution and user copy; require canonical cleanup/orphan/replacement proof before activation.
-
-No option has been silently selected. Current changes reduce risks within existing paths without expanding data collection or activating the service.
+Owner decision, 2026-09-08: bounded private temporary content is approved. Such
+content requires explicit user consent, retention of at most 72 hours, and
+deletion after consent withdrawal or run deletion. The owner separately approved
+the prepared staging journal repair instead of rebuilding staging. Neither
+decision activates the service or substitutes for a user's run/plan approval.
+Katedra records explicit consent before storing a run context. Withdrawal works
+after Pass expiry and feature shutdown. Canonical Lekta upload intents track each
+context/result object before its upload; uncertainty blocks physical deletion
+acknowledgement. Result retries use the same allocation, expiry and bytes. The
+canonical cleanup worker reconciles matching bytes/version before deleting them.
+These changes still require authenticated staging and physical deletion evidence.
 
 ## Canonical work still required
 
 - Prove tombstone/orphan recovery and scheduled physical deletion; access expiry alone is insufficient.
-- Provide atomic context replacement semantics; overwriting fixed Storage objects and compensating deletes can destroy the previous context on partial failure.
+- Verify the implemented atomic context replacement on staging, including interrupted upload and stale revision rejection.
+- Complete tracked unbound-material uploads and original provider-response recovery; result persistence alone is not provider execution recovery.
 - Prove shared billing/lease/entitlement/withdrawal contracts and RLS in staging.
 - ZIP output is now checked against actual bounded inflation. Cancellable extraction isolation remains open: a promise timeout does not terminate ongoing work. See `DOCX_RESOURCE_SAFETY.md`.
 - Keep the two independent product signals: Katedra process progress and Lekta technical findings.

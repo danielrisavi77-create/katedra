@@ -15,6 +15,8 @@ export interface RunPayloadStorage {
 }
 
 export interface RunPayloadManifest {
+  contextRevision?: string
+  planApproval?: unknown
   materialId: string
   projectId: string
   runId: string
@@ -56,15 +58,19 @@ export function createSupabaseRunPayloadManifestStore(db: RunPayloadManifestData
   return {
     async list(runId, projectId) {
       const result = await db.from('agent_payload_manifests')
-        .select('material_id, project_id, run_id, storage_bucket, storage_path, manifest_path, expires_at')
+        .select('material_id, project_id, run_id, storage_bucket, storage_path, manifest_path, expires_at, context_revision, context_plan_approval, material_upload_complete, material_consent_version, material_consent_at')
         .eq('run_id', runId)
         .eq('project_id', projectId)
+        .eq('context_state', 'active')
         .is('deleted_at', null)
       if (result.error) throw new Error(result.error.message || 'Run payload manifest query failed.')
       return (Array.isArray(result.data) ? result.data : []).flatMap((row) => {
         if (!row || typeof row !== 'object') return []
         const value = row as Record<string, unknown>
         const materialId = String(value.material_id || '')
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(materialId)
+          && (value.material_upload_complete !== true || value.material_consent_version !== 'material-storage-v1'
+            || typeof value.material_consent_at !== 'string' || !Number.isFinite(Date.parse(value.material_consent_at)))) return []
         const rowProjectId = String(value.project_id || '')
         const rowRunId = String(value.run_id || '')
         const storageBucket = String(value.storage_bucket || '')
@@ -72,7 +78,8 @@ export function createSupabaseRunPayloadManifestStore(db: RunPayloadManifestData
         const manifestPath = String(value.manifest_path || '')
         const expiresAt = typeof value.expires_at === 'string' ? value.expires_at : undefined
         return materialId && rowProjectId === projectId && rowRunId === runId && storageBucket && storagePath && manifestPath
-          ? [{ materialId, projectId: rowProjectId, runId: rowRunId, storageBucket, storagePath, manifestPath, expiresAt }]
+          ? [{ materialId, projectId: rowProjectId, runId: rowRunId, storageBucket, storagePath, manifestPath, expiresAt,
+            ...(typeof value.context_revision === 'string' ? { contextRevision: value.context_revision, planApproval: value.context_plan_approval } : {}) }]
           : []
       })
     },

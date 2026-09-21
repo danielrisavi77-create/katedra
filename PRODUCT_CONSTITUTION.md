@@ -4,7 +4,7 @@ Katedra i Lekta su dva odvojena proizvoda unutar jednog akademskog workflowa. Sv
 
 ## Dvije nepregovorljive granice
 
-**Katedra nikada ne proglašava dokument formalno usklađenim.** Katedra ne otvara `.docx`, ne broji Word polja i ne certificira marže, citate ni submission compliance. Kad spominje format/citate, to je coaching, ne verifikacija.
+**Katedra nikada ne proglašava dokument formalno usklađenim.** Uz izričit pristanak smije izdvojiti semantički sadržaj korisničkih materijala za akademski proces. Ne provjerava Word polja i ne certificira marže, citate ni submission compliance. Kad spominje format/citate, to je coaching, ne verifikacija. Tehnički DOCX autoritet ostaje isključivo Lekta.
 
 **Lekta nikada ne piše akademsku argumentaciju ni sadržaj rada.** Lekta deterministički mjeri dokument prema verificiranim pravilima; Katedra vodi proces, razmišljanje, semantičku recenziju i obranu.
 
@@ -46,6 +46,16 @@ Shared backend ne smije spremati:
 - source passages.
 
 Smiju se spremati samo strukturirani workflow metapodaci: account/project ID, ruleset/profile reference, score i sanitizirani finding metadata.
+
+Iznimka koju je vlasnik izričito odobrio 2026-09-08 jest privatna privremena
+pohrana odabranih materijala, radnog konteksta i AI odgovora za agentički tijek.
+Prije slanja potreban je zaseban, izričit korisnički pristanak. Sadržaj se čuva
+najviše 72 sata te se briše nakon povlačenja pristanka ili brisanja tijeka.
+Iznimka vrijedi samo za privatnu pohranu pod kanonskom Lektinom kontrolom
+pristupa i brisanja; ne dopušta tekst rukopisa u `/api/state`, zajedničkim
+logovima ni javnom bucketu. Lokalni rukopis ostaje kanonski sadržaj.
+Pristanak za pohranu nije odobrenje plana, AI prijedloga ili aktivacije servisa.
+Prije aktivacije treba dokazati pristanak, opoziv, istek i fizičko brisanje.
 
 ## Akademska pravila
 
