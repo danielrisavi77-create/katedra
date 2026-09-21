@@ -111,7 +111,7 @@ export interface AgentResultV1 {
 }
 
 export interface VerificationIssue {
-  code: 'missing_source' | 'missing_claim_evidence' | 'missing_passage_evidence' | 'unverified_passage_evidence' | 'unsupported_passage_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending'
+  code: 'missing_source' | 'missing_claim_evidence' | 'missing_passage_evidence' | 'unverified_passage_evidence' | 'unsupported_passage_evidence' | 'unverified_source' | 'incomplete_source' | 'invalid_output' | 'provider_capability_unavailable' | 'billing_released' | 'billing_reconciliation_pending' | 'gate_finding' | 'gate_step_skipped' | 'gate_step_failed' | 'verifier_error'
   message: string
   citationId?: string
 }

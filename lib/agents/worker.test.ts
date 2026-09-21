@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { PlanApprovalRequiredError } from './plan-approval'
 import { processClaimedAgentStep } from './worker'
 import { ProviderCapabilityError } from './provider-router'
 import { AgentBillingReconciliationError } from './billed-provider-execution'
@@ -187,4 +188,19 @@ describe('agent worker lease contract', () => {
       p_verification: expect.objectContaining({ billingState: 'settled' }),
     }))
   })
+})
+
+it('blocks for explicit plan approval without billing or automatic retry', async () => {
+  const rpc = vi.fn().mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 4, attempt: 1, status: 'running' }], error: null })
+    .mockResolvedValueOnce({ data: { status: 'blocked' }, error: null })
+  const verify = vi.fn()
+  const outcome = await processClaimedAgentStep({ db: { rpc }, workerId: 'worker', runId: 'run-1' }, {
+    execute: vi.fn().mockRejectedValue(new PlanApprovalRequiredError()), verify,
+  })
+  expect(outcome.status).toBe('blocked')
+  expect(verify).not.toHaveBeenCalled()
+  expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
+    p_status: 'blocked', p_requeue: false, p_usage: { inputTokens: 0, outputTokens: 0 },
+    p_verification: expect.objectContaining({ status: 'blocked', issues: [expect.objectContaining({ code: 'gate_finding' })] }),
+  }))
 })

@@ -8,6 +8,7 @@ import { plainTextDocument } from '../../../lib/manuscript/model'
 import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 import type { ManuscriptV1, TiptapNode } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
+import { AgentPlanApproval } from './agent-plan-approval'
 import { AgenticTimeline, projectAgentStatus, type AgenticTimelineStep } from './agentic-timeline'
 import { AgenticReview, type AgenticReviewClaim, type AgenticReviewDraft, type AgenticReviewEvidence, type AgenticReviewSupport } from './agentic-review'
 import { AgenticEventFeed } from './agentic-event-feed'
@@ -255,6 +256,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
     {visibleAutonomousMergeState === 'merged' && <p className="pis-agentic-auto-status is-complete" role="status">Autonomni rezultat je automatski spremljen u lokalni rukopis.</p>}
     {visibleAutonomousMergeState === 'failed' && <p className="pis-agentic-blocked" role="alert">Autonomni rezultat nije automatski primijenjen jer se rukopis promijenio. Tvoj izvorni tekst je ostao siguran.</p>}
     {draft && draft.sections.length > 0 && <AgenticReview automatic={run?.mode === 'autonomous'} manuscript={manuscript} draft={draft} onAccept={acceptDraft} onEdit={editDraft} onReject={rejectDraft} />}
+    {run?.status === 'blocked' && <AgentPlanApproval key={runId} runId={runId} projectId={projectId} onResumed={() => { void refresh() }} />}
     {run && <AiUsageLedger ledger={usageLedger} />}
     {message && <><p className="pis-agent-message" role="alert">{message}</p>{retryable && !loading && <button type="button" onClick={() => { setLoading(true); void refresh() }}>Pokušaj ponovno</button>}</>}
   </section>

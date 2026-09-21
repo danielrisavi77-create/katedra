@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { buildAgentSystemPrompt, GATE_PHASE_FOR_AGENT, type DoctrineProfileHint } from './doctrine'
+import { buildAgentSystemPrompt, type DoctrineProfileHint } from './doctrine'
+import { GATE_PHASE_FOR_AGENT } from './gate-verifier'
 
 import { documentText } from '../manuscript/model'
 import type { ManuscriptV1 } from '../manuscript/types'

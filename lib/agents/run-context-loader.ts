@@ -79,10 +79,10 @@ export function createSupabaseRunPayloadManifestStore(db: RunPayloadManifestData
   }
 }
 
-export async function loadRunManuscriptContext(
+export async function loadRunContextSnapshot(
   storage: RunPayloadStorage,
-  input: { storagePath: string; projectId: string },
-): Promise<ManuscriptV1> {
+  input: { storagePath: string; projectId: string; manifestPath?: string; runId?: string },
+): Promise<{ manuscript: ManuscriptV1; contextRevision?: string; planApproval?: unknown }> {
   const raw = await storage.download(input.storagePath)
   const bytes = toBytes(raw)
   if (bytes.byteLength > MAX_AGENT_CONTEXT_BYTES) throw new Error('Kontekst rukopisa je prevelik.')
@@ -94,7 +94,34 @@ export async function loadRunManuscriptContext(
   }
   const result = validateAgentRunContext(body, input.projectId, bytes.byteLength)
   if (result.ok === false) throw new Error(result.error)
-  return result.manuscript
+  const contextRevision = body && typeof body === 'object' && 'contextRevision' in body && typeof body.contextRevision === 'string'
+    ? body.contextRevision : undefined
+  const manifest = input.manifestPath && input.runId && contextRevision
+    ? await loadRunContextManifest(storage, { ...input, manifestPath: input.manifestPath, runId: input.runId, contextRevision }) : null
+  return { manuscript: result.manuscript, contextRevision, planApproval: manifest?.planApproval }
+}
+
+export async function loadRunContextManifest(storage: RunPayloadStorage, input: {
+  storagePath: string; manifestPath: string; projectId: string; runId: string; contextRevision: string
+}): Promise<Record<string, unknown> | null> {
+  try {
+    const bytes = toBytes(await storage.download(input.manifestPath))
+    if (bytes.byteLength > 16_384) return null
+    const value = JSON.parse(new TextDecoder().decode(bytes))
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    if (!input.contextRevision || value.contextRevision !== input.contextRevision || value.schemaVersion !== 1
+      || value.kind !== 'run-context' || value.materialId !== 'run-context' || value.projectId !== input.projectId
+      || value.runId !== input.runId || value.storagePath !== input.storagePath
+      || !isActiveTemporaryPayload(value.expiresAt, Date.now())) return null
+    return value
+  } catch { return null }
+}
+
+export async function loadRunManuscriptContext(
+  storage: RunPayloadStorage,
+  input: { storagePath: string; projectId: string },
+): Promise<ManuscriptV1> {
+  return (await loadRunContextSnapshot(storage, input)).manuscript
 }
 
 export async function loadRunMaterialContexts(
