@@ -29,7 +29,7 @@ export interface VerifiedFixedRecord {
   analysisId: string
 }
 
-interface LegacyManifest {
+export interface LegacyManifest {
   v?: number
   projectId?: string
   lektaIssues?: LegacyManifestIssue[]
@@ -37,6 +37,49 @@ interface LegacyManifest {
   lektaIdentityIndex?: Record<string, FindingIdentitySidecar>
   lektaResolutionHistory?: VerifiedFixedRecord[]
   [key: string]: unknown
+}
+
+export function mergeLektaResultIntoManifest(manifest: LegacyManifest, result: LektaResult): LegacyManifest {
+  if (manifest.projectId && result.projectId && manifest.projectId !== result.projectId) {
+    throw new Error('Lekta rezultat pripada drugom projektu.')
+  }
+
+  const previousIdentity = manifest.lektaIdentityIndex || {}
+  const { verifiedFixed } = reconcileRecheck(manifest.lektaIssues || [], result)
+  const enrichedFixed = verifiedFixed.map(item => ({
+    ...item,
+    checkId: item.checkId || previousIdentity[item.issueId]?.checkId || undefined,
+    ruleId: item.ruleId || previousIdentity[item.issueId]?.ruleId || undefined,
+  }))
+  const existingHistory = Array.isArray(manifest.lektaResolutionHistory) ? manifest.lektaResolutionHistory : []
+  const seen = new Set(existingHistory.map(item => `${item.analysisId}:${item.issueId}`))
+  const additions = enrichedFixed.filter(item => !seen.has(`${item.analysisId}:${item.issueId}`))
+
+  return {
+    ...manifest,
+    profileId: result.profileId || manifest.profileId,
+    lektaAnalysisId: result.analysisId,
+    lektaRulesetId: result.rulesetId,
+    lektaScore: result.score,
+    lektaCheckedAt: result.analyzedAt,
+    lektaIssues: result.issues.map(issue => ({
+      id: issue.issueKey,
+      ruleId: issue.ruleId || undefined,
+      checkId: issue.checkId || undefined,
+      severity: issue.severity,
+      category: issue.category,
+      fixable: issue.fixable,
+      fixerId: issue.fixerId || undefined,
+      label: issue.summary,
+      status: issue.status,
+    })),
+    lektaIdentityIndex: Object.fromEntries(result.issues.map(issue => [
+      issue.issueKey,
+      { checkId: issue.checkId || undefined, ruleId: issue.ruleId || undefined },
+    ])),
+    lektaResolutionHistory: [...existingHistory, ...additions].slice(-250),
+    lektaFixedTotal: Number(manifest.lektaFixedTotal || 0) + additions.length,
+  }
 }
 
 function readManifest(): LegacyManifest | null {
@@ -98,31 +141,14 @@ export function reconcileRecheck(
 export function prepareManifestForIncomingLektaResult(result: LektaResult): number {
   const manifest = readManifest()
   if (!manifest) return 0
-  if (manifest.projectId && result.projectId && manifest.projectId !== result.projectId) return 0
-
-  const previousIdentity = manifest.lektaIdentityIndex || {}
-  const { enginePrevious, verifiedFixed } = reconcileRecheck(manifest.lektaIssues || [], result)
-  const enrichedFixed = verifiedFixed.map(item => ({
-    ...item,
-    checkId: item.checkId || previousIdentity[item.issueId]?.checkId || undefined,
-    ruleId: item.ruleId || previousIdentity[item.issueId]?.ruleId || undefined,
-  }))
-
-  const existingHistory = Array.isArray(manifest.lektaResolutionHistory) ? manifest.lektaResolutionHistory : []
-  const seen = new Set(existingHistory.map(item => `${item.analysisId}:${item.issueId}`))
-  const additions = enrichedFixed.filter(item => !seen.has(`${item.analysisId}:${item.issueId}`))
-
-  manifest.lektaIssues = enginePrevious
-  manifest.lektaIdentityIndex = Object.fromEntries(result.issues.map(issue => [
-    issue.issueKey,
-    {
-      checkId: issue.checkId || undefined,
-      ruleId: issue.ruleId || undefined,
-    },
-  ]))
-  manifest.lektaResolutionHistory = [...existingHistory, ...additions].slice(-250)
-  writeManifest(manifest)
-  return additions.length
+  try {
+    const previousHistoryCount = manifest.lektaResolutionHistory?.length || 0
+    const merged = mergeLektaResultIntoManifest(manifest, result)
+    writeManifest(merged)
+    return Math.max(0, (merged.lektaResolutionHistory?.length || 0) - previousHistoryCount)
+  } catch {
+    return 0
+  }
 }
 
 /** USER_CHANGED means "I edited it"; opening a new Lekta check advances it to RECHECK_REQUIRED. */

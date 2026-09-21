@@ -1,34 +1,125 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Database } from '../database.types'
+import { katedraPassProductFilter } from '../../katedra-pass-catalog.js'
+import { logOperationalEvent } from '../../observability/operational-events'
 
 export type TypedAdminClient = SupabaseClient<Database>
 
-// Temporary live-schema discriminator until the shared entitlement contract
-// gains real `scope`/`capabilities` columns via a canonical Lekta migration.
-// Katedra's Stripe webhook grants Project Passes with provider='stripe' and
-// product_id=NULL because the Lekta product catalog has no Katedra bundle SKU.
-// Lekta's retail webhook resolves a catalog product and writes its product_id.
 const KATEDRA_PASS_PROVIDER = 'stripe'
+
+export type ProjectPassLookup =
+  | { ok: true; active: boolean }
+  | { ok: false; error: string }
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
+export async function lookupActiveProjectPass(
+  db: TypedAdminClient,
+  input: { userId: string; projectId: string; now?: Date },
+): Promise<ProjectPassLookup> {
+  const { userId, projectId, now = new Date() } = input
+  let result
+  try {
+    result = await db
+      .from('entitlements')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('academic_project_id', projectId)
+      .eq('provider', KATEDRA_PASS_PROVIDER)
+      .or(katedraPassProductFilter())
+      .eq('status', 'active')
+      .gt('purchase_expires_at', now.toISOString())
+      .limit(1)
+      .maybeSingle()
+  } catch (error) {
+    const message = errorMessage(error, 'Project Pass lookup failed.')
+    logOperationalEvent({ eventName: 'project_pass_lookup_failed', userId, projectId, error }, 'error')
+    return { ok: false, error: message }
+  }
+  if (result.error) {
+    logOperationalEvent({ eventName: 'project_pass_lookup_failed', userId, projectId, error: result.error }, 'error')
+    return { ok: false, error: result.error.message || 'Project Pass lookup failed.' }
+  }
+  return { ok: true, active: Boolean(result.data) }
+}
 
 export async function hasActiveProjectPass(
   db: TypedAdminClient,
   input: { userId: string; projectId: string; now?: Date },
 ): Promise<boolean> {
-  const { userId, projectId, now = new Date() } = input
+  const result = await lookupActiveProjectPass(db, input)
+  return result.ok && result.active
+}
 
-  const { data, error } = await db
-    .from('entitlements')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('academic_project_id', projectId)
-    .eq('provider', KATEDRA_PASS_PROVIDER)
-    .is('product_id', null)
-    .eq('status', 'active')
-    .gt('purchase_expires_at', now.toISOString())
-    .limit(1)
-    .maybeSingle()
+export async function lookupActiveProjectPassForProduct(
+  db: TypedAdminClient,
+  input: { userId: string; projectId: string; productId: string; now?: Date },
+): Promise<ProjectPassLookup> {
+  const { userId, projectId, productId, now = new Date() } = input
+  const workType = workTypeForProductId(productId)
+  if (!workType) return { ok: true, active: false }
 
-  if (error) return false
-  return Boolean(data)
+  try {
+    const exact = await db
+      .from('entitlements')
+      .select('id, product_id, work_type')
+      .eq('user_id', userId)
+      .eq('academic_project_id', projectId)
+      .eq('provider', KATEDRA_PASS_PROVIDER)
+      .eq('product_id', productId)
+      .eq('status', 'active')
+      .gt('purchase_expires_at', now.toISOString())
+      .limit(1)
+      .maybeSingle()
+
+    if (exact.error) {
+      logOperationalEvent({ eventName: 'project_pass_product_lookup_failed', userId, projectId, reason: productId, error: exact.error }, 'error')
+      return { ok: false, error: exact.error.message || 'Project Pass product lookup failed.' }
+    }
+    if (exact.data?.product_id === productId) return { ok: true, active: true }
+
+    // Older Katedra Pass rows predate the shared SKU catalog and intentionally
+    // have a NULL product_id. They remain valid only when their canonical
+    // work_type matches this exact product tier.
+    const legacy = await db
+      .from('entitlements')
+      .select('id, product_id, work_type')
+      .eq('user_id', userId)
+      .eq('academic_project_id', projectId)
+      .eq('provider', KATEDRA_PASS_PROVIDER)
+      .is('product_id', null)
+      .eq('work_type', workType)
+      .eq('status', 'active')
+      .gt('purchase_expires_at', now.toISOString())
+      .limit(1)
+      .maybeSingle()
+
+    if (legacy.error) {
+      logOperationalEvent({ eventName: 'project_pass_legacy_product_lookup_failed', userId, projectId, reason: productId, error: legacy.error }, 'error')
+      return { ok: false, error: legacy.error.message || 'Legacy Project Pass lookup failed.' }
+    }
+    return { ok: true, active: legacy.data?.product_id === null && legacy.data?.work_type === workType }
+  } catch (error) {
+    const message = errorMessage(error, 'Project Pass product lookup failed.')
+    logOperationalEvent({ eventName: 'project_pass_product_lookup_failed', userId, projectId, reason: productId, error }, 'error')
+    return { ok: false, error: message }
+  }
+}
+
+export async function hasActiveProjectPassForProduct(
+  db: TypedAdminClient,
+  input: { userId: string; projectId: string; productId: string; now?: Date },
+): Promise<boolean> {
+  const result = await lookupActiveProjectPassForProduct(db, input)
+  return result.ok && result.active
+}
+
+function workTypeForProductId(productId: string): 'seminarski' | 'zavrsni' | 'diplomski' | null {
+  if (productId === 'katedra_pass_seminarski') return 'seminarski'
+  if (productId === 'katedra_pass_zavrsni') return 'zavrsni'
+  if (productId === 'katedra_pass_diplomski') return 'diplomski'
+  return null
 }

@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ThemeToggle } from '../theme-toggle'
+import { createWithdrawalReference } from '../../lib/security/withdrawal-reference'
 import '../katedra-scoped.css'
 
 export default function RacunPage() {
@@ -10,6 +12,29 @@ export default function RacunPage() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [referenceId, setReferenceId] = useState('')
+  const [account, setAccount] = useState(null)
+  const [accountError, setAccountError] = useState('')
+  const [deleteStep, setDeleteStep] = useState('idle')
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/account')
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'Račun nije dostupan.')
+        if (active) setAccount(data)
+      })
+      .catch((fetchError) => { if (active) setAccountError(fetchError.message) })
+    return () => { active = false }
+  }, [])
+
+  const projectRows = Array.isArray(account?.projects) ? account.projects : null
+  const passRows = Array.isArray(account?.passes) ? account.passes : null
+  const usageSummary = account?.usage && typeof account.usage === 'object' ? account.usage : null
 
   const submit = async () => {
     setLoading(true)
@@ -18,7 +43,7 @@ export default function RacunPage() {
       const resp = await fetch('/api/withdrawal', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ reason: reason || undefined }),
+        body: JSON.stringify({ reason: reason || undefined, referenceId }),
       })
       const data = await resp.json()
       if (!resp.ok) { setError(data.error || 'Zahtjev nije uspio.'); return }
@@ -31,14 +56,105 @@ export default function RacunPage() {
     }
   }
 
+  const requestAccountDeletion = async (event) => {
+    event.preventDefault()
+    setDeleteLoading(true)
+    setDeleteError('')
+    try {
+      const response = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ confirmation: deleteConfirmation }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok || body?.error) throw new Error(body.error || 'Brisanje računa trenutno nije dostupno.')
+      setDeleteStep('done')
+    } catch (deleteFetchError) {
+      setDeleteError(deleteFetchError.message)
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', padding: '40px 16px 90px' }}>
-      <div className="wrap" style={{ maxWidth: 640 }}>
-        <Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
+      <main className="wrap" style={{ maxWidth: 640 }}>
+        <div className="theme-utility-row"><Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link><ThemeToggle /></div>
         <h1 style={{ marginTop: 16 }}>Moj račun</h1>
 
-        <div className="panel" style={{ marginTop: 20, lineHeight: 1.6 }}>
-          <h3>Jednostrani raskid ugovora</h3>
+        {accountError && <p role="alert" style={{ color: 'var(--bad)', fontSize: 13 }}>{accountError}</p>}
+        {account && (
+          <section className="panel account-overview" aria-labelledby="account-overview-title">
+            <p className="pis-kicker">Projektni račun</p>
+            <h2 id="account-overview-title">Identitet računa</h2>
+            <p className="account-email">{account.user.email || 'E-mail nije dostupan'}</p>
+            {account.admin === true && <p className="account-admin-link"><Link href="/admin">Otvori admin pregled</Link></p>}
+            {Array.isArray(account.warnings) && account.warnings.length > 0 && (
+              <div className="account-data-warnings" role="status">
+                {account.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+              </div>
+            )}
+            <section className="account-subsection account-metrics" aria-labelledby="account-metrics-title">
+              <h3 id="account-metrics-title">Sažetak korištenja</h3>
+              <div className="account-overview-grid">
+                <div><b>{projectRows ? projectRows.length : '—'}</b><span>projekata</span></div>
+                <div><b>{passRows ? passRows.filter((pass) => pass.status === 'active').length : '—'}</b><span>aktivnih Passova</span></div>
+                <div><b>{projectRows ? projectRows.filter((project) => project.lekta_score !== null).length : '—'}</b><span>Lekta provjera</span></div>
+                <div><b>{usageSummary ? usageSummary.requests : '—'}</b><span>AI zahtjeva</span></div>
+              </div>
+            </section>
+            {usageSummary
+              ? <p className="account-usage-note">AI potrošnja: {usageSummary.inputTokens.toLocaleString('hr-HR')} ulaznih i {usageSummary.outputTokens.toLocaleString('hr-HR')} izlaznih tokena. Rukopis i promptovi nisu dio account izvoza.</p>
+              : <p className="account-usage-note" role="status">AI potrošnja trenutačno nije dostupna; broj zahtjeva nije moguće potvrditi.</p>}
+            <section className="account-subsection" aria-labelledby="account-projects-title">
+              <h3 id="account-projects-title">Moji projekti</h3>
+              {projectRows && projectRows.length > 0 && <ul className="account-project-list">{projectRows.map((project) => <li key={project.project_id}><div className="account-project-copy"><b>{project.topic || 'Rad bez naslova'}</b><small>{project.work_type_canonical || project.work_type || 'Projekt'} · {project.deadline || 'Bez roka'}</small></div><Link href={`/pisi?projectId=${encodeURIComponent(project.project_id)}`}>Otvori</Link></li>)}</ul>}
+              {projectRows && projectRows.length === 0 && <p role="status">Još nema spremljenih projekata.</p>}
+              {account.projects === null && <p role="status">Projekti trenutačno nisu dostupni.</p>}
+            </section>
+            <section className="account-subsection" aria-labelledby="account-passes-title">
+              <h3 id="account-passes-title">Pass po projektu</h3>
+              {passRows && passRows.length > 0 && <ul className="account-pass-list">{passRows.map((pass, index) => {
+                const project = projectRows?.find((candidate) => candidate.project_id === pass.academic_project_id)
+                const status = pass.status === 'active' ? 'Aktivan' : pass.status === 'expired' ? 'Istekao' : 'Nije aktivan'
+                return <li key={pass.id || `${pass.academic_project_id || 'pass'}-${index}`}><div><b>{project?.topic || 'Projekt bez naziva'}</b><small>{pass.work_type || pass.product_id || 'Project Pass'}</small></div><span data-status={pass.status}>{status}</span></li>
+              })}</ul>}
+              {passRows && passRows.length === 0 && <p role="status">Nema zabilježenih Passova.</p>}
+              {account.passes === null && <p role="status">Status Passova trenutačno nije dostupan.</p>}
+            </section>
+            <div className="account-data-actions"><a href="/api/account/export" download>Izvezi podatke</a><span>Rukopis ostaje lokalno na uređaju.</span></div>
+          </section>
+        )}
+
+        <section className="panel account-privacy" aria-labelledby="account-privacy-title">
+          <p className="pis-kicker">Privatnost i podaci</p>
+          <h2 id="account-privacy-title">Ti odlučuješ što ostaje.</h2>
+          <p>Rukopis i lokalne verzije ostaju na ovom uređaju. Server može izvesti samo projektne metapodatke i sažetak potrošnje.</p>
+          <p className="account-availability-note" role="status">Brisanje se izvršava samo kada canonical identity servis potvrdi zahtjev. Katedra neće prikazati uspjeh bez te potvrde.</p>
+          <p><Link href="/privatnost">Pročitaj pravila privatnosti</Link></p>
+          {account ? (
+            <>
+              {deleteStep === 'idle' && <button type="button" className="copy-btn" onClick={() => setDeleteStep('confirm')}>Zatraži brisanje računa</button>}
+              {deleteStep === 'confirm' && (
+                <form onSubmit={requestAccountDeletion} className="account-delete-form">
+                  <label htmlFor="account-delete-confirmation">Upiši OBRIŠI RAČUN za potvrdu</label>
+                  <input id="account-delete-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" />
+                  {deleteError && <p role="alert">{deleteError}</p>}
+                  <div><button type="submit" className="copy-btn" disabled={deleteLoading || deleteConfirmation !== 'OBRIŠI RAČUN'}>{deleteLoading ? 'Šaljem…' : 'Potvrdi zahtjev'}</button><button type="button" className="onb-back" onClick={() => { setDeleteStep('idle'); setDeleteConfirmation(''); setDeleteError('') }} disabled={deleteLoading}>Odustani</button></div>
+                </form>
+              )}
+              {deleteStep === 'done' && <p role="status">Zahtjev za brisanje je zaprimljen.</p>}
+            </>
+          ) : (
+            <div className="account-auth-prompt">
+              <p>Za upravljanje računom, izvoz podataka ili zakonske zahtjeve prvo se prijavi.</p>
+              <Link href="/prijava?redirect=/racun" className="copy-btn">Prijavi se za upravljanje računom</Link>
+            </div>
+          )}
+        </section>
+
+        {account && <div className="panel" style={{ marginTop: 20, lineHeight: 1.6 }} aria-labelledby="withdrawal-title">
+          <h3 id="withdrawal-title">Jednostrani raskid ugovora</h3>
           <p style={{ color: 'var(--mut)' }}>
             Imaš pravo, bez navođenja razloga, jednostrano raskinuti ugovor u roku od 14 dana od
             kupnje (ili ranije ako si pri kupnji potvrdio/la gubitak tog prava zbog trenutnog
@@ -48,34 +164,35 @@ export default function RacunPage() {
           </p>
 
           {step === 'idle' && (
-            <button className="copy-btn" onClick={() => setStep('confirm')}>
+            <button type="button" className="copy-btn" onClick={() => { setReferenceId(createWithdrawalReference()); setStep('confirm') }}>
               Jednostrani raskid ugovora
             </button>
           )}
 
           {step === 'confirm' && (
-            <div style={{ marginTop: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>
+            <form style={{ marginTop: 12 }} onSubmit={(event) => { event.preventDefault(); void submit() }}>
+              <label htmlFor="withdrawal-reason" style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>
                 Razlog (neobavezno — ne moraš ga navesti)
               </label>
               <textarea
+                id="withdrawal-reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
                 style={{ width: '100%', marginBottom: 12, fontFamily: 'inherit' }}
               />
-              {error && <p style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+              {error && <p role="alert" aria-live="assertive" style={{ color: 'var(--bad)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
               <div style={{ display: 'flex', gap: 10 }}>
-                <button className="copy-btn" onClick={submit} disabled={loading}>
+                <button type="submit" className="copy-btn" disabled={loading} aria-busy={loading}>
                   {loading ? 'Šaljem…' : 'Da, raskini ugovor'}
                 </button>
-                <button className="onb-back" onClick={() => setStep('idle')} disabled={loading}>Odustani</button>
+                <button type="button" className="onb-back" onClick={() => { setReferenceId(''); setStep('idle') }} disabled={loading}>Odustani</button>
               </div>
-            </div>
+            </form>
           )}
 
           {step === 'done' && result && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12 }} role="status" aria-live="polite">
               <p style={{ color: 'var(--ok)', fontWeight: 700 }}>✅ Zahtjev zaprimljen.</p>
               <p style={{ color: 'var(--mut)' }}>
                 Vrijeme primitka: {new Date(result.requestedAt).toLocaleString('hr-HR')}<br />
@@ -86,8 +203,8 @@ export default function RacunPage() {
               </p>
             </div>
           )}
-        </div>
-      </div>
+        </div>}
+      </main>
     </div>
   )
 }

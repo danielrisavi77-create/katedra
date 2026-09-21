@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { hasActiveProjectPass } from './entitlements'
+import { hasActiveProjectPass, lookupActiveProjectPass, lookupActiveProjectPassForProduct } from './entitlements'
 
 type EntitlementFixture = {
   id: string
@@ -8,6 +8,7 @@ type EntitlementFixture = {
   academic_project_id: string | null
   provider: string
   product_id: string | null
+  work_type: string | null
   status: string
   purchase_expires_at: string
 }
@@ -20,6 +21,7 @@ const ACTIVE_PASS: EntitlementFixture = {
   academic_project_id: 'project-1',
   provider: 'stripe',
   product_id: null,
+  work_type: 'seminarski',
   status: 'active',
   purchase_expires_at: '2026-12-31T23:59:59.000Z',
 }
@@ -42,6 +44,14 @@ function createEntitlementDb(rows: EntitlementFixture[]) {
         },
         is(column: keyof EntitlementFixture, value: null) {
           predicates.push((row) => row[column] === value)
+          return query
+        },
+        or(filter: string) {
+          const allowed: string[] = filter.match(/katedra_pass_[a-z]+/g) || []
+          const workTypeMatch = filter.match(/work_type\.in\.\(([^)]+)\)/)
+          const allowedWorkTypes = workTypeMatch?.[1].split(',') || []
+          predicates.push((row) => allowed.includes(row.product_id || '')
+            || (row.product_id === null && allowedWorkTypes.includes(row.work_type || '')))
           return query
         },
         gt(column: keyof EntitlementFixture, value: string) {
@@ -115,13 +125,60 @@ describe('hasActiveProjectPass', () => {
     ).resolves.toBe(false)
   })
 
-  it('rejects a Stripe entitlement that belongs to a catalog product', async () => {
+  it('rejects an unknown Stripe catalog product', async () => {
     await expect(
       resolvePass([{ ...ACTIVE_PASS, product_id: 'some-catalog-product' }]),
     ).resolves.toBe(false)
   })
 
+  it('rejects a null-product entitlement for a work type outside the Katedra catalog', async () => {
+    await expect(
+      resolvePass([{ ...ACTIVE_PASS, work_type: 'doktorski' }]),
+    ).resolves.toBe(false)
+  })
+
+  it('accepts a known Katedra catalog Pass product', async () => {
+    await expect(
+      resolvePass([{ ...ACTIVE_PASS, product_id: 'katedra_pass_diplomski' }]),
+    ).resolves.toBe(true)
+  })
+
   it('returns false when there is no matching entitlement', async () => {
     await expect(resolvePass([])).resolves.toBe(false)
+  })
+
+  it('fails closed when the entitlement client throws', async () => {
+    await expect(hasActiveProjectPass({
+      from() { throw new Error('database unavailable') },
+    } as never, { userId: 'user-1', projectId: 'project-1', now: NOW })).resolves.toBe(false)
+  })
+
+  it('preserves entitlement lookup errors for strict callers', async () => {
+    await expect(lookupActiveProjectPass({
+      from() { throw new Error('database unavailable') },
+    } as never, { userId: 'user-1', projectId: 'project-1', now: NOW })).resolves.toMatchObject({ ok: false })
+  })
+})
+
+describe('lookupActiveProjectPassForProduct', () => {
+  it('accepts the legacy null-product Pass when its work type matches the requested SKU', async () => {
+    await expect(lookupActiveProjectPassForProduct(createEntitlementDb([ACTIVE_PASS]) as never, {
+      userId: 'user-1',
+      projectId: 'project-1',
+      productId: 'katedra_pass_seminarski',
+      now: NOW,
+    })).resolves.toEqual({ ok: true, active: true })
+  })
+
+  it('does not use a legacy Pass from another work type for the requested capability tier', async () => {
+    await expect(lookupActiveProjectPassForProduct(createEntitlementDb([{
+      ...ACTIVE_PASS,
+      work_type: 'zavrsni',
+    }]) as never, {
+      userId: 'user-1',
+      projectId: 'project-1',
+      productId: 'katedra_pass_seminarski',
+      now: NOW,
+    })).resolves.toEqual({ ok: true, active: false })
   })
 })

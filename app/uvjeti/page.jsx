@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ThemeToggle } from '../theme-toggle'
 import '../katedra-scoped.css'
 
 export const metadata = {
@@ -7,9 +8,27 @@ export const metadata = {
 
 export default function UvjetiPage() {
   return (
-    <div className="katedra-page" style={{ minHeight: '100vh', padding: '40px 16px 90px' }}>
-      <div className="wrap" style={{ maxWidth: 760 }}>
-        <div className="panel" style={{ background: 'var(--warn)', color: '#2a1a00', marginBottom: 20, fontWeight: 700 }}>
+    <div className="katedra-page legal-page" data-skin="kreda" style={{ minHeight: '100vh', padding: '0 16px 90px' }}>
+      <div className="wrap legal-shell" style={{ maxWidth: 900 }}>
+        <header className="legal-header">
+          <Link href="/" className="legal-brand">
+            <div className="logo-badge">K</div>
+            <div>
+              <strong className="legal-brand-title">Katedra</strong>
+              <span className="legal-brand-subtitle">Od teme do obrane</span>
+            </div>
+          </Link>
+          <div className="legal-header-actions"><ThemeToggle /><Link href="/pisi" className="legal-header-action">Otvori aplikaciju</Link></div>
+        </header>
+
+        <main className="legal-main">
+        <div className="legal-hero">
+          <p className="legal-kicker">Dokument · Uvjeti korištenja</p>
+          <h1 className="legal-title">Uvjeti korištenja</h1>
+          <p className="legal-meta">Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
+        </div>
+
+        <div className="panel legal-alert" style={{ background: 'var(--warn)', color: '#2a1a00', marginBottom: 20, fontWeight: 700 }}>
           ⚠ NACRT — zahtijeva pravnu provjeru prije objave. Ovaj tekst nije pravni savjet niti ga
           je sastavio odvjetnik — istražen je i ojačan konkretnim izvorima (v. dno stranice), ali
           to ne zamjenjuje pravnu reviziju. §5 (pravo na odustajanje) sadrži i implementacijski
@@ -17,12 +36,10 @@ export default function UvjetiPage() {
           prije pravne revizije i prije nego funkcija raskida stvarno postoji u aplikaciji.
         </div>
 
-        <Link href="/pisi" style={{ color: 'var(--acc)', fontSize: 13 }}>← Natrag na Katedru</Link>
-        <h1 style={{ marginTop: 16 }}>Uvjeti korištenja</h1>
-        <p style={{ color: 'var(--mut)' }}>Zadnje ažurirano: [DATUM]. Vrijedi za uslugu Katedra dostupnu na katedra.hr.</p>
+        <Link href="/pisi" className="legal-back">← Natrag na Katedru</Link>
 
-        <div className="panel" style={{ marginTop: 20, lineHeight: 1.6 }}>
-          <h3>1. Tko smo i što je Katedra</h3>
+        <div className="panel legal-document" style={{ marginTop: 20, lineHeight: 1.6 }}>
+          <h2>1. Tko smo i što je Katedra</h2>
           <p>
             Katedra je digitalni kopilot koji vodi izradu jednog akademskog rada (seminarski,
             završni ili diplomski) od teme do obrane — istraživanje, struktura, pisanje uz AI
@@ -36,13 +53,13 @@ export default function UvjetiPage() {
             objašnjava Lekta nalaze i pomaže ih riješiti, ali ne izdaje vlastitu tehničku ocjenu.
           </p>
 
-          <h3>2. Dobna granica i registracija</h3>
+          <h2>2. Dobna granica i registracija</h2>
           <p>
             Uslugu smiju koristiti osobe s navršenih <b>18 godina</b>. Registracijom potvrđuješ da
             ispunjavaš ovaj uvjet i da su podaci koje navedeš točni.
           </p>
 
-          <h3>3. Priroda usluge — AI asistencija, ne izrada rada umjesto tebe</h3>
+          <h2>3. Priroda usluge — AI asistencija, ne izrada rada umjesto tebe</h2>
           <p>
             Katedra je alat koji pomaže <i>tebi</i> napisati rad — ti biraš temu, odobravaš plan i
             svako poglavlje, provjeravaš izvore i braniš rad. Kada je AI politika tvoje ustanove
@@ -52,7 +69,7 @@ export default function UvjetiPage() {
             odgovori mogu sadržavati pogreške ili izmišljene navode — provjera je tvoja obveza.
           </p>
 
-          <h3>4. Cijena i plaćanje</h3>
+          <h2>4. Cijena i plaćanje</h2>
           <p>
             Cijene Pass paketa prikazane su u eurima na stranici kupnje. [PROVJERITI PDV STATUS:
             paušalni obrt ostaje izvan sustava PDV-a dok godišnji primici ne prijeđu 60.000 € —
@@ -66,7 +83,7 @@ export default function UvjetiPage() {
             neovisno o Pass kupnji.
           </p>
 
-          <h3>5. Pravo na jednostrani raskid ugovora (pravo na odustajanje)</h3>
+          <h2>5. Pravo na jednostrani raskid ugovora (pravo na odustajanje)</h2>
           <p>
             Ako kupuješ kao potrošač, prema Zakonu o zaštiti potrošača imaš pravo, bez navođenja
             razloga, jednostrano raskinuti ugovor sklopljen na daljinu u roku od <b>14 dana</b> od
@@ -107,7 +124,7 @@ export default function UvjetiPage() {
             postojati za slučajeve kad korisnik NIJE potvrdio tu privolu.]
           </p>
 
-          <h3>6. Katedrina politika povrata novca</h3>
+          <h2>6. Katedrina politika povrata novca</h2>
           <p>
             Neovisno o zakonskom pravu na odustajanje iz §5, Katedrina interna politika je: <b>povrat
             novca odobravamo u slučaju tehničkog problema</b> (npr. usluga nije bila dostupna,
@@ -117,45 +134,45 @@ export default function UvjetiPage() {
             <a href="mailto:podrska@katedra.hr" style={{ color: 'var(--acc)' }}>podrska@katedra.hr</a>.
           </p>
 
-          <h3>7. Poštena upotreba</h3>
+          <h2>7. Poštena upotreba</h2>
           <p>
             Pass pokriva razuman opseg AI zadataka za jedan akademski rad. Zadržavamo pravo
             ograničiti ili obustaviti račun kod očite zlouporabe (npr. preprodaja pristupa,
             automatizirano iskorištavanje izvan namjene usluge).
           </p>
 
-          <h3>8. Ograničenje odgovornosti</h3>
+          <h2>8. Ograničenje odgovornosti</h2>
           <p>
             Katedra ne jamči određenu ocjenu, prolaznost ili ishod obrane. Usluga se pruža
             &bdquo;kakva jest&rdquo;, u mjeri dopuštenoj zakonom. Ne odgovaramo za posljedice
             oslanjanja na AI sadržaj bez vlastite provjere.
           </p>
 
-          <h3>9. Intelektualno vlasništvo</h3>
+          <h2>9. Intelektualno vlasništvo</h2>
           <p>
             Zadržavaš sva prava na temu, ideje i konačni tekst svog rada. Katedrin softver,
             dizajn i baza pravila fakulteta ostaju u našem vlasništvu.
           </p>
 
-          <h3>10. Raskid računa</h3>
+          <h2>10. Raskid računa</h2>
           <p>
             Račun možeš zatvoriti u svakom trenutku putem e-maila na podršku. Zadržavamo pravo
             obustaviti račun kod kršenja ovih uvjeta.
           </p>
 
-          <h3>11. Mjerodavno pravo</h3>
+          <h2>11. Mjerodavno pravo</h2>
           <p>Ovi uvjeti podliježu hrvatskom pravu. Za sporove je nadležan sud u Hrvatskoj, ne dovodeći u pitanje prisilne odredbe o zaštiti potrošača.</p>
 
-          <h3>12. Izmjene uvjeta</h3>
+          <h2>12. Izmjene uvjeta</h2>
           <p>O značajnim izmjenama obavijestit ćemo te prije nego stupe na snagu.</p>
 
-          <h3>13. Kontakt</h3>
+          <h2>13. Kontakt</h2>
           <p>
             [ADRESA], e-mail: <a href="mailto:podrska@katedra.hr" style={{ color: 'var(--acc)' }}>podrska@katedra.hr</a>
           </p>
         </div>
 
-        <div className="panel" style={{ marginTop: 20, fontSize: 12, color: 'var(--mut)', lineHeight: 1.6 }}>
+        <div className="panel legal-sources" style={{ marginTop: 20, fontSize: 12, color: 'var(--mut)', lineHeight: 1.6 }}>
           <b>Izvori korišteni pri pisanju ovog nacrta</b> (provjereno kolovoz 2026 — prije objave provjeriti nisu li se propisi u međuvremenu promijenili):
           <ul style={{ marginTop: 6 }}>
             <li>Zakon o izmjenama i dopunama Zakona o zaštiti potrošača, NN 59/2026, čl. 81.a — <a href="https://narodne-novine.nn.hr/clanci/sluzbeni/full/2026_06_59_728.html" target="_blank" rel="noopener" style={{ color: 'var(--acc)' }}>narodne-novine.hr</a></li>
@@ -164,9 +181,10 @@ export default function UvjetiPage() {
           </ul>
         </div>
 
-        <p style={{ marginTop: 20 }}>
+        <p className="legal-footer-links" style={{ marginTop: 20 }}>
           <Link href="/privatnost" style={{ color: 'var(--acc)' }}>← Politika privatnosti</Link>
         </p>
+        </main>
       </div>
     </div>
   )

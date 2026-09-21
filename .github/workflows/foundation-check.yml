@@ -3,6 +3,7 @@ name: Foundation check
 on:
   push:
     branches:
+      - master
       - architecture/lekta-katedra-foundation-v0.1
   pull_request:
     branches:
@@ -19,6 +20,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run audit:dependencies
       - run: npm test
       - run: npx tsc --noEmit
       - run: npm run lint

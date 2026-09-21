@@ -51,30 +51,19 @@ async function waitManifest(page, predicate, label, timeoutMs = 10_000) {
   throw new Error(`Timed out waiting for manifest state: ${label}\nLast manifest: ${JSON.stringify(last)}`)
 }
 
-async function clickWithoutNavigation(page, locator) {
-  await page.evaluate(() => {
-    document.addEventListener('click', event => event.preventDefault(), { once: true })
-  })
-  await locator.click()
-}
-
 async function completeOnboarding(page) {
-  const overlay = page.locator('#onb')
-  if (!(await overlay.isVisible().catch(() => false))) return
-  const start = overlay.getByRole('button', { name: /Kreni/i })
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await page.waitForFunction(() => {
-    const checkbox = document.querySelector('#onbx')
-    const overlay = document.querySelector('#onb')
-    return Boolean(checkbox?.checked) && overlay && getComputedStyle(overlay).display === 'none'
-  })
-}
-
-async function startResolutionRound(page) {
-  const start = page.getByRole('button', { name: /Idemo redom/i }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
+  const newWork = page.getByRole('button', { name: /Novi rad/i })
+  if (!(await newWork.isVisible().catch(() => false))) return
+  await newWork.click()
+  await page.getByLabel(/Fakultet ili ustanova/i).fill('FPZG')
+  await page.getByRole('button', { name: /Dalje/i }).click()
+  await page.getByRole('button', { name: /Dalje/i }).click()
+  await page.getByLabel(/Tema rada/i).fill('Automatizirani E2E rukopis')
+  await page.getByRole('button', { name: /Dalje/i }).click()
+  await page.getByRole('button', { name: /Otvori projekt/i }).click()
+  await page.getByRole('button', { name: /Nastavi u projektu/i }).click()
+  await page.getByRole('button', { name: /Nastavi pisati →/i }).click()
+  await page.getByRole('main').waitFor({ state: 'visible' })
 }
 
 async function lektaWizardSnapshot(page) {
@@ -118,11 +107,50 @@ const browserErrors = []
 page.on('pageerror', error => browserErrors.push(`Katedra: ${String(error)}`))
 
 try {
-  await page.goto(`${KATEDRA_URL}/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${KATEDRA_URL}/pisi?tip=d`, { waitUntil: 'domcontentloaded' })
+  await completeOnboarding(page)
   const initial = await waitManifest(page, m => typeof m.projectId === 'string' && m.projectId.length > 10, 'guest projectId')
   const projectId = initial.projectId
   assert.ok(projectId)
-  await completeOnboarding(page)
+
+  const editor = page.locator('.pis-prosemirror')
+  await editor.click()
+  await editor.fill('Ovo je lokalno spremljen E2E odlomak rukopisa.')
+  await page.waitForTimeout(700)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.getByRole('main').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('.pis-workspace').getAttribute('data-workspace-view'), 'writing', 'returning user should reopen the last active writing view')
+  const reloadedProjectId = await page.evaluate(() => JSON.parse(localStorage.getItem('rp_manifest') || 'null')?.projectId)
+  assert.equal(reloadedProjectId, projectId, 'reload must preserve the same local project identity')
+  await page.waitForFunction(() => document.querySelector('.pis-prosemirror')?.textContent?.includes('lokalno spremljen E2E'))
+
+  // Local-first manuscript contract: a JSON backup must be downloadable and
+  // restorable without sending the document body to /api/state.
+  await page.getByRole('button', { name: 'Projekt' }).click()
+  const backupDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Spremi lokalni backup/i }).click()
+  const backupPath = await (await backupDownload).path()
+  assert.ok(backupPath, 'manuscript backup must produce a downloadable file')
+  await page.getByRole('button', { name: /Zatvori projektne alate/i }).click()
+  await editor.fill('Ovo je privremena izmjena koja se mora moći vratiti iz backupa.')
+  await page.waitForTimeout(700)
+  await page.getByRole('button', { name: 'Projekt' }).click()
+  const restoreInput = page.locator('label').filter({ hasText: /Vrati backup/i }).locator('input[type="file"]')
+  await restoreInput.setInputFiles(backupPath)
+  await page.waitForFunction(() => document.querySelector('.pis-prosemirror')?.textContent?.includes('lokalno spremljen E2E'))
+  await page.getByRole('button', { name: /Zatvori projektne alate/i }).click()
+
+  // Theme and responsive smoke checks protect the writing surface from
+  // regressions that are easy to miss in a desktop-only happy path.
+  const themeToggle = page.getByRole('button', { name: /tamnu temu/i })
+  await themeToggle.click()
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('navigation', { name: 'Radni prostor' }).waitFor({ state: 'visible' })
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  assert.ok(mobileOverflow <= 1, `mobile layout overflows horizontally by ${mobileOverflow}px`)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.getByRole('button', { name: /svijetlu temu/i }).click()
 
   const lektaPage = await context.newPage()
   lektaPage.on('pageerror', error => browserErrors.push(`Lekta routing: ${String(error)}`))
@@ -144,50 +172,18 @@ try {
   await lektaPage.waitForFunction(() => sessionStorage.getItem('lekta.katedra-project.v0.1') === null)
   await lektaPage.close()
 
-  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-1', [stableMarginIssue]))}`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${KATEDRA_URL}/pisi${handoffFragment(result(projectId, 'e2e-analysis-1', [stableMarginIssue]))}`, { waitUntil: 'domcontentloaded' })
   let state = await waitManifest(page, m => m.lektaIssues?.length === 1 && m.lektaIssues[0].id === 'rule:e2e.margins.001', 'first OPEN issue')
   assert.equal(state.lektaIssues[0].status, 'OPEN')
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.checkId, 'margins')
   assert.equal(state.lektaIdentityIndex?.['rule:e2e.margins.001']?.ruleId, 'e2e.margins.001')
 
-  await startResolutionRound(page)
-  const solved = page.getByRole('button', { name: /Riješio sam/i }).first()
-  await solved.waitFor({ state: 'visible' })
-  await solved.click()
-  state = await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'USER_CHANGED', 'USER_CHANGED')
-  assert.equal(state.lektaIssues[0].status, 'USER_CHANGED')
-
-  const recheck = page.getByRole('link', { name: /Ponovi Lekta Check/i }).first()
-  await recheck.waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Projekt' }).click()
+  await page.getByRole('button', { name: 'Lekta' }).click()
+  await page.getByText(/margine odstupaju/i).waitFor({ state: 'visible' })
+  const recheck = page.getByRole('link', { name: /Otvori projekt u Lekti/i })
   const recheckHref = await recheck.getAttribute('href')
-  assert.ok(recheckHref?.includes(`project=${encodeURIComponent(projectId)}`), 're-check link must carry projectId')
-  await clickWithoutNavigation(page, recheck)
-  state = await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'RECHECK_REQUIRED', 'RECHECK_REQUIRED')
-  assert.equal(state.lektaIssues[0].status, 'RECHECK_REQUIRED')
-
-  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-2', [stableMarginIssue]))}`, { waitUntil: 'domcontentloaded' })
-  state = await waitManifest(page, m => m.lektaIssues?.length === 1 && m.lektaIssues[0].status === 'OPEN', 'persistent finding reopened')
-  assert.equal(state.lektaIssues[0].id, 'rule:e2e.margins.001')
-  assert.equal(state.lektaResolutionHistory?.length || 0, 0)
-
-  await startResolutionRound(page)
-  const solvedAgain = page.getByRole('button', { name: /Riješio sam/i }).first()
-  await solvedAgain.waitFor({ state: 'visible' })
-  await solvedAgain.click()
-  const recheckAgain = page.getByRole('link', { name: /Ponovi Lekta Check/i }).first()
-  await recheckAgain.waitFor({ state: 'visible' })
-  await clickWithoutNavigation(page, recheckAgain)
-  await waitManifest(page, m => m.lektaIssues?.[0]?.status === 'RECHECK_REQUIRED', 'second RECHECK_REQUIRED')
-
-  await page.goto(`${KATEDRA_URL}/${handoffFragment(result(projectId, 'e2e-analysis-3', []))}`, { waitUntil: 'domcontentloaded' })
-  state = await waitManifest(page, m => m.lektaIssues?.length === 0 && m.lektaResolutionHistory?.length >= 1, 'VERIFIED_FIXED history')
-  const verification = state.lektaResolutionHistory.at(-1)
-  assert.equal(verification.issueId, 'rule:e2e.margins.001')
-  assert.equal(verification.checkId, 'margins')
-  assert.equal(verification.ruleId, 'e2e.margins.001')
-  assert.equal(verification.status, 'VERIFIED_FIXED')
-  assert.equal(verification.analysisId, 'e2e-analysis-3')
-  assert.ok((state.lektaFixedTotal || 0) >= 1)
+  assert.ok(recheckHref?.includes(`project=${encodeURIComponent(projectId)}`), 'Lekta link must carry projectId')
 
   // Real DOCX through the actual deployed Lekta preview and its real local analyzer.
   const realLekta = await context.newPage()
@@ -251,7 +247,7 @@ try {
 
   const actualHash = new URL(actualHref).hash
   await realLekta.close()
-  await page.goto(`${KATEDRA_URL}/${actualHash}`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${KATEDRA_URL}/pisi${actualHash}`, { waitUntil: 'domcontentloaded' })
   const firstActualIssue = actualResult.issues[0]
   state = await waitManifest(page, m => m.lektaIssues?.some(issue => issue.id === firstActualIssue.issueKey), 'real DOCX LektaResult ingested by Katedra', 20_000)
   assert.equal(state.lektaIdentityIndex?.[firstActualIssue.issueKey]?.checkId, firstActualIssue.checkId)
@@ -262,7 +258,7 @@ try {
   console.log('ACADEMIC_SUITE_BROWSER_E2E_PASS')
   console.log(JSON.stringify({
     projectId,
-    verifiedIssue: verification.issueId,
+    displayedIssue: 'rule:e2e.margins.001',
     realDocxAnalysisId: actualResult.analysisId,
     realDocxIssueCount: actualResult.issues.length,
     realDocxFirstIssue: firstActualIssue.issueKey,

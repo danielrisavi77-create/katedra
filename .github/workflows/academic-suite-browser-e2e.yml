@@ -1,19 +1,33 @@
 name: Academic Suite browser E2E
 
 on:
+  push:
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:
 
 jobs:
   browser-e2e:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'architecture/lekta-katedra-foundation-v0.1'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       KATEDRA_E2E_URL: http://127.0.0.1:3000
-      LEKTA_PREVIEW_URL: https://deploy-preview-25--lektahr.netlify.app
+      LEKTA_PREVIEW_URL: ${{ secrets.LEKTA_PREVIEW_URL }}
       E2E_DOCX_PATH: /tmp/academic-suite-bad-formatting.docx
+      KATEDRA_INTEGRATION_URL: ${{ secrets.KATEDRA_INTEGRATION_URL }}
+      KATEDRA_AUTH_E2E_EMAIL: ${{ secrets.KATEDRA_AUTH_E2E_EMAIL }}
+      KATEDRA_AUTH_E2E_PASSWORD: ${{ secrets.KATEDRA_AUTH_E2E_PASSWORD }}
+      KATEDRA_WORKER_APP_URL: ${{ secrets.KATEDRA_WORKER_APP_URL || secrets.KATEDRA_INTEGRATION_URL }}
+      KATEDRA_AGENT_WORKER_TOKEN: ${{ secrets.KATEDRA_AGENT_WORKER_TOKEN }}
+      KATEDRA_AGENT_WORKER_CRON_SECRET: ${{ secrets.KATEDRA_AGENT_WORKER_CRON_SECRET }}
+      KATEDRA_AGENT_MODEL: ${{ vars.KATEDRA_AGENT_MODEL }}
+      KATEDRA_AGENT_RUNS_ENABLED: ${{ vars.KATEDRA_AGENT_RUNS_ENABLED }}
+      KATEDRA_PROJECT_LOCKS_ENABLED: ${{ vars.KATEDRA_PROJECT_LOCKS_ENABLED }}
+      KATEDRA_BILLING_RPC_CONTRACT: 'v2'
+      KATEDRA_RATE_LIMIT_STORE: 'supabase'
+      KATEDRA_AUTH_E2E_CHECKOUT: '1'
+      KATEDRA_E2E_REQUIRE_CONFIG: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -25,10 +39,22 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      - name: Install Playwright runner (ephemeral)
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Require staging configuration for manual release gate
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          npm install --no-save --package-lock=false playwright@1.55.0
-          npx playwright install --with-deps chromium
+          missing=0
+          for name in LEKTA_PREVIEW_URL KATEDRA_INTEGRATION_URL KATEDRA_AUTH_E2E_EMAIL KATEDRA_AUTH_E2E_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "$name is required for the manual authenticated release gate."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Generate intake-valid DOCX with deterministic formatting errors
         run: |
@@ -158,6 +184,15 @@ jobs:
           print(f'Generated {path} ({size} bytes, intake-valid)')
           PY
 
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run unit and component tests
+        run: npm run test:ci
+
       - name: Build Katedra
         run: npm run build
 
@@ -175,7 +210,26 @@ jobs:
           exit 1
 
       - name: Run Lekta × Katedra browser loop
+        if: ${{ env.LEKTA_PREVIEW_URL != '' }}
         run: node scripts/academic-suite-browser-e2e.mjs
+
+      - name: Run authenticated money-flow browser gate
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: node scripts/authenticated-money-flow-e2e.mjs
+
+      - name: Require agentic staging worker configuration
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: npm run preflight:agentic
+
+      - name: Run authenticated agentic-workflow browser gate
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          KATEDRA_AGENT_E2E_TIMEOUT_MS: '300000'
+        run: npm run test:e2e:agentic
+
+      - name: Run HTTP integration gate when staging is configured
+        if: ${{ env.KATEDRA_INTEGRATION_URL != '' }}
+        run: npm run test:ci -- app/api/checkout/route.integration.test.js app/api/chat/route.integration.test.js app/api/webhook/route.integration.test.js app/api/state/route.integration.test.js
 
       - name: Print Katedra server log on failure
         if: failure()

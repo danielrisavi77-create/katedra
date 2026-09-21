@@ -3,6 +3,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
+import { getSafeAuthRouteRedirect } from './lib/auth/redirect.js'
 
 export async function proxy(request) {
   // Prije nego je Supabase projekt postavljen (prazan .env.local), ne pucaj —
@@ -42,7 +43,10 @@ export async function proxy(request) {
   const authRoutes = ['/prijava', '/registracija']
   if (authRoutes.includes(request.nextUrl.pathname) && user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    const destination = new URL(getSafeAuthRouteRedirect(request.nextUrl.searchParams.get('redirect')), request.url)
+    url.pathname = destination.pathname
+    url.search = destination.search
+    url.hash = destination.hash
     return NextResponse.redirect(url)
   }
 

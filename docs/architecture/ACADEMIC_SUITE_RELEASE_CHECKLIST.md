@@ -9,9 +9,14 @@ Paired PRs:
 - Lekta PR #25
 - Katedra PR #1
 
-## 0. Current release status — 2026-08-03
+## 0. Historical foundation status — 2026-08-03
 
-The shared database phase is **COMPLETE on the live Lekta Supabase project**.
+The shared database foundation phase was **COMPLETE on the live Lekta Supabase
+project** as of 2026-08-03. This is historical evidence for migrations
+0035–0040 only; it is not a current production-readiness statement for the
+agentic, billing, worker or material contracts introduced later. The current
+status is tracked in [`LOCAL_VERIFICATION_2026-08-16.md`](../release/LOCAL_VERIFICATION_2026-08-16.md)
+and [`BLOCKERS.md`](../autonomous/BLOCKERS.md).
 
 Applied authoritative migrations:
 
@@ -107,7 +112,7 @@ Adds the covering ownership/time index for `katedra_topups.user_id`, removing th
 
 ---
 
-## 3. Live post-migration evidence — COMPLETE
+## 3. Live post-migration evidence — COMPLETE (foundation scope only)
 
 Confirmed on `zrrjttizjyfcxmcpgzml`:
 

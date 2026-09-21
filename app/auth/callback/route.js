@@ -4,16 +4,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getSafeInternalRedirect } from '@/lib/auth/redirect'
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const oauthError = searchParams.get('error_description') || searchParams.get('error')
-  const redirectRaw = searchParams.get('redirect') ?? '/pisi'
-  // Sigurnost: dozvoli samo relativne, same-origin putanje (spriječi open redirect)
-  const redirect = (redirectRaw.startsWith('/') && !redirectRaw.startsWith('//') && !redirectRaw.startsWith('/\\'))
-    ? redirectRaw
-    : '/pisi'
+  const redirect = getSafeInternalRedirect(searchParams.get('redirect'))
 
   if (oauthError) {
     return NextResponse.redirect(`${origin}/prijava?error=${encodeURIComponent(oauthError)}`)
@@ -38,9 +35,10 @@ export async function GET(request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      const base = isLocalEnv ? origin : (process.env.NEXT_PUBLIC_APP_URL || origin)
-      return NextResponse.redirect(`${base}${redirect}`)
+      // Keep auth recovery and email-confirmation links inside the Katedra
+      // app that handled the callback. A shared NEXT_PUBLIC_APP_URL can point
+      // at Lekta in a cross-repo setup and must not control this redirect.
+      return NextResponse.redirect(`${origin}${redirect}`)
     }
   }
 
