@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { executionContextFixture, executionRecoveryFixture } from './execution-recovery.fixture'
 import { createGatewayPassageVerifier, executeBilledPassageVerification } from './passage-verification'
 
 const claims = [{
@@ -19,18 +20,30 @@ const citations = [{
 }]
 
 describe('gateway passage verification', () => {
+  it('replays the original passage result despite a new citation verification timestamp', async () => {
+    const fixture = executionRecoveryFixture()
+    const verifier = { verify: vi.fn(async () => ({ claims, provider: 'fixture', model: 'fixture-model',
+      usage: { inputTokens: 10, outputTokens: 5 }, outcome: 'verified' as const })) }
+    const input = { verifier, provider: 'fixture', model: 'fixture-model', userId: 'user-1', projectId: 'project-1',
+      runId: 'run-1', requestId: 'passage-replay', agent: 'writing_verifier', attempt: 1,
+      execution: executionContextFixture, claims, citations }
+    const first = await executeBilledPassageVerification(fixture.db, input)
+    const second = await executeBilledPassageVerification(fixture.db, { ...input,
+      citations: citations.map(citation => ({ ...citation, verification: {
+        status: 'verified' as const, method: 'crossref' as const, checkedAt: '2026-09-08T20:00:00Z',
+      } })) })
+    expect(second).toEqual(first)
+    expect(verifier.verify).toHaveBeenCalledTimes(1)
+    expect(fixture.debitCount()).toBe(1)
+  })
   it('settles passage verifier usage through the canonical billing lifecycle', async () => {
-    const rpc = vi.fn(async (name: string) => {
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
-      if (name === 'katedra_release_request') return { data: { status: 'released' }, error: null }
-      return { data: null, error: null }
-    })
+    const { db, rpc } = executionRecoveryFixture()
     const verifier = {
       verify: vi.fn(async () => ({ claims, provider: 'independent-verifier', model: 'verifier-model', usage: { inputTokens: 40, outputTokens: 12 }, outcome: 'verified' as const })),
     }
 
-    const result = await executeBilledPassageVerification({ rpc }, {
+    const result = await executeBilledPassageVerification(db, {
+      execution: executionContextFixture,
       verifier,
       provider: 'independent-verifier',
       model: 'verifier-model',
@@ -45,25 +58,17 @@ describe('gateway passage verification', () => {
     })
 
     expect(result).toMatchObject({ billingState: 'settled', usage: { inputTokens: 40, outputTokens: 12 }, charged: 100 })
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({
-      p_request_id: 'run-1:step-1:1:passage',
-      p_project_id: 'project-1',
-      p_in: 40,
-      p_out: 12,
-    }))
+    expect(rpc).toHaveBeenCalledWith('record_agent_provider_response', expect.objectContaining({ p_evidence: expect.objectContaining({ inputTokens: 40, outputTokens: 12, charged: 100 }) }))
   })
 
   it('does not accept a passage result when verifier usage is unavailable', async () => {
-    const rpc = vi.fn(async (name: string) => {
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_mark_pending') return { data: { status: 'pending_reconciliation' }, error: null }
-      return { data: { status: 'released' }, error: null }
-    })
+    const { db, rpc } = executionRecoveryFixture()
     const verifier = {
       verify: vi.fn(async () => ({ claims, provider: 'independent-verifier', model: 'verifier-model', outcome: 'needs_review' as const })),
     }
 
-    await expect(executeBilledPassageVerification({ rpc }, {
+    await expect(executeBilledPassageVerification(db, {
+      execution: executionContextFixture,
       verifier,
       provider: 'independent-verifier',
       model: 'verifier-model',
@@ -76,7 +81,7 @@ describe('gateway passage verification', () => {
       claims,
       citations,
     })).rejects.toMatchObject({ billingState: 'pending_reconciliation' })
-    expect(rpc).toHaveBeenCalledWith('katedra_mark_pending', expect.objectContaining({ p_request_id: 'run-1:step-2:1:passage' }))
+    expect(rpc).toHaveBeenCalledWith('record_agent_provider_response', expect.objectContaining({ p_evidence: expect.objectContaining({ inputTokens: null, outputTokens: null, charged: null }) }))
     expect(rpc).not.toHaveBeenCalledWith('katedra_consume', expect.anything())
   })
 

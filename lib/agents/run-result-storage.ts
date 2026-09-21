@@ -121,11 +121,28 @@ export async function storeAgentStepResult(
     createdAt,
     expiresAt,
   }
-  const body = new TextEncoder().encode(JSON.stringify(payload))
+  let body: Uint8Array = new TextEncoder().encode(JSON.stringify(payload))
   if (body.byteLength > MAX_RESULT_BYTES) return { ok: false, error: 'Rezultat agenta je prevelik za privremenu pohranu.' }
   const bucket = input.bucket || DEFAULT_BUCKET
   if (bucket !== DEFAULT_BUCKET) return { ok: false, error: 'Privremeni bucket ne odgovara kanonskom ugovoru.' }
-  const manifest = { ...payload, storageBucket: bucket, storagePath, manifestPath }
+  let storedPayload = payload
+  try {
+    const existing = await db.storage.from(bucket).download?.(storagePath)
+    if (existing?.data && !existing.error) {
+      if (existing.data instanceof Blob && existing.data.size > MAX_RESULT_BYTES) throw new Error('Result too large.')
+      const originalBytes = await storageValueToBytes(existing.data)
+      if (originalBytes.byteLength > MAX_RESULT_BYTES) throw new Error('Result too large.')
+      const original = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(originalBytes))
+      // Fresh verification still runs. Only its observation timestamps may differ;
+      // a changed verdict, source, quote, scope or output cannot reuse this artifact.
+      if (resultIdentity(original) !== resultIdentity(payload)) throw new Error('Result changed.')
+      storedPayload = original
+      body = originalBytes
+    }
+  } catch {
+    return { ok: false, error: 'Original result cannot be safely recovered.' }
+  }
+  const manifest = { ...storedPayload, storageBucket: bucket, storagePath, manifestPath }
   const client = { rpc: (name: string, params: Record<string, unknown>) => db.rpc(name, params), storage: db.storage }
   const payloadUploaded = await trackedPayloadUpload(client, { manifestId: allocation.manifest_id, kind: 'body', path: storagePath, body })
   if (!payloadUploaded) return { ok: false, error: 'Spremanje rezultata agenta nije potvrđeno.' }
@@ -135,6 +152,22 @@ export async function storeAgentStepResult(
     return { ok: false, error: 'Spremanje manifesta rezultata nije uspjelo.' }
   }
   return { ok: true, value: { manifestId: allocation.manifest_id, materialId, expiresAt } }
+}
+
+function resultIdentity(payload: AgentStepResultPayloadV1): string {
+  const copy = JSON.parse(JSON.stringify(payload)) as AgentStepResultPayloadV1
+  const stripCitationTime = (citation: CitationEvidence) => {
+    if (citation.verification) delete citation.verification.checkedAt
+  }
+  copy.citations.forEach(stripCitationTime)
+  copy.verification.evidence.forEach(stripCitationTime)
+  copy.claims?.forEach(claim => claim.support?.forEach(support => {
+    if (support.verification) delete support.verification.checkedAt
+  }))
+  const ordered = (value: unknown): unknown => Array.isArray(value) ? value.map(ordered)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, ordered(entry)])) : value
+  return JSON.stringify(ordered(copy))
 }
 
 async function storageValueToBytes(value: unknown): Promise<Uint8Array> {
@@ -148,11 +181,12 @@ async function storageValueToBytes(value: unknown): Promise<Uint8Array> {
 export async function loadAgentRunResults(
   manifests: RunPayloadManifestStore,
   storage: RunPayloadStorage,
-  input: { runId: string; projectId: string; userId?: string; bucket?: string; now?: number },
+  input: { runId: string; projectId: string; userId?: string; bucket?: string; now?: number; excludeStepId?: string },
 ): Promise<AgentStepResultPayloadV1[]> {
   if (!input.userId || !input.bucket) return []
   const entries = await manifests.list(input.runId, input.projectId)
   const resultEntries = entries.filter((entry) => entry.materialId.startsWith(RESULT_PREFIX)
+    && (!input.excludeStepId || !entry.materialId.startsWith(`${RESULT_PREFIX}${safeSegment(input.excludeStepId)}:`))
     && isScopedAgentPayload(entry, { userId: input.userId, projectId: input.projectId, runId: input.runId, bucket: input.bucket }))
   if (resultEntries.length > MAX_RESULT_ENTRIES) throw new Error('Popis rezultata agenta je prevelik za sigurno učitavanje.')
   const budget = { totalBytes: 0 }

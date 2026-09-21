@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentProvider } from './contracts'
+import { executionContextFixture, executionRecoveryFixture } from './execution-recovery.fixture'
 import { createProviderBackedExecutor } from './provider-worker'
 import { loadRunManuscriptContext } from './run-context-loader'
 
@@ -18,15 +19,28 @@ const manuscript = {
 }
 
 function billingDependencies() {
-  const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-    ? { data: { status: 'reserved' }, error: null }
-    : name === 'katedra_consume'
-      ? { data: { status: 'settled' }, error: null }
-      : { data: { status: 'released' }, error: null })
-  return { db: { rpc }, userId: 'user-1', model: 'agent-model' }
+  return { db: executionRecoveryFixture().db, userId: 'user-1', model: 'agent-model' }
 }
 
 describe('provider-backed worker context', () => {
+  it('runs citation verification again on the recovered original provider output', async () => {
+    const fixture = executionRecoveryFixture()
+    const run = vi.fn(async function* () {
+      yield { type: 'completed' as const, value: { output: 'Original proposal', usage: { inputTokens: 10, outputTokens: 4 } } }
+    })
+    const verifyCitations = vi.fn(async citations => citations)
+    const execute = createProviderBackedExecutor({ projectId: 'project-1', runId: 'run-1',
+      contextRevision: executionContextFixture.contextRevision, loadContext: async () => manuscript,
+      router: { providerFor: () => ({ id: 'fixture', capabilities: ['text'], run }) },
+      billing: { db: fixture.db, userId: 'user-1', model: 'fixture-model' }, verifyCitations })
+    const step = { id: 'step-1', agent: 'writing' as const, verifier: 'writing_verifier' as const, order: 4,
+      attempt: 1 as const, status: 'running' as const,
+      executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } }
+    expect(await execute(step)).toEqual(await execute(step))
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(verifyCitations).toHaveBeenCalledTimes(2)
+    expect(fixture.debitCount()).toBe(1)
+  })
   it('loads and validates a manuscript from private storage', async () => {
     const storage = { download: vi.fn(async () => new TextEncoder().encode(JSON.stringify({ manuscript })).buffer) }
 
@@ -48,6 +62,7 @@ describe('provider-backed worker context', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
@@ -56,7 +71,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       output: 'Nacrt.',
       provider: 'fake',
       citations: [{ id: 'source-1', verified: false }],
@@ -75,6 +90,7 @@ describe('provider-backed worker context', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
@@ -122,7 +138,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'run-1:writing:section-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 4, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'run-1:writing:section-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 4, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       output: 'Nacrt iz plana.',
       inputArtifactIds: ['agent-result:planning:1'],
     })
@@ -136,21 +152,20 @@ describe('provider-backed worker context', () => {
         yield { type: 'completed', value: { output: 'Naplaćeni nacrt.', usage: { inputTokens: 4, outputTokens: 5 } } }
       },
     }
-    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-      ? { data: { status: 'reserved' }, error: null }
-      : name === 'katedra_consume'
-        ? { data: { status: 'settled' }, error: null }
-        : { data: { status: 'released' }, error: null })
+    const { db, rpc } = executionRecoveryFixture()
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
       router: { providerFor: () => provider },
-      billing: { db: { rpc }, userId: 'user-1', model: 'agent-model' },
+      billing: { db, userId: 'user-1', model: 'agent-model' },
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Naplaćeni nacrt.' })
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_request_id: 'run-1:step-1:1', p_project_id: 'project-1' }))
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({ output: 'Naplaćeni nacrt.' })
+    expect(rpc).toHaveBeenCalledWith('claim_agent_provider_execution', expect.objectContaining({
+      p_identity: expect.objectContaining({ requestId: 'run-1:step-1:1', projectId: 'project-1' }),
+    }))
   })
 
   it('records the billed model in provider telemetry', async () => {
@@ -165,6 +180,7 @@ describe('provider-backed worker context', () => {
         },
       }
       const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
         projectId: 'project-1',
         runId: 'run-1',
         loadContext: async () => manuscript,
@@ -172,7 +188,7 @@ describe('provider-backed worker context', () => {
         billing: { db: billingDependencies().db, userId: 'user-1', model: 'fallback-model' },
       })
 
-      await execute({ id: 'step-telemetry', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+      await execute({ id: 'step-telemetry', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })
 
       const events = info.mock.calls
         .map(([line]) => {
@@ -194,6 +210,7 @@ describe('provider-backed worker context', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => ({ ...manuscript, sources: [{ id: 'source-doi', title: 'DOI izvor', urlOrDoi: '10.1234/example', verified: true }] }),
@@ -201,7 +218,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       citations: [{ id: 'source-doi', doi: '10.1234/example', verified: false }],
     })
   })
@@ -215,6 +232,7 @@ describe('provider-backed worker context', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => ({ ...manuscript, sources: [{ id: 'source-doi-url', title: 'DOI URL izvor', urlOrDoi: 'https://doi.org/10.1234/example', verified: true }] }),
@@ -222,7 +240,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       citations: [{ id: 'source-doi-url', doi: '10.1234/example', verified: false }],
     })
   })
@@ -236,6 +254,7 @@ describe('provider-backed worker context', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => ({ ...manuscript, sources: [{ id: 'source-unchecked', title: 'Nepotvrđen izvor', urlOrDoi: '10.1234/example', verified: true }] }),
@@ -243,7 +262,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       citations: [{ id: 'source-unchecked', doi: '10.1234/example', verified: false }],
     })
   })
@@ -272,6 +291,7 @@ describe('provider-backed worker context', () => {
       verification: { status: citation.id === 'source-new' ? 'verified' : 'needs_review', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z' },
     })))
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
@@ -280,7 +300,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       citations: expect.arrayContaining([expect.objectContaining({ id: 'source-new', verified: true, verification: expect.objectContaining({ status: 'verified' }) })]),
     })
     expect(verifyCitations).toHaveBeenCalled()
@@ -317,6 +337,7 @@ describe('provider-backed worker context', () => {
       })),
     })))
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
@@ -326,7 +347,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({
       claims: [{ support: [{ verification: { status: 'verified', claimSupported: 'supported' } }] }],
     })
     expect(verifyPassages).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project-1', runId: 'run-1', requestId: 'run-1:step-1:1:passage', agent: 'writing_verifier', attempt: 1 }))
@@ -353,6 +374,7 @@ describe('provider-backed worker context', () => {
         },
       }
       const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
         projectId: 'project-1',
         runId: 'run-1',
         loadContext: async () => manuscript,
@@ -375,7 +397,7 @@ describe('provider-backed worker context', () => {
         billing: billingDependencies(),
       })
 
-      await execute({ id: 'step-verified', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+      await execute({ id: 'step-verified', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })
 
       const passageLog = info.mock.calls
         .map(([line]) => typeof line === 'string' ? line : '')
@@ -411,6 +433,7 @@ describe('provider-backed worker context', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
@@ -419,7 +442,7 @@ describe('provider-backed worker context', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-vision', agent: 'intake', verifier: 'intake_verifier', order: 0, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Analiza skena.' })
+    await expect(execute({ id: 'step-vision', agent: 'intake', verifier: 'intake_verifier', order: 0, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({ output: 'Analiza skena.' })
   })
 
   it('uses the selected provider model for billing attribution', async () => {
@@ -431,22 +454,19 @@ describe('provider-backed worker context', () => {
         yield { type: 'completed', value: { output: 'Rezultat.', usage: { inputTokens: 10, outputTokens: 4 } } }
       },
     }
-    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-      ? { data: { status: 'reserved' }, error: null }
-      : name === 'katedra_consume'
-        ? { data: { status: 'settled' }, error: null }
-        : { data: { status: 'released' }, error: null })
+    const { db, rpc } = executionRecoveryFixture()
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
       router: { providerFor: () => provider },
-      billing: { db: { rpc }, userId: 'user-1', model: 'default-model' },
+      billing: { db, userId: 'user-1', model: 'default-model' },
     })
 
-    await execute({ id: 'step-model', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+    await execute({ id: 'step-model', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })
 
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_model: 'research-model' }))
+    expect(rpc).toHaveBeenCalledWith('claim_agent_provider_execution', expect.objectContaining({ p_identity: expect.objectContaining({ model: 'research-model' }) }))
   })
 
   it('bounds the default billing request id when a section id is long', async () => {
@@ -457,20 +477,17 @@ describe('provider-backed worker context', () => {
         yield { type: 'completed', value: { output: 'Nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
       },
     }
-    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-      ? { data: { status: 'reserved' }, error: null }
-      : name === 'katedra_consume'
-        ? { data: { status: 'settled' }, error: null }
-        : { data: { status: 'released' }, error: null })
+    const { db, rpc } = executionRecoveryFixture()
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
       router: { providerFor: () => provider },
-      billing: { db: { rpc }, userId: 'user-1', model: 'agent-model' },
+      billing: { db, userId: 'user-1', model: 'agent-model' },
     })
 
-    await execute({ id: `run-1:writing:${'x'.repeat(200)}`, agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })
+    await execute({ id: `run-1:writing:${'x'.repeat(200)}`, agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })
 
     const reservation = (rpc.mock.calls as unknown as Array<[string, Record<string, unknown>]>).find(([name]) => name === 'katedra_reserve_request')?.[1]
     expect(reservation.p_request_id).toHaveLength(78)
@@ -490,6 +507,7 @@ describe('provider-backed worker doctrine', () => {
       },
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       loadContext: async () => manuscript,
@@ -508,7 +526,7 @@ describe('provider-backed worker doctrine', () => {
       billing: billingDependencies(),
     })
 
-    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Nacrt.' })
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending', executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })).resolves.toMatchObject({ output: 'Nacrt.' })
     expect(payload?.system).toContain('ZADATAK writing:')
     expect(payload?.system).toContain('VRSTA RADA: seminarski rad.')
     expect(payload?.system).toContain('gate faze "pisanje"')
