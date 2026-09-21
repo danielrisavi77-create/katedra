@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import type { ManuscriptSourceV1, ManuscriptV1 } from '../../../lib/manuscript/types'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
+import type { readAiLedger } from '../../../lib/manuscript/ai-ledger'
 import type { LektaWorkspaceSummary } from './workspace-client'
 import { FocusTrap } from './focus-trap'
 import { PaidProjectSetup } from './paid-project-setup'
@@ -31,6 +32,9 @@ export function ProjectDrawer({
   requestedTab,
   onTabChange,
   historyEntries = [],
+  aiLedger,
+  ledgerWarning,
+  onExportAiLedger,
 }: {
   open: boolean
   manuscript: ManuscriptV1
@@ -51,6 +55,9 @@ export function ProjectDrawer({
   requestedTab?: ProjectDrawerTab
   onTabChange?: (tab: ProjectDrawerTab) => void
   historyEntries?: LocalHistoryEntry[]
+  aiLedger?: ReturnType<typeof readAiLedger>
+  ledgerWarning?: string
+  onExportAiLedger?: () => void
 }) {
   const requestedDrawerTab = requestedTab === 'defense' && manuscript.workType === 's' ? 'plan' : requestedTab
   const [uncontrolledTab, setUncontrolledTab] = useState<ProjectDrawerTab>(requestedDrawerTab || 'plan')
@@ -170,7 +177,13 @@ export function ProjectDrawer({
           {tab === 'history' && (
             <section>
               <p className="pis-kicker">Samo na ovom uređaju</p><h3>Lokalna povijest projekta</h3>
-              <p className="pis-boundary-note">Ovdje su samo lokalno evidentirane prihvaćene promjene. Tekst rukopisa ne odlazi u povijest projekta.</p>
+              {onExportAiLedger && <>
+                <p className="pis-boundary-note">AI evidencija čuva najviše 200 posljednjih zahtjeva ovog projekta, njihove ishode i tvoje odluke. Ne sadrži prompt ni tekst odgovora, ne sinkronizira se i nije potvrda naplate. Nedovršen zahtjev ima nepoznat konačni ishod.</p>
+                {(ledgerWarning || aiLedger?.status !== 'available') && <p role="status">{ledgerWarning || 'Lokalna AI evidencija nije dostupna. Može biti nepotpuna.'}</p>}
+                <button type="button" onClick={onExportAiLedger} disabled={aiLedger?.status !== 'available'}>Izvezi AI evidenciju</button>
+                {aiLedger?.entries.length ? <ul className="pis-tool-list">{aiLedger.entries.map(entry => <li key={entry.proposalId}><div><b>{entry.action}</b><small>{entry.requestedAt} · {ledgerOutcomeLabel(entry.outcome)} · {ledgerDecisionLabel(entry.decision)}</small></div></li>)}</ul> : <p className="pis-boundary-note">Još nema zabilježenih AI zahtjeva u ovoj evidenciji.</p>}
+              </>}
+              <p className="pis-boundary-note">Dosadašnja povijest prihvaćenih promjena prikazana je u nastavku. Tekst rukopisa ne odlazi u povijest projekta.</p>
               {historyEntries.length > 0 ? <ul className="pis-tool-list">{historyEntries.map((entry) => <li key={`${entry.occurredAt}:${entry.sectionId}`}><div><b>{entry.action}</b><small>{entry.occurredAt} · sekcija {entry.sectionId}</small></div></li>)}</ul> : <p className="pis-boundary-note">Još nema lokalno evidentiranih promjena.</p>}
             </section>
           )}
@@ -190,7 +203,7 @@ export function ProjectDrawer({
           {tab === 'help' && (
             <section>
               <p className="pis-kicker">Kako radi</p><h3>Pišeš ti. Katedra uređuje uz tvoju potvrdu.</h3>
-              <ol className="pis-help-steps"><li><b>Piši u sredini.</b><span>Svako poglavlje ima vlastiti prostor i lokalnu verziju.</span></li><li><b>Označi tekst.</b><span>Katedra dobiva samo aktivnu sekciju ili označeni dio.</span></li><li><b>Pregledaj prijedlog.</b><span>Ništa ne ulazi u rukopis dok ne odabereš Prihvati.</span></li><li><b>Izvezi i provjeri.</b><span>DOCX otvori u Wordu i provjeri u Lekti.</span></li></ol>
+              <ol className="pis-help-steps"><li><b>Piši u sredini.</b><span>Svako poglavlje ima vlastiti prostor i lokalnu verziju.</span></li><li><b>Označi tekst.</b><span>U chatu Katedra dobiva aktivnu sekciju ili označeni dio, uz strukturu rada, naslove izvora i dodane materijale.</span></li><li><b>Pregledaj prijedlog.</b><span>Ništa ne ulazi u rukopis dok ne odabereš Prihvati.</span></li><li><b>Izvezi i provjeri.</b><span>DOCX otvori u Wordu i provjeri u Lekti.</span></li></ol>
             </section>
           )}
         </div>
@@ -198,6 +211,14 @@ export function ProjectDrawer({
       </FocusTrap>
     </div>
   )
+}
+
+function ledgerOutcomeLabel(outcome: string): string {
+  return ({ requested: 'zahtjev poslan; ishod nepoznat', completed: 'prijedlog pripremljen', failed: 'zahtjev nije uspio', cancelled: 'prekinuto na ovom uređaju' } as Record<string, string>)[outcome] || 'nepoznato'
+}
+
+function ledgerDecisionLabel(decision: string): string {
+  return ({ none: 'bez odluke', accepted: 'prihvaćeno', rejected: 'odbijeno', discarded: 'odloženo bez prihvaćanja' } as Record<string, string>)[decision] || 'nepoznato'
 }
 
 export function lektaUrl(manuscript: ManuscriptV1): string {

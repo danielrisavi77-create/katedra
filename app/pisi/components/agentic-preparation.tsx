@@ -6,6 +6,7 @@ import { AgentTeamSelector, type AgentRunMode, type AgentSourcePolicy } from './
 import { AgenticProcessPreview } from './agentic-process-preview'
 import { MaterialLibrary } from './material-library'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import { SNAPSHOT_CONSENT_VERSION } from '../../../lib/agents/snapshot-consent'
 
 const workTypeLabels: Record<ManuscriptV1['workType'], string> = {
   s: 'Seminarski rad',
@@ -35,6 +36,8 @@ export function AgenticPreparation({
   const [materialIds, setMaterialIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [consentProjectId, setConsentProjectId] = useState<string | null>(null)
+  const consentAccepted = consentProjectId === projectId
   const handleMaterialsChange = useCallback((materials: Array<{ id?: string; extractionStatus?: string }>) => {
     setMaterialIds(materials
       .filter((material) => typeof material.id === 'string' && material.id.trim().length > 0 && ['extracted', 'partial', 'needs_review'].includes(material.extractionStatus || ''))
@@ -53,13 +56,15 @@ export function AgenticPreparation({
   }
 
   const startRun = async () => {
+    if (!consentAccepted) return
     setBusy(true)
     setMessage('')
     try {
       const response = await fetch(`/api/agent-runs?projectId=${encodeURIComponent(projectId)}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode, sourcePolicy, sectionIds, materialIds, manuscript }),
+        body: JSON.stringify({ mode, sourcePolicy, sectionIds, materialIds, manuscript,
+          snapshotConsent: { accepted: true, version: SNAPSHOT_CONSENT_VERSION } }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(agentRequestMessage(response.status, body.error, 'Proces izrade nije moguće pokrenuti.'))
@@ -106,7 +111,8 @@ export function AgenticPreparation({
 
       <div className="pis-preparation-step pis-preparation-start">
         <div className="pis-preparation-step-label"><span>03</span><div><b>Pokreni izradu rada</b><small>Tijek se izvršava po kontrolnim točkama. Možeš zatvoriti preglednik, pauzirati ga i kasnije urediti kontekst.</small></div></div>
-        <button type="button" className="is-primary" disabled={busy} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : mode === 'autonomous' ? 'Pokreni autonomni tijek' : 'Pokreni tijek'}</button>
+        <label><input type="checkbox" checked={consentAccepted} disabled={busy} onChange={(event) => setConsentProjectId(event.target.checked ? projectId : null)} /> Pristajem na privatnu privremenu pohranu sadržaja ovog tijeka, najviše 72 sata, radi rada agenata. Povlačenjem pristanka ili brisanjem tijeka tražim brisanje privremenog sadržaja.</label>
+        <button type="button" className="is-primary" disabled={busy || !consentAccepted} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : mode === 'autonomous' ? 'Pokreni autonomni tijek' : 'Pokreni tijek'}</button>
       </div>
       {message && <p className="pis-agent-message" role="alert">{message}</p>}
     </section>

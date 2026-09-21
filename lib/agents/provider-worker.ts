@@ -8,6 +8,7 @@ import type { AgentInput, AgentProvider, AgentResultV1, ClaimEvidence, CitationE
 import type { PassageVerificationResult } from './passage-verification'
 import type { ProviderRouter } from './provider-router'
 import { executeBilledAgentProvider, type BillingDatabase } from './billed-provider-execution'
+import type { ProviderExecutionContext } from './provider-execution-recovery.server'
 import type { AgentStepRecord } from './run-state'
 import type { RunMaterialContext } from './run-context-loader'
 import type { SourcePolicy } from './run-state'
@@ -24,6 +25,7 @@ const DOI_PATTERN = /^10\.\d{4,9}\/\S+$/i
 export function createProviderBackedExecutor(input: {
   projectId: string
   runId: string
+  contextRevision: string
   loadContext: () => Promise<ManuscriptV1>
   loadMaterials?: () => Promise<RunMaterialContext[]>
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
@@ -31,12 +33,14 @@ export function createProviderBackedExecutor(input: {
   loadPolicyBlocked?: (manuscript: ManuscriptV1) => Promise<boolean>
   runMode?: 'guided' | 'accelerated' | 'autonomous'
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
-  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3 }) => Promise<ClaimEvidence[] | PassageVerificationResult>
+  verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3; execution: ProviderExecutionContext }) => Promise<ClaimEvidence[] | PassageVerificationResult>
   sourcePolicy?: SourcePolicy
   billing: { db: BillingDatabase; userId: string; model?: string; modelFor?: (provider: AgentProvider, step: AgentStepRecord) => string; requestIdFor?: (step: AgentStepRecord) => string }
   router: Pick<ProviderRouter, 'providerFor'>
 }) {
   return async (step: AgentStepRecord): Promise<Omit<AgentResultV1, 'agent'>> => {
+    const execution: ProviderExecutionContext = { contextRevision: input.contextRevision, stepId: step.id,
+      workerId: step.executionLease?.workerId, stepClaimedAt: step.executionLease?.claimedAt }
     const manuscript = await input.loadContext()
     const activeSection = step.sectionId
       ? manuscript.sections.find((section) => section.id === step.sectionId)
@@ -67,6 +71,7 @@ export function createProviderBackedExecutor(input: {
       const result = await executeBilledAgentProvider(input.billing.db, {
         provider,
         agentInput,
+        execution,
         userId: input.billing.userId,
         projectId: input.projectId,
         requestId,
@@ -84,7 +89,7 @@ export function createProviderBackedExecutor(input: {
       const candidateCitations = mergeCitations([...inheritedCitations, ...result.citations, ...inheritedArtifacts])
       const citations = input.verifyCitations ? await input.verifyCitations(candidateCitations) : candidateCitations
       const passageVerification = result.claims && input.verifyPassages
-        ? await verifyPassagesWithTelemetry(input, step, requestId, result.claims, citations)
+        ? await verifyPassagesWithTelemetry(input, step, requestId, result.claims, citations, execution)
         : undefined
       const claims = passageVerification?.claims || result.claims
       logAgentEvent({
@@ -135,13 +140,14 @@ async function verifyPassagesWithTelemetry(
   input: {
     projectId: string
     runId: string
-    verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3 }) => Promise<ClaimEvidence[] | PassageVerificationResult>
+    verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3; execution: ProviderExecutionContext }) => Promise<ClaimEvidence[] | PassageVerificationResult>
     billing: { userId: string }
   },
   step: AgentStepRecord,
   requestId: string,
   claims: ClaimEvidence[],
   citations: CitationEvidence[],
+  execution: ProviderExecutionContext,
 ): Promise<PassageVerificationResult> {
   const startedAt = Date.now()
   const verifierRequestId = `${requestId}:passage`
@@ -154,6 +160,7 @@ async function verifyPassagesWithTelemetry(
       requestId: verifierRequestId,
       agent: `${step.agent}_verifier`,
       attempt: step.attempt,
+      execution,
     })
     const result = Array.isArray(raw)
       ? { claims: raw, provider: 'configured-passage-verifier', model: 'unknown', outcome: summarizePassageOutcome(raw) as PassageVerificationResult['outcome'] }

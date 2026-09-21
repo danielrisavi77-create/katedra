@@ -139,7 +139,7 @@ describe('agent worker lease contract', () => {
     expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({ p_status: 'failed', p_requeue: false }))
   })
 
-  it('persists pending billing reconciliation without blindly retrying the provider call', async () => {
+  it('leaves canonical recovery pending without completing a failed placeholder', async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
       .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
@@ -149,19 +149,12 @@ describe('agent worker lease contract', () => {
       verify: vi.fn(),
     })
 
-    expect(result).toMatchObject({ status: 'failed', stepId: 'step-1' })
-    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
-      p_status: 'failed',
-      p_requeue: false,
-      p_verification: expect.objectContaining({
-        status: 'failed',
-        billingState: 'pending_reconciliation',
-        issues: [expect.objectContaining({ code: 'billing_reconciliation_pending' })],
-      }),
-    }))
+    expect(result).toMatchObject({ status: 'reconciliation_pending', stepId: 'step-1' })
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).not.toHaveBeenCalledWith('complete_agent_step', expect.anything())
   })
 
-  it('preserves a settled billing outcome when result persistence fails', async () => {
+  it('preserves the attempt for recovery when settled result persistence is uncertain', async () => {
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: [{ step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', step_order: 0, attempt: 1, status: 'running' }], error: null })
       .mockResolvedValueOnce({ data: { status: 'failed' }, error: null })
@@ -182,11 +175,8 @@ describe('agent worker lease contract', () => {
       verify: vi.fn().mockReturnValue({ status: 'verified', issues: [], evidence: [] }),
     })
 
-    expect(result).toMatchObject({ status: 'failed', stepId: 'step-1' })
-    expect(rpc).toHaveBeenLastCalledWith('complete_agent_step', expect.objectContaining({
-      p_status: 'failed',
-      p_verification: expect.objectContaining({ billingState: 'settled' }),
-    }))
+    expect(result).toMatchObject({ status: 'reconciliation_pending', stepId: 'step-1' })
+    expect(rpc).not.toHaveBeenCalledWith('complete_agent_step', expect.anything())
   })
 })
 

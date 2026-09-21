@@ -240,6 +240,9 @@ function normalizeStep(row: Record<string, unknown>): AgentStepRecord | null {
     attempt: attempt as 1 | 2 | 3,
     status,
     lastVerification: row.last_verification as AgentStepRecord['lastVerification'],
+    ...(typeof row.lease_owner === 'string' && row.lease_owner.trim()
+      && typeof row.claimed_at === 'string' && Number.isFinite(Date.parse(row.claimed_at))
+      ? { executionLease: { workerId: row.lease_owner, claimedAt: row.claimed_at } } : {}),
   }
 }
 

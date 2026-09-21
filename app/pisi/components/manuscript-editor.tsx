@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import Link from '@tiptap/extension-link'
 import StarterKit from '@tiptap/starter-kit'
@@ -8,9 +8,10 @@ import StarterKit from '@tiptap/starter-kit'
 import { isSafeManuscriptHref } from '../../../lib/manuscript/links'
 import { countDocumentWords } from '../../../lib/manuscript/model'
 import type { ManuscriptSectionV1, TiptapNode } from '../../../lib/manuscript/types'
+import type { ProposalApplication } from '../../../lib/manuscript/proposal-application'
 
 export type EditorSelection = { from: number; to: number; text: string }
-export type EditorApplyRequest = { id: string; sectionId: string; mode: 'replace' | 'append'; text: string; from?: number; to?: number }
+export type EditorApplyRequest = ProposalApplication
 
 export function ManuscriptEditor({
   section,
@@ -19,6 +20,7 @@ export function ManuscriptEditor({
   onSelectionChange,
   applyRequest,
   onApplied,
+  onApplyRejected,
 }: {
   section: ManuscriptSectionV1
   acceptedFlash?: boolean
@@ -26,7 +28,9 @@ export function ManuscriptEditor({
   onSelectionChange: (selection: EditorSelection | null) => void
   applyRequest?: EditorApplyRequest | null
   onApplied?: (content: TiptapNode) => void
+  onApplyRejected?: () => void
 }) {
+  const handledRequestRef = useRef<string | null>(null)
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -61,29 +65,43 @@ export function ManuscriptEditor({
   }, [section.id])
 
   useEffect(() => {
-    if (!editor) return
+    if (!editor || editor.isDestroyed) return
     const current = JSON.stringify(editor.getJSON())
     const incoming = JSON.stringify(section.content)
     if (current !== incoming) editor.commands.setContent(section.content, { emitUpdate: false })
   }, [editor, section.content])
 
   useEffect(() => {
-    if (!editor || !applyRequest || applyRequest.sectionId !== section.id) return
+    if (!editor || editor.isDestroyed || !applyRequest || applyRequest.sectionId !== section.id) return
+    if (handledRequestRef.current === applyRequest.id) return
+    handledRequestRef.current = applyRequest.id
+    // Snapshot creation is asynchronous. Check actual editor content at the
+    // mutation boundary, even if the earlier proposal guard already passed.
+    let unchanged = false
+    try {
+      unchanged = editor.state.doc.eq(editor.schema.nodeFromJSON(applyRequest.expectedContent))
+    } catch {
+      // A malformed expected document cannot authorize an editor mutation.
+    }
+    if (!unchanged) {
+      onApplyRejected?.()
+      return
+    }
     const paragraphs = applyRequest.text.split(/\n{2,}/).filter(Boolean).map((text) => ({
       type: 'paragraph',
       content: [{ type: 'text', text }],
     }))
+    let applied = false
     if (applyRequest.mode === 'replace' && applyRequest.from != null && applyRequest.to != null) {
-      editor.chain().focus().insertContentAt({ from: applyRequest.from, to: applyRequest.to }, paragraphs).run()
+      applied = editor.chain().focus().insertContentAt({ from: applyRequest.from, to: applyRequest.to }, paragraphs).run()
     } else if (applyRequest.mode === 'append') {
-      editor.chain().focus('end').insertContent(paragraphs).run()
-    } else {
-      return
+      applied = editor.chain().focus('end').insertContent(paragraphs).run()
     }
-    onApplied?.(editor.getJSON() as TiptapNode)
-  }, [applyRequest, editor, onApplied, section.id])
+    if (applied) onApplied?.(editor.getJSON() as TiptapNode)
+    else onApplyRejected?.()
+  }, [applyRequest, editor, onApplied, onApplyRejected, section.id])
 
-  if (!editor) return <div className="pis-editor-loading">Otvaram rukopis…</div>
+  if (!editor || editor.isDestroyed) return <div className="pis-editor-loading">Otvaram rukopis…</div>
 
   const setLink = () => {
     const previous = editor.getAttributes('link').href as string | undefined

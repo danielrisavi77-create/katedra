@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentProvider, CitationEvidence } from './contracts'
+import { executionContextFixture, executionRecoveryFixture } from './execution-recovery.fixture'
 import { createProviderBackedExecutor } from './provider-worker'
 import type { AgentStepResultPayloadV1 } from './run-result-storage'
 import { createAgentRunState, nextRunnableStep, recordStepVerification } from './run-state'
@@ -33,12 +34,7 @@ const manuscript: ManuscriptV1 = {
 }
 
 function billingDependencies() {
-  const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-    ? { data: { status: 'reserved' }, error: null }
-    : name === 'katedra_consume'
-      ? { data: { status: 'settled' }, error: null }
-      : { data: { status: 'released' }, error: null })
-  return { db: { rpc }, userId: 'golden-user-1', model: 'golden-model' }
+  return { db: executionRecoveryFixture().db, userId: 'golden-user-1', model: 'golden-model' }
 }
 
 function resultPayload(step: ReturnType<typeof nextRunnableStep>, result: Awaited<ReturnType<ReturnType<typeof createProviderBackedExecutor>>>, verification: ReturnType<typeof verifyAgentResult>): AgentStepResultPayloadV1 {
@@ -99,6 +95,7 @@ describe('golden academic workflow', () => {
     })))
     const results: AgentStepResultPayloadV1[] = []
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: PROJECT_ID,
       runId: RUN_ID,
       sourcePolicy: 'web_research',
@@ -117,7 +114,7 @@ describe('golden academic workflow', () => {
     while (true) {
       const step = nextRunnableStep(run)
       if (!step) break
-      const result = await execute(step)
+      const result = await execute({ ...step, executionLease: { workerId: executionContextFixture.workerId, claimedAt: executionContextFixture.stepClaimedAt } })
       const verification = verifyAgentResult({ ...result, agent: step.agent }, { requireIndependentSourceVerification: ['sources', 'writing', 'citation', 'review'].includes(step.agent) })
       expect(verification.status, `${step.agent} should pass its verifier`).toBe('verified')
       results.push(resultPayload(step, result, verification))

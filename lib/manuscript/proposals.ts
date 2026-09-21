@@ -50,6 +50,7 @@ export function proposalApplyRange(
   currentContent: TiptapNode,
 ): { from: number; to: number } | null {
   if (mode !== 'replace' || isProposalStale(proposal, currentContent)) return null
+  if (typeof proposal.selectedFrom !== 'number' || typeof proposal.selectedTo !== 'number') return null
   if (!Number.isInteger(proposal.selectedFrom) || !Number.isInteger(proposal.selectedTo)) return null
   if (proposal.selectedFrom < 0 || proposal.selectedTo < proposal.selectedFrom) return null
   return { from: proposal.selectedFrom, to: proposal.selectedTo }

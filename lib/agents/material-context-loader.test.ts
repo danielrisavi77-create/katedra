@@ -1,8 +1,30 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { loadRunManuscriptContext, loadRunMaterialContexts } from './run-context-loader'
+import { extractMaterial, MATERIAL_LIMITS } from '../materials/extractors'
 
 describe('run material context loader', () => {
+  it('consumes a successfully truncated extraction without silently dropping the material', async () => {
+    const extraction = await extractMaterial({
+      name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('x'.repeat(MATERIAL_LIMITS.maxTextChars + 1)),
+    })
+    const manifests = { list: async () => [{
+      materialId: 'material-1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket',
+      storagePath: 'user-1/project-1/run-1/raw', manifestPath: 'user-1/project-1/run-1/manifest',
+    }] }
+    const storage = { download: async () => JSON.stringify({
+      id: 'material-1', projectId: 'project-1', name: 'notes.txt', kind: 'notes', mimeType: 'text/plain',
+      extractionStatus: extraction.status, extractedText: extraction.text, warnings: extraction.warnings,
+      expiresAt: '2026-09-08T12:00:00.000Z',
+    }) }
+    const contexts = await loadRunMaterialContexts(manifests, storage, {
+      userId: 'user-1', projectId: 'project-1', runId: 'run-1', bucket: 'bucket', now: Date.parse('2026-09-07T12:00:00.000Z'),
+    })
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0].text).toBe(extraction.text)
+    expect(contexts[0].warnings).toEqual(extraction.warnings)
+  })
+
   it('rejects an oversized manuscript object before attempting JSON parsing', async () => {
     const storage = { download: vi.fn(async () => `${' '.repeat(5 * 1024 * 1024)}{`) }
 

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc --project tsconfig.strict.json --noEmit",
+    "check:database-projection": "node scripts/check-database-projection.mjs",
     "test": "vitest run",
     "test:ci": "vitest run --maxWorkers=2",
     "test:e2e:authenticated": "node scripts/authenticated-money-flow-e2e.mjs",
@@ -26,14 +28,14 @@
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.108.2",
-    "@tiptap/extension-link": "3.30.1",
-    "@tiptap/extensions": "3.30.1",
-    "@tiptap/react": "3.30.1",
-    "@tiptap/starter-kit": "3.30.1",
+    "@tiptap/extension-link": "3.31.3",
+    "@tiptap/extensions": "3.31.3",
+    "@tiptap/react": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
     "busboy": "^1.6.0",
     "docx": "9.7.1",
     "mammoth": "^1.12.0",
-    "next": "^16.3.0",
+    "next": "^16.3.4",
     "pdfjs-dist": "^5.4.54",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -46,7 +48,7 @@
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.4",
     "@types/node": "^22",
-    "@types/react": "19.2.14",
+    "@types/react": "19.3.0",
     "eslint": "^9",
     "eslint-config-next": "^16.3.0",
     "fake-indexeddb": "6.2.5",
@@ -54,11 +56,13 @@
     "playwright": "^1.61.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@types/react-dom": "19.3.0"
   },
   "overrides": {
     "postcss": {
       "nanoid": "3.3.18"
-    }
+    },
+    "@xmldom/xmldom": "0.8.15"
   }
 }

@@ -180,6 +180,23 @@ export interface ResolvedCapability {
   sourceVerifiedDate?: string
 }
 
+function isPastOrPresentPolicyDate(value: unknown, now: Date): boolean {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+    && parsed.getTime() <= now.getTime()
+}
+
+function hasVerifiedEvidence(fact: ProcessFact, now: Date): boolean {
+  if (fact.status !== 'verified' || typeof fact.source?.t !== 'string' || !fact.source.t.trim()) return false
+  try {
+    const source = new URL(fact.source.u)
+    if (!['http:', 'https:'].includes(source.protocol) || source.username || source.password) return false
+  } catch { return false }
+  return isPastOrPresentPolicyDate(fact.verifiedDate, now)
+    && (!fact.effectiveDate || isPastOrPresentPolicyDate(fact.effectiveDate, now))
+}
+
 /**
  * Resolves the effective answer for one AI capability against a unit's
  * process facts, most-specific-scope-first (course > program > faculty >
@@ -195,10 +212,17 @@ export function resolveCapability(
   pack: ProcessFactPack | null,
   unitId: string,
   capability: AiCapabilityId,
+  now: Date = new Date(),
 ): ResolvedCapability {
   for (const fact of processFactsForUnit(pack, unitId)) {
     const answer = fact.aiCapabilities?.[capability] ?? deriveFromStance(fact.aiPolicy, capability)
     if (!answer) continue
+    // A unit ID alone cannot establish the student's program/course. Until
+    // that applicability contract is supplied, narrower facts cannot unlock
+    // a capability or supply a self-reported mentor-approval escape hatch.
+    if (!hasVerifiedEvidence(fact, now) || fact.scope === 'course' || fact.scope === 'program') {
+      return { capability, stance: 'unspecified', effective: 'blocked', sourceFactId: fact.id, sourceStatus: 'unverified' }
+    }
     return {
       capability,
       stance: answer.stance,
@@ -249,13 +273,15 @@ const SCOPE_PRIORITY: Record<ProcessFactScope, number> = {
 }
 
 export function processFactsForUnit(pack: ProcessFactPack | null, unitId: string): ProcessFact[] {
-  if (!pack || !unitId) return []
+  if (!pack || !unitId || !Array.isArray(pack.entries)) return []
   return pack.entries
-    .filter((f) => f.unitId === unitId && !f.supersededBy)
+    .filter((f) => f && f.unitId === unitId && !f.supersededBy && Object.hasOwn(SCOPE_PRIORITY, f.scope))
     .sort((a, b) => SCOPE_PRIORITY[a.scope] - SCOPE_PRIORITY[b.scope])
 }
 
 /** The single most-specific applicable fact, if any — for compact badge UI. */
 export function primaryProcessFactForUnit(pack: ProcessFactPack | null, unitId: string): ProcessFact | null {
-  return processFactsForUnit(pack, unitId)[0] || null
+  const fact = processFactsForUnit(pack, unitId)[0]
+  if (!fact) return null
+  return hasVerifiedEvidence(fact, new Date()) ? fact : { ...fact, status: 'unverified' }
 }

@@ -1,11 +1,8 @@
-import { randomUUID } from 'node:crypto'
-import { loadRunContextManifest } from './run-context-loader'
-import { registerAgentPayload } from './backend-contract'
 import { MAX_AGENT_CONTEXT_BYTES, runContextStoragePaths, validateAgentRunContext } from './run-context'
 import type { PlanApprovalV1 } from './plan-approval'
+import { trackedPayloadUpload, type TrackedUploadClient } from './tracked-upload'
 
 const DEFAULT_BUCKET = 'katedra-temporary-materials'
-const CONTEXT_TTL_MS = 72 * 60 * 60 * 1000
 
 interface StorageObjectClient {
   download?: (path: string) => Promise<{ data?: { arrayBuffer: () => Promise<ArrayBuffer | Uint8Array> } | null; error?: unknown }>
@@ -14,13 +11,13 @@ interface StorageObjectClient {
 }
 
 interface RunContextDatabase {
-  rpc: (functionName: string, params: Record<string, unknown>) => Promise<{ data?: unknown; error?: { message?: string } | null }>
+  rpc: (functionName: string, params: Record<string, unknown>) => Promise<{ data?: unknown; error?: { message?: string; code?: string } | null }>
   storage: { from: (bucket: string) => StorageObjectClient }
 }
 
 export type StoreRunContextResult =
   | { ok: true; value: { manifestId: string; expiresAt: string; storagePath: string; manifestPath: string } }
-  | { ok: false; status: 400 | 403 | 413 | 503; error: string }
+  | { ok: false; status: 400 | 403 | 409 | 413 | 503; error: string }
 
 export async function storeAgentRunContext(
   db: RunContextDatabase,
@@ -29,9 +26,11 @@ export async function storeAgentRunContext(
     projectId: string
     runId: string
     manuscript: unknown
+    materialIds?: string[]
     bucket?: string
     now?: () => number
   },
+  createUploadClient: () => TrackedUploadClient = () => db,
 ): Promise<StoreRunContextResult> {
   const validated = validateAgentRunContext({ manuscript: input.manuscript }, input.projectId)
   if (validated.ok === false) return {
@@ -40,54 +39,61 @@ export async function storeAgentRunContext(
     error: validated.error,
   }
 
-  const contextRevision = randomUUID()
-  const body = new TextEncoder().encode(JSON.stringify({ manuscript: validated.manuscript, contextRevision }))
-  if (body.byteLength > MAX_AGENT_CONTEXT_BYTES) return { ok: false, status: 413, error: 'Kontekst rukopisa je prevelik.' }
+  try {
+    const reserved = await db.rpc('reserve_agent_run_context', { p_user_id: input.userId, p_project_id: input.projectId, p_run_id: input.runId })
+    const allocation = Array.isArray(reserved.data) && reserved.data.length === 1 ? reserved.data[0] : null
+    if (reserved.error || !allocation || typeof allocation.manifest_id !== 'string' || !allocation.manifest_id
+      || typeof allocation.context_revision !== 'string' || typeof allocation.expires_at !== 'string') {
+      return { ok: false, status: 503, error: 'Rezervacija konteksta nije uspjela.' }
+    }
+    const contextRevision = allocation.context_revision
+    const { storagePath, manifestPath } = runContextStoragePaths(input.userId, input.projectId, input.runId, contextRevision)
+    const expiresAt = allocation.expires_at
+    if (allocation.storage_path !== storagePath || allocation.manifest_path !== manifestPath
+      || !(Date.parse(expiresAt) > (input.now || Date.now)())) {
+      return { ok: false, status: 503, error: 'Rezervacija konteksta nije valjana za ovaj run.' }
+    }
+    const body = new TextEncoder().encode(JSON.stringify({ manuscript: validated.manuscript, contextRevision }))
+    if (body.byteLength > MAX_AGENT_CONTEXT_BYTES) return { ok: false, status: 413, error: 'Kontekst rukopisa je prevelik.' }
 
-  const { storagePath, manifestPath } = runContextStoragePaths(input.userId, input.projectId, input.runId)
-  const expiresAt = new Date((input.now || Date.now)() + CONTEXT_TTL_MS).toISOString()
-  const bucket = input.bucket || DEFAULT_BUCKET
-  const storage = db.storage.from(bucket)
-  const upload = await storage.upload(storagePath, body, { contentType: 'application/json', cacheControl: '0', upsert: true })
-  if (upload.error) return { ok: false, status: 503, error: 'Privremena pohrana konteksta nije uspjela.' }
+    const bucket = input.bucket || DEFAULT_BUCKET
+    if (bucket !== DEFAULT_BUCKET) return { ok: false, status: 503, error: 'Privremeni bucket ne odgovara kanonskom ugovoru.' }
+    const uploadClient = createUploadClient()
+    const uploaded = await trackedPayloadUpload(uploadClient, { manifestId: allocation.manifest_id, kind: 'body', path: storagePath, body })
+    if (!uploaded) return { ok: false, status: 503, error: 'Privremena pohrana konteksta nije potvrđena.' }
 
-  const manifest = {
-    schemaVersion: 1,
-    kind: 'run-context',
-    contextRevision,
-    materialId: 'run-context',
-    runId: input.runId,
-    projectId: input.projectId,
-    storagePath,
-    contentType: 'application/json',
-    expiresAt,
+    const manifest = {
+      schemaVersion: 1,
+      kind: 'run-context',
+      contextRevision,
+      materialId: 'run-context',
+      runId: input.runId,
+      projectId: input.projectId,
+      storagePath,
+      contentType: 'application/json',
+      expiresAt,
+    }
+    const manifestUploaded = await trackedPayloadUpload(uploadClient, {
+      manifestId: allocation.manifest_id, kind: 'manifest', path: manifestPath, body: new TextEncoder().encode(JSON.stringify(manifest)),
+    })
+    if (!manifestUploaded) {
+      return { ok: false, status: 503, error: 'Spremanje statusa konteksta nije uspjelo.' }
+    }
+
+    const committed = await db.rpc('commit_agent_run_context', {
+      p_user_id: input.userId, p_project_id: input.projectId, p_run_id: input.runId,
+      p_manifest_id: allocation.manifest_id, p_material_ids: input.materialIds ?? [],
+    })
+    if (committed.error || committed.data !== allocation.manifest_id) {
+      // Odgovor se moze izgubiti nakon commita. Brisanje ovdje moglo bi izbrisati aktivnu verziju.
+      // Kanonski TTL i cleanup obradjuju neobjavljene rezervacije.
+      return { ok: false, status: committed.error?.code === '40901' ? 409 : 503, error: 'Objava konteksta nije potvrđena.' }
+    }
+
+    return { ok: true, value: { manifestId: allocation.manifest_id, expiresAt, storagePath, manifestPath } }
+  } catch {
+    return { ok: false, status: 503, error: 'Privremena pohrana konteksta nije dostupna.' }
   }
-  const manifestUpload = await storage.upload(manifestPath, new TextEncoder().encode(JSON.stringify(manifest)), {
-    contentType: 'application/json',
-    cacheControl: '0',
-    upsert: true,
-  })
-  if (manifestUpload.error) {
-    await storage.remove([storagePath])
-    return { ok: false, status: 503, error: 'Spremanje statusa konteksta nije uspjelo.' }
-  }
-
-  const registered = await registerAgentPayload(db, {
-    userId: input.userId,
-    projectId: input.projectId,
-    runId: input.runId,
-    materialId: 'run-context',
-    storageBucket: bucket,
-    storagePath,
-    manifestPath,
-    expiresAt,
-  })
-  if (!registered.ok) {
-    await storage.remove([storagePath, manifestPath])
-    return { ok: false, status: 503, error: 'Registracija konteksta nije uspjela.' }
-  }
-
-  return { ok: true, value: { manifestId: registered.value.manifestId, expiresAt, storagePath, manifestPath } }
 }
 
 
@@ -96,16 +102,19 @@ export async function storePlanApproval(db: RunContextDatabase, input: {
   userId: string; projectId: string; runId: string; contextRevision: string;
   planApproval: PlanApprovalV1; bucket?: string
 }): Promise<{ ok: true } | { ok: false; status: 409 | 503; error: string }> {
-  const paths = runContextStoragePaths(input.userId, input.projectId, input.runId)
-  const storage = db.storage.from(input.bucket || DEFAULT_BUCKET)
-  const manifest = await loadRunContextManifest({ download: async (path) => {
-    const result = await storage.download?.(path)
-    if (!result?.data || result.error) throw new Error('Context manifest unavailable')
-    return result.data.arrayBuffer()
-  } }, { ...paths, projectId: input.projectId, runId: input.runId, contextRevision: input.contextRevision })
-  if (!manifest) return { ok: false, status: 409, error: 'Kontekst se promijenio. Ponovno pošalji kontekst pa pregledaj i odobri plan.' }
-  const upload = await storage.upload(paths.manifestPath, new TextEncoder().encode(JSON.stringify({
-    ...manifest, planApproval: input.planApproval,
-  })), { contentType: 'application/json', cacheControl: '0', upsert: true })
-  return upload.error ? { ok: false, status: 503, error: 'Potvrdu plana nije moguće spremiti.' } : { ok: true }
+  try {
+    const result = await db.rpc('approve_agent_run_context_plan', {
+      p_user_id: input.userId, p_project_id: input.projectId, p_run_id: input.runId,
+      p_context_revision: input.contextRevision, p_plan_revision: input.planApproval.planRevision, p_approve: true,
+    })
+    if (result.error) return { ok: false, status: result.error.code === '40901' ? 409 : 503, error: 'Potvrda nije spremljena. Ponovno pregledaj aktivni plan.' }
+    const approval = result.data as Partial<PlanApprovalV1> | null
+    if (!approval || approval.approvedBy !== input.userId || approval.runId !== input.runId
+      || approval.projectId !== input.projectId || approval.planRevision !== input.planApproval.planRevision) {
+      return { ok: false, status: 503, error: 'Kanonska potvrda plana nije dostupna.' }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, status: 503, error: 'Potvrdu plana nije moguće spremiti.' }
+  }
 }

@@ -17,6 +17,18 @@ vi.mock('@/lib/stripe/catalog', () => ({
 import { POST } from './route'
 
 const projectId = '11111111-1111-4111-8111-111111111111'
+function refundLedgerRpc() {
+  return vi.fn(async (name) => {
+    if (name === 'read_katedra_pass_refund') return { data: null, error: null }
+    if (name === 'claim_katedra_pass_refund') return { data: {
+      session_id: 'cs_second', payment_intent_id: 'pi_second', amount: 12990, currency: 'eur',
+      lease_token: 'lease-1', refund_id: null, status: 'requested', creation_attempted_at: null,
+    }, error: null }
+    if (['mark_katedra_refund_attempt', 'record_katedra_pass_refund'].includes(name)) return { data: null, error: null }
+    throw new Error('Duplicate payment must not grant a wallet or entitlement')
+  })
+}
+const refundEvidence = (id, status) => ({ id, status, amount: 12990, currency: 'eur', payment_intent: 'pi_second' })
 
 function request() {
   return new Request('http://localhost/api/webhook', {
@@ -32,6 +44,81 @@ afterEach(() => {
 })
 
 describe('POST /api/webhook runtime guards', () => {
+  it.each([true, false])('does not grant a refunded purchase after original Pass expiry (ledger=%s)', async (recorded) => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
+    const baseRpc = refundLedgerRpc().getMockImplementation()
+    const rpc = vi.fn((name, params) => name === 'read_katedra_pass_refund'
+      ? Promise.resolve({ data: recorded ? { session_id: 'cs_second', status: 'pending' } : null, error: null }) : baseRpc(name, params))
+    const from = vi.fn(table => {
+      const query = { select: () => query, eq: () => query, or: () => query, gt: () => query, limit: () => query,
+        maybeSingle: async () => ({ data: table === 'katedra_projects' ? { user_id: 'user-1', project_id: projectId, work_type_canonical: 'graduate' } : null, error: null }),
+        insert: () => { throw new Error('Refunded purchase must not grant entitlement') } }
+      return query
+    })
+    mocks.createAdminClient.mockReturnValue({ rpc, from })
+    mocks.getStripe.mockReturnValue({ webhooks: { constructEvent: () => ({ type: 'checkout.session.completed', data: { object: {
+      id: 'cs_second', mode: 'payment', payment_status: 'paid', currency: 'eur', amount_total: 12990, payment_intent: 'pi_second',
+      metadata: { user_id: 'user-1', academic_project_id: projectId, product_key: 'diplomski', product_id: 'katedra_pass_diplomski', tokens: '12000000', amount_eur: '129.9' },
+    } } }) }, refunds: { list: vi.fn().mockResolvedValue({ data: [refundEvidence('re_recovered', 'succeeded')], has_more: false }) } })
+    expect((await POST(request())).status).toBe(200)
+    expect(from.mock.calls).toEqual([['katedra_projects']])
+    expect(rpc.mock.calls.some(([name]) => name === 'katedra_grant')).toBe(false)
+  })
+  it.each([
+    ['exact replay', {}, 200],
+    ['missing purchase', null, 500],
+    ['foreign owner', { user_id: 'other-user' }, 500],
+    ['foreign project', { academic_project_id: '22222222-2222-4222-8222-222222222222' }, 500],
+    ['wrong product', { product_id: 'katedra_pass_seminarski' }, 500],
+    ['wrong work type', { work_type: 'seminarski' }, 500],
+    ['wrong provider', { provider: 'other' }, 500],
+    ['wrong order', { order_id: 'cs_other' }, 500],
+    ['lookup error', { lookupError: true }, 500],
+    ['lookup rejects', { lookupThrows: true }, 500],
+  ])('proves purchase identity after a unique conflict: %s', async (_name, override, expectedStatus) => {
+    vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'false')
+    mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
+    mocks.getStripe.mockReturnValue({ webhooks: { constructEvent: () => ({
+      type: 'checkout.session.completed', data: { object: {
+        id: 'cs_replay', payment_intent: 'pi_replay', mode: 'payment', payment_status: 'paid', currency: 'eur', amount_total: 12_990,
+        metadata: { user_id: 'user-1', academic_project_id: projectId, product_key: 'diplomski', product_id: 'katedra_pass_diplomski', tokens: '12000000', amount_eur: '129.9' },
+      } },
+    }) }, refunds: { list: vi.fn().mockResolvedValue({ data: [], has_more: false }) } })
+    let inserted = false
+    const replayFilters = []
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null })
+    const db = {
+      rpc,
+      from(table) {
+        const query = {
+          select() { return query },
+          eq(column, value) { if (inserted) replayFilters.push([column, value]); return query },
+          or() { return query }, gt() { if (inserted) throw new Error('Replay identity must not filter expiry'); return query }, limit() { return query },
+          async insert() { inserted = true; return { error: { code: '23505' } } },
+          async maybeSingle() {
+            if (table === 'katedra_projects') return { data: { user_id: 'user-1', project_id: projectId, work_type_canonical: 'graduate' }, error: null }
+            if (!inserted) return { data: null, error: null }
+            if (override?.lookupThrows) throw new Error('private-database-detail')
+            return {
+              data: override === null ? null : { id: 'entitlement-1', user_id: 'user-1', academic_project_id: projectId, provider: 'stripe', order_id: 'cs_replay', product_id: 'katedra_pass_diplomski', work_type: 'diplomski', ...override },
+              error: override?.lookupError ? { code: 'XX000', message: 'private-database-detail' } : null,
+            }
+          },
+        }
+        return query
+      },
+    }
+    mocks.createAdminClient.mockReturnValue(db)
+    const response = await POST(request())
+    expect(response.status).toBe(expectedStatus)
+    expect(await response.text()).not.toContain('private-database-detail')
+    if (expectedStatus === 200) {
+      expect(rpc).toHaveBeenCalledWith('katedra_grant', expect.objectContaining({ p_user: 'user-1', p_session: 'cs_replay' }))
+      expect(replayFilters).toEqual([['provider', 'stripe'], ['order_id', 'cs_replay']])
+    } else expect(rpc.mock.calls.every(([name]) => name === 'read_katedra_pass_refund')).toBe(true)
+  })
+
   it('returns a retryable response when the admin client is unavailable', async () => {
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
     mocks.getStripe.mockReturnValue({
@@ -171,7 +258,7 @@ describe('POST /api/webhook runtime guards', () => {
     expect(mocks.createAdminClient).not.toHaveBeenCalled()
   })
 
-  it('does not grant a second active Pass for a concurrent paid session', async () => {
+  it.each(['succeeded', 'pending', 'failed'])('does not grant a second active Pass when duplicate refund is %s', async (refundStatus) => {
     mocks.getStripe.mockReturnValue({
       webhooks: {
         constructEvent: vi.fn().mockReturnValue({
@@ -198,7 +285,7 @@ describe('POST /api/webhook runtime guards', () => {
       },
     })
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
-    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second' })
+    const refundCreate = vi.fn().mockResolvedValue(refundEvidence('re_second', refundStatus))
     const calls = []
     const db = {
       from(table) {
@@ -220,7 +307,7 @@ describe('POST /api/webhook runtime guards', () => {
         }
         return query
       },
-      rpc: vi.fn(() => { throw new Error('duplicate session must not grant wallet') }),
+      rpc: refundLedgerRpc(),
     }
     mocks.createAdminClient.mockReturnValue(db)
     mocks.getStripe.mockReturnValue({
@@ -245,17 +332,17 @@ describe('POST /api/webhook runtime guards', () => {
           },
         } },
       }) },
-      refunds: { create: refundCreate },
+      refunds: { create: refundCreate, list: vi.fn().mockResolvedValue({ data: [], has_more: false }) },
     })
 
     const response = await POST(request())
 
-    expect(response.status).toBe(200)
-    expect(await response.text()).toBe('ok')
-    expect(db.rpc).not.toHaveBeenCalled()
+    expect(response.status).toBe(refundStatus === 'succeeded' ? 200 : 500)
+    expect(await response.text()).toBe(refundStatus === 'succeeded' ? 'ok' : 'duplicate refund pending')
+    expect(db.rpc.mock.calls.map(([name]) => name)).toEqual(['read_katedra_pass_refund', 'claim_katedra_pass_refund', 'mark_katedra_refund_attempt', 'record_katedra_pass_refund'])
     expect(refundCreate).toHaveBeenCalledWith(
       { payment_intent: 'pi_second' },
-      { idempotencyKey: 'katedra-duplicate-pass-cs_second' },
+      { idempotencyKey: 'katedra-duplicate-pass-cs_second', timeout: 10_000, maxNetworkRetries: 0 },
     )
     expect(calls).toEqual([
       ['from', 'katedra_projects'],
@@ -287,6 +374,7 @@ describe('POST /api/webhook runtime guards', () => {
           },
         } },
       }) },
+      refunds: { list: vi.fn().mockResolvedValue({ data: [], has_more: false }) },
     })
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
     const calls = []
@@ -337,10 +425,10 @@ describe('POST /api/webhook runtime guards', () => {
   it('refunds a second payment when the canonical project lock already belongs to another session', async () => {
     vi.stubEnv('KATEDRA_PROJECT_LOCKS_ENABLED', 'true')
     mocks.getKatedraPackage.mockReturnValue({ productId: 'katedra_pass_diplomski', tokens: 12_000_000, eur: 129.9, workType: 'graduate' })
-    const refundCreate = vi.fn().mockResolvedValue({ id: 're_second_lock_race' })
+    const refundCreate = vi.fn().mockResolvedValue(refundEvidence('re_second_lock_race', 'succeeded'))
     const calls = []
     const db = {
-      rpc: vi.fn(() => { throw new Error('a duplicate lock race must not grant wallet') }),
+      rpc: refundLedgerRpc(),
       from(table) {
         calls.push(['from', table])
         const query = {
@@ -381,7 +469,7 @@ describe('POST /api/webhook runtime guards', () => {
           },
         } },
       }) },
-      refunds: { create: refundCreate },
+      refunds: { create: refundCreate, list: vi.fn().mockResolvedValue({ data: [], has_more: false }) },
     })
 
     const response = await POST(request())
@@ -390,9 +478,9 @@ describe('POST /api/webhook runtime guards', () => {
     expect(await response.text()).toBe('ok')
     expect(refundCreate).toHaveBeenCalledWith(
       { payment_intent: 'pi_second' },
-      { idempotencyKey: 'katedra-duplicate-pass-cs_second' },
+      { idempotencyKey: 'katedra-duplicate-pass-cs_second', timeout: 10_000, maxNetworkRetries: 0 },
     )
-    expect(db.rpc).not.toHaveBeenCalled()
+    expect(db.rpc.mock.calls.map(([name]) => name)).toEqual(['read_katedra_pass_refund', 'claim_katedra_pass_refund', 'mark_katedra_refund_attempt', 'record_katedra_pass_refund'])
     expect(calls).toEqual([
       ['from', 'katedra_projects'],
       ['from', 'entitlements'],

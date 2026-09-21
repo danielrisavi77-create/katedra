@@ -25,6 +25,21 @@ afterEach(() => {
 })
 
 describe('AgenticPreparation', () => {
+  it('does not send a run until consent is selected for that project', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ materials: [] }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const { rerender } = render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} onRunCreated={vi.fn()} />)
+    const start = screen.getByRole('button', { name: 'Pokreni tijek' }) as HTMLButtonElement
+    expect(start.disabled).toBe(true)
+    await user.click(start)
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(false)
+    await user.click(screen.getByRole('checkbox', { name: /Pristajem na privatnu/ }))
+    expect(start.disabled).toBe(false)
+    rerender(<AgenticPreparation projectId="project-2" passActive sectionIds={['intro']} manuscript={{ ...manuscript, projectId: 'project-2' }} onRunCreated={vi.fn()} />)
+    expect(start.disabled).toBe(true)
+  })
+
   it('explains why preparation is locked without an active Pass', () => {
     render(<AgenticPreparation projectId="project-1" passActive={false} sectionIds={['intro']} manuscript={manuscript} onRunCreated={vi.fn()} />)
 
@@ -43,11 +58,12 @@ describe('AgenticPreparation', () => {
     render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} webResearchAvailable onRunCreated={onRunCreated} />)
     await user.click(screen.getByRole('radio', { name: /Autonomno/ }))
     await user.click(screen.getByRole('radio', { name: /Šira pretraga/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Pristajem na privatnu/ }))
     await user.click(screen.getByRole('button', { name: 'Pokreni autonomni tijek' }))
 
     expect(fetchMock).toHaveBeenLastCalledWith('/api/agent-runs?projectId=project-1', expect.objectContaining({
       method: 'POST',
-      body: JSON.stringify({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro'], materialIds: [], manuscript }),
+      body: JSON.stringify({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro'], materialIds: [], manuscript, snapshotConsent: { accepted: true, version: 'agentic-snapshot-v1' } }),
     }))
     expect(onRunCreated).toHaveBeenCalledWith('run-1')
   })
@@ -103,6 +119,7 @@ describe('AgenticPreparation', () => {
 
     render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} onRunCreated={vi.fn()} />)
     await screen.findByText(/Pro.*itano/)
+    await user.click(screen.getByRole('checkbox', { name: /Pristajem na privatnu/ }))
     await user.click(screen.getByRole('button', { name: 'Pokreni tijek' }))
 
     const request = JSON.parse(fetchMock.mock.calls[1][1].body as string) as { materialIds: string[] }

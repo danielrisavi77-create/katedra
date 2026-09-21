@@ -1,24 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentProvider } from './contracts'
+import { executionContextFixture, executionRecoveryFixture } from './execution-recovery.fixture'
 import { createProviderBackedExecutor } from './provider-worker'
 import { runAgentWorkerLoop } from './worker-loop'
 import { verifyAgentResult } from './verifier'
 
 describe('agentic runtime integration', () => {
   it('runs one claimed step through provider, verifier, billing and completion', async () => {
+    const fixture = executionRecoveryFixture()
     let claimed = true
-    const rpc = vi.fn(async (name: string) => {
+    const rpc = vi.fn(async (name: string, params: Record<string, unknown>) => {
       if (name === 'claim_agent_step' && claimed) {
         claimed = false
-        return { data: { step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', section_id: 'section-1', step_order: 1, attempt: 1, status: 'pending' }, error: null }
+        return { data: { step_id: 'step-1', agent: 'writing', verifier: 'writing_verifier', section_id: 'section-1', step_order: 1, attempt: 1, status: 'running', lease_owner: 'worker-1', claimed_at: executionContextFixture.stepClaimedAt }, error: null }
       }
       if (name === 'claim_agent_step') return { data: null, error: null }
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
-      if (name === 'katedra_release_request') return { data: { status: 'released' }, error: null }
       if (name === 'complete_agent_step') return { data: { status: 'verified' }, error: null }
-      return { data: null, error: null }
+      return fixture.rpc(name, params)
     })
     const provider: AgentProvider = {
       id: 'fake-provider',
@@ -49,6 +48,7 @@ describe('agentic runtime integration', () => {
       updatedAt: '2026-08-14T10:00:00.000Z',
     }
     const execute = createProviderBackedExecutor({
+      contextRevision: executionContextFixture.contextRevision,
       projectId: 'project-1',
       runId: 'run-1',
       sourcePolicy: 'uploaded_only',
@@ -59,7 +59,7 @@ describe('agentic runtime integration', () => {
         verification: { status: 'verified', method: 'crossref', checkedAt: '2026-08-16T12:00:00.000Z' },
       })),
       router: { providerFor: () => provider },
-      billing: { db: { rpc }, userId: 'user-1', model: 'agent-model' },
+      billing: { db: { ...fixture.db, rpc }, userId: 'user-1', model: 'agent-model' },
     })
 
     const result = await runAgentWorkerLoop(
@@ -69,7 +69,9 @@ describe('agentic runtime integration', () => {
     )
 
     expect(result).toMatchObject({ status: 'limit', stepsProcessed: 1, lastStepId: 'step-1' })
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_request_id: 'run-1:step-1:1' }))
+    expect(rpc).toHaveBeenCalledWith('claim_agent_provider_execution', expect.objectContaining({ p_identity: expect.objectContaining({ requestId: 'run-1:step-1:1' }) }))
+    expect(rpc).toHaveBeenCalledWith('start_agent_provider_execution', expect.objectContaining({ p_worker_id: 'worker-1', p_step_claimed_at: executionContextFixture.stepClaimedAt }))
+    expect(fixture.debitCount()).toBe(1)
     expect(rpc).toHaveBeenCalledWith('complete_agent_step', expect.objectContaining({ p_status: 'verified', p_worker_id: 'worker-1' }))
   })
 })

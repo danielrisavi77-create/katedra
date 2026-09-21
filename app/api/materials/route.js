@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { createMaterialProvider } from '@/lib/materials/provider'
 import { MATERIAL_LIMITS } from '@/lib/materials/extractors'
-import { registerAgentPayload } from '@/lib/agents/backend-contract'
+import { storeMaterialPayload } from '@/lib/materials/payload-storage'
 import { resolveCanonicalProjectPass } from '@/lib/product/server-capabilities'
 import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveDistributedRequest, reserveUserRequest } from '@/lib/ai/rate-limit'
 import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
@@ -12,6 +12,7 @@ import { privateJson } from '@/lib/observability/private-response.js'
 import { mapWithConcurrency } from '@/lib/async/map-limited'
 import { readMultipartForm } from '@/lib/http/multipart.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
+import { MATERIAL_CONSENT_HEADER, MATERIAL_CONSENT_VERSION } from '@/lib/materials/consent'
 
 const ENABLED = process.env.KATEDRA_MATERIALS_ENABLED === 'true'
 const BUCKET = process.env.KATEDRA_TEMP_MATERIALS_BUCKET || 'katedra-temporary-materials'
@@ -34,6 +35,10 @@ async function handlePost(req, requestContext) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Prijavi se.' }, { status: 401 })
+
+  if (req.headers.get(MATERIAL_CONSENT_HEADER) !== MATERIAL_CONSENT_VERSION) {
+    return Response.json({ error: 'Prije slanja materijala potreban je izričit pristanak na privremenu pohranu.' }, { status: 400 })
+  }
 
   const distributedRateLimit = isDistributedRateLimitConfigured()
   if (process.env.NODE_ENV === 'production' && !distributedRateLimit) {
@@ -106,35 +111,15 @@ async function handlePost(req, requestContext) {
     buffer,
   })
   if (asset.extractionStatus === 'failed') return privateJson({ error: asset.warnings[0] || 'Ekstrakcija nije uspjela.', asset }, { status: 422 })
-
-  const safeName = asset.name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 120) || 'materijal'
-  const prefix = `${user.id}/${project.projectId}/${materialId}`
-  const storagePath = `${prefix}-${safeName}`
-  const storage = supabase.storage.from(BUCKET)
-  const upload = await storage.upload(storagePath, buffer, { contentType: asset.mimeType, upsert: false })
-  if (upload.error) return Response.json({ error: 'Privremena pohrana datoteke nije uspjela.' }, { status: 503 })
-  const manifestPath = `${prefix}.manifest.json`
-  const manifest = await storage.upload(manifestPath, Buffer.from(JSON.stringify(asset)), { contentType: 'application/json', upsert: false })
-  if (manifest.error) {
-    await removeTemporaryObjects(storage, [storagePath], { userId: user.id, projectId: project.projectId, materialId, reason: 'manifest_upload_failed' })
-    return Response.json({ error: 'Spremanje statusa materijala nije uspjelo.' }, { status: 503 })
-  }
-  const registered = await registerAgentPayload(supabase, {
-    userId: user.id,
-    projectId: project.projectId,
-    runId: String(form.fields.runId || '').trim() || undefined,
-    materialId,
-    storageBucket: BUCKET,
-    storagePath,
-    manifestPath,
-    expiresAt: asset.expiresAt,
-  })
-  if (!registered.ok) {
-    await removeTemporaryObjects(storage, [storagePath, manifestPath], { userId: user.id, projectId: project.projectId, materialId, reason: 'payload_registration_failed' })
-    logOperationalEvent({ eventName: 'register_agent_payload_failed', userId: user.id, projectId: project.projectId, error: registered.error }, 'error')
-    return Response.json({ error: 'Registracija privremenog materijala nije uspjela.' }, { status: 503 })
-  }
-  return privateJson({ asset, storagePath, manifestPath, manifestId: registered.value.manifestId, expiresAt: asset.expiresAt })
+  let stored
+  try {
+    stored = await storeMaterialPayload(createAdminClient(), {
+      userId: user.id, projectId: project.projectId, runId: String(form.fields.runId || '').trim() || undefined,
+      asset, body: buffer,
+    })
+  } catch { stored = { ok: false } }
+  if (!stored.ok) return privateJson({ error: 'Privremenu pohranu materijala nije moguće potvrditi.' }, { status: 503 })
+  return privateJson({ asset: stored.asset, storagePath: stored.storagePath, manifestPath: stored.manifestPath, manifestId: stored.manifestId, expiresAt: stored.asset.expiresAt })
   } finally {
     await releaseRateLimitReservation(reservation, (error, attempt) => {
       logOperationalEvent({ eventName: 'material_rate_limit_release_failed', attempt, userId: user.id, requestId: traceRequestId, reservationRequestId, error }, 'error')
@@ -206,25 +191,6 @@ function toPublicMaterial(value) {
   const { extractedText, ...metadata } = value
   void extractedText
   return metadata
-}
-
-async function removeTemporaryObjects(storage, paths, context) {
-  let lastError
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      const result = await storage.remove(paths)
-      if (!result?.error) return true
-      lastError = result.error
-    } catch (error) {
-      lastError = error
-    }
-  }
-  console.error(JSON.stringify({
-    eventName: 'material_storage_cleanup_failed',
-    ...context,
-    error: lastError?.message || 'unknown',
-  }))
-  return false
 }
 
 function isActiveMaterial(value, expectedProjectId, expectedMaterialId) {

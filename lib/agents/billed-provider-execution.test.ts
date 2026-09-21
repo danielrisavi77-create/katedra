@@ -1,148 +1,53 @@
 import { describe, expect, it, vi } from 'vitest'
-
 import type { AgentProvider } from './contracts'
-import { AgentBillingReconciliationError, executeBilledAgentProvider, executeBilledOperation } from './billed-provider-execution'
+import { AgentBillingReconciliationError, executeBilledAgentProvider } from './billed-provider-execution'
+import { executionContextFixture, executionRecoveryFixture } from './execution-recovery.fixture'
 
-function providerWithEvents(events: Array<{ type: 'completed' | 'error'; value?: unknown; message?: string }>): AgentProvider {
-  return {
-    id: 'fake-provider',
-    capabilities: ['text'],
-    async *run() {
-      for (const event of events) yield event as never
-    },
-  }
+function operation(usage: unknown = { inputTokens: 10, outputTokens: 20 }) {
+  const run = vi.fn(async function* () {
+    yield { type: 'completed' as const, value: { output: 'Original output', usage } }
+  })
+  return { provider: { id: 'fixture', capabilities: ['text'], run } as AgentProvider,
+    agentInput: { projectId: 'project-1', runId: 'run-1', payload: { messages: [] }, attempt: 1 as const },
+    execution: executionContextFixture, userId: 'user-1', projectId: 'project-1', requestId: 'billing-recovery', model: 'fixture-model' }
 }
 
 describe('billed provider execution', () => {
-  it('uses the same billing lifecycle for a non-chat verifier operation', async () => {
-    const rpc = vi.fn(async (name: string) => {
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
-      if (name === 'katedra_release_request') return { data: { status: 'released' }, error: null }
-      return { data: null, error: null }
-    })
-
-    const result = await executeBilledOperation({ rpc }, {
-      provider: 'independent-verifier',
-      model: 'verifier-model',
-      agent: 'writing_verifier',
-      runId: 'run-1',
-      attempt: 1,
-      payload: { task: 'verify_claim_passages' },
-      userId: 'user-1',
-      projectId: 'project-1',
-      requestId: 'run-1:step-1:1:passage',
-      execute: async () => ({ value: { outcome: 'verified' }, usage: { inputTokens: 12, outputTokens: 8 } }),
-    })
-
-    expect(result).toMatchObject({ value: { outcome: 'verified' }, usage: { inputTokens: 12, outputTokens: 8 }, billingState: 'settled' })
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({
-      p_request_id: 'run-1:step-1:1:passage',
-      p_project_id: 'project-1',
-      p_in: 12,
-      p_out: 8,
-    }))
+  it('returns the original parsed provider result on replay and releases the reservation', async () => {
+    const fixture = executionRecoveryFixture(), input = operation()
+    const first = await executeBilledAgentProvider(fixture.db, input)
+    expect(await executeBilledAgentProvider(fixture.db, input)).toEqual(first)
+    expect(first).toMatchObject({ output: 'Original output', provider: 'fixture', usage: { inputTokens: 10, outputTokens: 20 }, billingState: 'settled' })
+    expect(input.provider.run).toHaveBeenCalledTimes(1)
+    expect(fixture.debitCount()).toBe(1)
+    expect(fixture.rpc).toHaveBeenNthCalledWith(1, 'claim_agent_provider_execution', expect.anything())
+    expect(fixture.rpc).toHaveBeenCalledWith('katedra_release_request', { p_user: 'user-1', p_request_id: input.requestId })
+    expect(fixture.rpc).not.toHaveBeenCalledWith('katedra_consume', expect.anything())
   })
-
-  it('reserves, settles exactly once, and releases the distributed reservation', async () => {
-    const rpc = vi.fn(async (name: string) => {
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
-      if (name === 'katedra_release_request') return { data: { status: 'released' }, error: null }
-      return { data: null, error: null }
-    })
-    const result = await executeBilledAgentProvider({ rpc }, {
-      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 10, outputTokens: 20 } } }]),
-      agentInput: { projectId: 'project-1', runId: 'run-1', payload: { messages: [] }, attempt: 1 },
-      userId: 'user-1', projectId: 'project-1', requestId: 'run-1:step-1:1', model: 'agent-model',
-    })
-
-    expect(result).toMatchObject({ output: 'tekst', provider: 'fake-provider', usage: { inputTokens: 10, outputTokens: 20 }, billingState: 'settled' })
-    expect(rpc).toHaveBeenNthCalledWith(1, 'katedra_reserve_request', expect.objectContaining({ p_request_id: 'run-1:step-1:1' }))
-    expect(rpc).toHaveBeenCalledWith('katedra_consume', expect.objectContaining({ p_request_id: 'run-1:step-1:1', p_project_id: 'project-1', p_in: 10, p_out: 20 }))
-    expect(rpc).toHaveBeenCalledWith('katedra_release_request', { p_user: 'user-1', p_request_id: 'run-1:step-1:1' })
+  it.each(['before', 'after'])('preserves actual usage after settlement fails %s commit', async phase => {
+    const fixture = executionRecoveryFixture(), input = operation()
+    fixture.faults.add(`settle_agent_provider_execution:${phase}`)
+    await expect(executeBilledAgentProvider(fixture.db, input)).rejects.toBeInstanceOf(AgentBillingReconciliationError)
+    expect(fixture.executions.get(input.requestId)).toMatchObject({ inputTokens: 10, outputTokens: 20, charged: 110 })
+    await expect(executeBilledAgentProvider(fixture.db, input)).resolves.toMatchObject({ output: 'Original output' })
+    expect(input.provider.run).toHaveBeenCalledTimes(1)
+    expect(fixture.debitCount()).toBe(1)
   })
-
-  it('releases without consuming when the provider fails', async () => {
-    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-      ? { data: { status: 'reserved' }, error: null }
-      : { data: { status: 'released' }, error: null })
-
-    await expect(executeBilledAgentProvider({ rpc }, {
-      provider: providerWithEvents([{ type: 'error', message: 'provider down' }]),
-      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
-      userId: 'user-1', projectId: 'project-1', requestId: 'request-2', model: 'agent-model',
-    })).rejects.toThrow('provider down')
-    expect(rpc).toHaveBeenCalledWith('katedra_release_request', { p_user: 'user-1', p_request_id: 'request-2' })
-    expect(rpc).not.toHaveBeenCalledWith('katedra_consume', expect.anything())
+  it('retains unknown usage without estimating a debit', async () => {
+    const fixture = executionRecoveryFixture(), input = operation({ inputTokens: 0, outputTokens: 0 })
+    await expect(executeBilledAgentProvider(fixture.db, input)).rejects.toMatchObject({ billingState: 'pending_reconciliation' })
+    expect(fixture.executions.get(input.requestId)).toMatchObject({ inputTokens: null, outputTokens: null, charged: null })
+    expect(fixture.debitCount()).toBe(0)
   })
-
-  it('fails closed and releases when provider usage is unavailable', async () => {
-    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-      ? { data: { status: 'reserved' }, error: null }
-      : name === 'katedra_mark_pending'
-        ? { data: { status: 'pending_reconciliation' }, error: null }
-        : { data: { status: 'released' }, error: null })
-
-    await expect(executeBilledAgentProvider({ rpc }, {
-      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 0, outputTokens: 0 } } }]),
-      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
-      userId: 'user-1', projectId: 'project-1', requestId: 'request-3', model: 'agent-model',
-    })).rejects.toMatchObject({ billingState: 'pending_reconciliation' })
-    expect(rpc).not.toHaveBeenCalledWith('katedra_consume', expect.anything())
-    expect(rpc).toHaveBeenCalledWith('katedra_mark_pending', expect.objectContaining({ p_request_id: 'request-3', p_estimated_charge: expect.any(Number) }))
+  it('does not invoke a provider without a canonical step lease', async () => {
+    const fixture = executionRecoveryFixture(), input = operation()
+    await expect(executeBilledAgentProvider(fixture.db, { ...input, execution: undefined })).rejects.toBeInstanceOf(AgentBillingReconciliationError)
+    expect(input.provider.run).not.toHaveBeenCalled()
   })
-
-  it('surfaces a failed pending marker instead of pretending reconciliation was recorded', async () => {
-    const rpc = vi.fn(async (name: string) => name === 'katedra_reserve_request'
-      ? { data: { status: 'reserved' }, error: null }
-      : name === 'katedra_mark_pending'
-        ? { data: null, error: null }
-        : { data: { status: 'released' }, error: null })
-
-    await expect(executeBilledAgentProvider({ rpc }, {
-      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 0, outputTokens: 0 } } }]),
-      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
-      userId: 'user-1', projectId: 'project-1', requestId: 'request-missing-marker', model: 'agent-model',
-    })).rejects.toThrow('reconciliation marker unavailable')
-  })
-
-  it('marks an unknown consume response as pending reconciliation instead of hiding billing ambiguity', async () => {
-    const rpc = vi.fn(async (name: string) => {
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_consume') return { data: { status: 'unexpected_status' }, error: null }
-      if (name === 'katedra_mark_pending') return { data: { status: 'pending_reconciliation' }, error: null }
-      return { data: { status: 'released' }, error: null }
-    })
-
-    await expect(executeBilledAgentProvider({ rpc }, {
-      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 10, outputTokens: 20 } } }]),
-      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
-      userId: 'user-1', projectId: 'project-1', requestId: 'request-ambiguous', model: 'agent-model',
-    })).rejects.toMatchObject({
-      constructor: AgentBillingReconciliationError,
-      billingState: 'pending_reconciliation',
-    })
-    expect(rpc).toHaveBeenCalledWith('katedra_release_request', { p_user: 'user-1', p_request_id: 'request-ambiguous' })
-    expect(rpc).toHaveBeenCalledWith('katedra_mark_pending', expect.objectContaining({ p_request_id: 'request-ambiguous', p_estimated_charge: 110 }))
-  })
-
-  it('retries a transient reservation release failure after billing settles', async () => {
-    let releaseAttempts = 0
-    const rpc = vi.fn(async (name: string) => {
-      if (name === 'katedra_reserve_request') return { data: { status: 'reserved' }, error: null }
-      if (name === 'katedra_consume') return { data: { status: 'settled' }, error: null }
-      releaseAttempts += 1
-      if (releaseAttempts === 1) throw new Error('temporary release failure')
-      return { data: { status: 'released' }, error: null }
-    })
-
-    await expect(executeBilledAgentProvider({ rpc }, {
-      provider: providerWithEvents([{ type: 'completed', value: { output: 'tekst', usage: { inputTokens: 10, outputTokens: 20 } } }]),
-      agentInput: { projectId: 'project-1', payload: {}, attempt: 1 },
-      userId: 'user-1', projectId: 'project-1', requestId: 'request-release-retry', model: 'agent-model',
-    })).resolves.toMatchObject({ billingState: 'settled' })
-
-    expect(releaseAttempts).toBe(2)
+  it('retries a transient reservation release failure', async () => {
+    const fixture = executionRecoveryFixture(), input = operation()
+    fixture.faults.add('katedra_release_request:before')
+    await expect(executeBilledAgentProvider(fixture.db, input)).resolves.toMatchObject({ billingState: 'settled' })
+    expect(fixture.rpc.mock.calls.filter(([name]) => name === 'katedra_release_request')).toHaveLength(2)
   })
 })

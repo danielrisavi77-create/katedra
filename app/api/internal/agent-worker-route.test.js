@@ -22,7 +22,8 @@ describe('internal agent worker route contract', () => {
   })
 
   it('loads private context and uses the billing-aware provider executor', () => {
-    expect(source).toContain('loadRunManuscriptContext')
+    expect(source).toContain('loadActiveRunContextSnapshot')
+    expect(source).not.toContain('loadRunManuscriptContext(')
     expect(source).toContain('loadRunMaterialContexts')
     expect(source).toContain('createProviderBackedExecutor')
     expect(source).toContain('KATEDRA_AGENT_RUNS_ENABLED')

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { AgentRunPanel } from './agent-run-panel'
 import { AgenticPreparation } from './agentic-preparation'
 import { AgenticIntervention } from './agentic-intervention'
+import { MaterialPrivacy } from './material-privacy'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
 import type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-view'
@@ -14,16 +15,21 @@ export type { AgenticWorkspacePhase } from '../../../lib/manuscript/workspace-vi
 const RUN_STORAGE_PREFIX = 'katedra_agent_run_v1:'
 const RESUMABLE_STATUSES = new Set(['pending', 'running', 'paused', 'blocked'])
 
-export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript, requestedPhase, onPhaseChange, onContextUpdated, onAcceptDraft, onOpenSection, onOpenAssistant, lockedMode, webResearchAvailable = false }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onContextUpdated?: (manuscript: ManuscriptV1) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean>; onOpenSection?: (sectionId: string) => void; onOpenAssistant?: (sectionId?: string) => void; lockedMode?: 'autonomous'; webResearchAvailable?: boolean }) {
+function PaidProjectFlow({ projectId, passActive, sectionIds, manuscript, requestedPhase, onPhaseChange, onContextUpdated, onAcceptDraft, onOpenSection, onOpenAssistant, lockedMode, webResearchAvailable = false }: { projectId: string; passActive: boolean; sectionIds: string[]; manuscript: ManuscriptV1; requestedPhase?: AgenticWorkspacePhase; onPhaseChange?: (phase: AgenticWorkspacePhase) => void; onContextUpdated?: (manuscript: ManuscriptV1) => void; onAcceptDraft?: (draft: AgenticDraftV1, sectionIds?: string[]) => Promise<boolean>; onOpenSection?: (sectionId: string) => void; onOpenAssistant?: (sectionId?: string) => void; lockedMode?: 'autonomous'; webResearchAvailable?: boolean }) {
   const [runId, setRunId] = useState('')
   const [intervention, setIntervention] = useState(false)
 
   useEffect(() => {
-    if (!passActive || !projectId) return
+    if (!projectId) return
     let cancelled = false
     const storageKey = `${RUN_STORAGE_PREFIX}${projectId}`
     const resume = async () => {
       const storedRunId = readStoredRunId(storageKey)
+      // Privacy controls must survive Pass expiry, including after a reload.
+      if (!passActive) {
+        if (!cancelled) setRunId(storedRunId)
+        return
+      }
       const response = await fetch(`/api/agent-runs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }).catch(() => null)
       if (!response?.ok) {
         if (storedRunId && !cancelled) setRunId(storedRunId)
@@ -76,6 +82,10 @@ export function PaidProjectSetup({ projectId, passActive, sectionIds, manuscript
         <AgenticPreparation projectId={projectId} passActive={passActive} sectionIds={sectionIds} manuscript={manuscript} lockedMode={lockedMode} webResearchAvailable={webResearchAvailable} onRunCreated={rememberRun} />
     </div>
   )
+}
+
+export function PaidProjectSetup(props: Parameters<typeof PaidProjectFlow>[0]) {
+  return <><PaidProjectFlow {...props} /><MaterialPrivacy projectId={props.projectId} /></>
 }
 
 function workTypeLabel(workType: ManuscriptV1['workType']): string {

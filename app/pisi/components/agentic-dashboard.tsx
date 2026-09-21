@@ -107,7 +107,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
   }
 
   const cancel = async () => {
-    const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}?projectId=${encodeURIComponent(projectId)}`, { method: 'DELETE' }).catch(() => null)
+    const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' }).catch(() => null)
     if (!response?.ok) {
       const body = await response?.json().catch(() => ({}))
       setMessage(agentRequestMessage(response?.status, body?.error, 'Otkazivanje tijeka nije uspjelo.'))
