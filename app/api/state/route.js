@@ -20,6 +20,8 @@ import {
 } from '@/lib/academic-suite/contracts'
 import { GEN_SERVER_SAFE_KEYS, LOG_SERVER_SAFE_KEYS } from '@/lib/academic-suite/katedra-state-privacy'
 import { sanitizeLektaIssues } from '@/lib/academic-suite/state-issue-projection'
+import { loadOwnedWorkflow, WorkflowPersistenceError } from '@/lib/academic-suite/workflow/repository'
+import { resolveWorkflowForLegacySelection } from '@/lib/academic-suite/workflow/resolver'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { readProjectLock, validateLockedProjectMutation } from '../../../lib/academic-suite/project-lock'
 import { stripManuscriptFromStatePayload } from '@/lib/manuscript/privacy'
@@ -281,6 +283,12 @@ function cleanOpaqueId(value) {
   return id
 }
 
+function cleanCanonicalProjectId(value) {
+  const id = cleanOpaqueId(value)
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return ''
+  return id
+}
+
 function canonicalWorkType(body) {
   if (isAcademicWorkType(body?.workTypeCanonical)) return body.workTypeCanonical
   if (body?.workType === 's' || body?.workType === 'z' || body?.workType === 'd') {
@@ -335,11 +343,33 @@ async function handleGET(req) {
 
   if (error) return privateJson({ error: 'Učitavanje nije uspjelo.' }, { status: 500 })
   if (!row) return privateJson({ error: 'Stanje projekta nije pronađeno.' }, { status: 404 })
-  if (!projectLocksEnabled()) return privateJson(rowToCamel(row))
+
+  const candidateProjectId = cleanCanonicalProjectId(row?.project_id)
+  let workflowResolution = {
+    workflowAuthority: 'legacy-compat',
+    workflow: null,
+  }
+
+  if (candidateProjectId) {
+    try {
+      const loadResult = await loadOwnedWorkflow(supabase, {
+        ownerUserId: user.id,
+        projectId: candidateProjectId,
+      })
+      workflowResolution = resolveWorkflowForLegacySelection(candidateProjectId, loadResult)
+    } catch (workflowError) {
+      if (workflowError instanceof WorkflowPersistenceError) {
+        return privateJson({ error: 'Učitavanje workflowa nije uspjelo.' }, { status: 500 })
+      }
+      throw workflowError
+    }
+  }
+
+  if (!projectLocksEnabled()) return privateJson({ ...rowToCamel(row), ...workflowResolution })
 
   const lockResult = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
   if (!lockResult.ok) return privateJson({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
-  return privateJson({ ...rowToCamel(row), projectLock: lockResult.lock })
+  return privateJson({ ...rowToCamel(row), ...workflowResolution, projectLock: lockResult.lock })
 }
 
 export async function PUT(req) {
