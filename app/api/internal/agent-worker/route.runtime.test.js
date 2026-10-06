@@ -197,6 +197,40 @@ describe('POST /api/internal/agent-worker runtime contract', () => {
     }))
   })
 
+  it('returns a correlated sanitized storage 503 when the admin client is unavailable', async () => {
+    const privateDetail = 'private storage connection detail'
+    mocks.createAdminClient.mockImplementationOnce(() => { throw new Error(privateDetail) })
+    const fetchStub = vi.fn(() => { throw new Error('Unexpected network access') })
+    vi.stubGlobal('fetch', fetchStub)
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { POST } = await loadRoute()
+
+    const response = await POST(request())
+    const body = await response.json()
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('x-request-id')).toBe('worker-request-1')
+    expect(body).toEqual({ error: 'Agent worker storage trenutno nije konfiguriran.' })
+    expect(errorLog).toHaveBeenCalledTimes(1)
+    const event = JSON.parse(errorLog.mock.calls[0][0])
+    expect(event).toEqual({
+      eventName: 'agent_worker_admin_client_unavailable',
+      requestId: 'worker-request-1',
+      userId: 'unknown',
+      projectId: 'unknown',
+      runId: 'run-1',
+      outcome: 'failed',
+      errorCode: 'Error',
+    })
+    expect(JSON.stringify(body)).not.toContain(privateDetail)
+    expect(JSON.stringify(event)).not.toContain(privateDetail)
+    expect(mocks.createAnthropicAgentProvider).not.toHaveBeenCalled()
+    expect(mocks.createGatewayAgentProvider).not.toHaveBeenCalled()
+    expect(mocks.createProviderBackedExecutor).not.toHaveBeenCalled()
+    expect(mocks.runAgentWorkerLoop).not.toHaveBeenCalled()
+    expect(fetchStub).not.toHaveBeenCalled()
+  })
+
   it('returns a sanitized 503 when the worker loop cannot complete the RPC contract', async () => {
     mocks.runAgentWorkerLoop.mockRejectedValue(new Error('internal provider or database detail'))
     const { POST } = await loadRoute()
