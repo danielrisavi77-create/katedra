@@ -35,7 +35,7 @@ const WORKER_TOKEN = process.env.KATEDRA_AGENT_WORKER_TOKEN || ''
 export async function POST(req) {
   const requestId = getRequestId(req)
   try {
-    return withRequestId(await handlePost(req), requestId)
+    return withRequestId(await handlePost(req, requestId), requestId)
   } catch (error) {
     console.error(JSON.stringify({
       eventName: 'agent_worker_execution_failed',
@@ -46,7 +46,7 @@ export async function POST(req) {
   }
 }
 
-async function handlePost(req) {
+async function handlePost(req, requestId) {
   if (!ENABLED) return privateJson({ error: 'Agenticni worker još nije aktivan u backendu.' }, { status: 503 })
   if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED !== 'true') {
     return privateJson({ error: 'Agenticni worker nije aktivan bez server-side project lock ugovora.' }, { status: 503 })
