@@ -24,7 +24,7 @@ describe('run material context loader', () => {
     const storage = {
       download: vi.fn(async () => new TextEncoder().encode(JSON.stringify({
         id: 'material-1', projectId: 'project-1', name: 'Upute', kind: 'mentor', mimeType: 'text/plain',
-        extractionStatus: 'extracted', extractedText: 'Mentor traži jasnu tezu.', warnings: [], expiresAt: '2026-08-17T10:00:00.000Z',
+        extractionStatus: 'extracted', extractedText: 'Mentor traži jasnu tezu.', warnings: [], expiresAt: '2099-08-17T10:00:00.000Z',
       })).buffer),
     }
 
@@ -44,7 +44,7 @@ describe('run material context loader', () => {
     }
     const storage = {
       download: vi.fn(async (path: string) => path.endsWith('.manifest')
-        ? JSON.stringify({ id: 'scan-1', projectId: 'project-1', name: 'Sken', kind: 'scan', mimeType: 'image/png', warnings: [], expiresAt: '2026-08-17T10:00:00.000Z' })
+        ? JSON.stringify({ id: 'scan-1', projectId: 'project-1', name: 'Sken', kind: 'scan', mimeType: 'image/png', warnings: [], expiresAt: '2099-08-17T10:00:00.000Z' })
         : new Uint8Array([137, 80, 78, 71]).buffer),
     }
 
@@ -137,7 +137,7 @@ describe('run material context loader', () => {
     const storage = {
       download: vi.fn(async (path: string) => JSON.stringify({
         id: path.replace(/^.*\/manifest-/u, 'material-'), projectId: 'project-1', name: path, kind: 'notes',
-        extractedText: 'x'.repeat(250_000), warnings: [], expiresAt: '2026-08-17T10:00:00.000Z',
+        extractedText: 'x'.repeat(250_000), warnings: [], expiresAt: '2099-08-17T10:00:00.000Z',
       })),
     }
 

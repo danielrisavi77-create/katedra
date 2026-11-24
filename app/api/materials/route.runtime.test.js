@@ -6,12 +6,14 @@ const mocks = vi.hoisted(() => ({
   resolveOwnedProject: vi.fn(),
   resolveOwnedProjectResult: vi.fn(async (...args) => ({ ok: true, value: await mocks.resolveOwnedProject(...args) })),
   resolveCanonicalProjectPass: vi.fn(),
+  registerAgentPayload: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: mocks.createAdminClient }))
 vi.mock('@/lib/academic-suite/repositories/projects', () => ({ resolveOwnedProject: mocks.resolveOwnedProject, resolveOwnedProjectResult: mocks.resolveOwnedProjectResult }))
 vi.mock('@/lib/product/server-capabilities', () => ({ resolveCanonicalProjectPass: mocks.resolveCanonicalProjectPass }))
+vi.mock('@/lib/agents/backend-contract', () => ({ registerAgentPayload: mocks.registerAgentPayload }))
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -23,6 +25,61 @@ beforeEach(() => {
 })
 
 describe('GET /api/materials manifest integrity', () => {
+  it('rejects a material upload until the temporary-processing consent is present', async () => {
+    vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
+    const { POST } = await import('./route')
+    const upload = vi.fn().mockResolvedValue({ error: null })
+    const storage = { upload, remove: vi.fn() }
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      storage: { from: vi.fn(() => storage) },
+    })
+    mocks.resolveOwnedProject.mockResolvedValue({ projectId: 'project-1' })
+    mocks.resolveCanonicalProjectPass.mockResolvedValue({ allowed: true })
+    mocks.registerAgentPayload.mockResolvedValue({ ok: true, value: { manifestId: 'manifest-1' } })
+
+    const form = new FormData()
+    form.set('projectId', 'project-1')
+    form.set('kind', 'notes')
+    form.set('file', new File(['privatni tekst'], 'biljeske.txt', { type: 'text/plain' }))
+
+    const response = await POST(new Request('http://localhost/api/materials', { method: 'POST', body: form }))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Prije slanja materijala moraš potvrditi privremenu obradu sadržaja.' })
+    expect(upload).not.toHaveBeenCalled()
+  })
+
+  it('accepts a consented upload and registers its temporary manifest', async () => {
+    vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
+    const { POST } = await import('./route')
+    const upload = vi.fn().mockResolvedValue({ error: null })
+    const storage = { upload, remove: vi.fn() }
+    mocks.createClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+      storage: { from: vi.fn(() => storage) },
+    })
+    mocks.resolveOwnedProject.mockResolvedValue({ projectId: 'project-1' })
+    mocks.resolveCanonicalProjectPass.mockResolvedValue({ allowed: true })
+    mocks.registerAgentPayload.mockResolvedValue({ ok: true, value: { manifestId: 'manifest-1' } })
+
+    const form = new FormData()
+    form.set('projectId', 'project-1')
+    form.set('kind', 'notes')
+    form.set('snapshotConsent', JSON.stringify({ version: 'agentic-snapshot-v1', projectId: 'project-1', acceptedAt: new Date().toISOString() }))
+    form.set('file', new File(['privatni tekst'], 'biljeske.txt', { type: 'text/plain' }))
+
+    const response = await POST(new Request('http://localhost/api/materials', { method: 'POST', body: form }))
+
+    expect(response.status).toBe(200)
+    expect(upload).toHaveBeenCalledTimes(2)
+    expect(mocks.registerAgentPayload).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: 'user-1',
+      projectId: 'project-1',
+      materialId: expect.any(String),
+    }))
+  })
+
   it('returns a controlled 503 when the distributed admin client is unavailable', async () => {
     vi.stubEnv('KATEDRA_MATERIALS_ENABLED', 'true')
     vi.stubEnv('KATEDRA_RATE_LIMIT_STORE', 'supabase')

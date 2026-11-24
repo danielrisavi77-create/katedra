@@ -3,6 +3,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 import { createAcademicCatalog, displayAcademicProfile, findAcademicUnits, findProfilesForUnit, resolveUniqueAcademicUnit, type AcademicCatalog, type AcademicProfile, type AcademicUnit } from '../../../lib/manuscript/academic-catalog'
+import { academicRuleStatusForProfile, compileAcademicContext } from '../../../lib/academic-context/compile-context'
+import type { AcademicContext } from '../../../lib/academic-context/types'
+import { academicVisibilityForStatus } from '../../../lib/academic-context/visibility'
 import type { ProjectCurrentState } from '../../../lib/project/completion-scan'
 import type { LegacyWorkType } from '../../../lib/manuscript/types'
 import { ThemeToggle } from '../../theme-toggle'
@@ -21,6 +24,7 @@ export type OnboardingResult = {
   importedText: string
   currentState: ProjectCurrentState
   materials: string[]
+  academicContext?: AcademicContext
 }
 
 export type OnboardingInitialValues = Partial<Pick<OnboardingResult, 'workType' | 'institution' | 'program' | 'unitId' | 'profileId' | 'title' | 'mentor' | 'deadline' | 'currentState' | 'materials'>>
@@ -66,6 +70,14 @@ export function OnboardingFlow({
   const inferredUnit = useMemo(() => catalog && !unitId ? resolveUniqueAcademicUnit(catalog, institution) : null, [catalog, institution, unitId])
   const activeUnitId = unitId || inferredUnit?.id || ''
   const programOptions = useMemo(() => catalog && activeUnitId ? findProfilesForUnit(catalog, activeUnitId, workType, program) : [], [activeUnitId, catalog, program, workType])
+  const academicContext = useMemo(() => catalog ? compileAcademicContext({
+    catalog,
+    unitId: activeUnitId,
+    profileId,
+    workType,
+    institutionName: inferredUnit?.name || institution,
+    program,
+  }) : undefined, [activeUnitId, catalog, inferredUnit?.name, institution, profileId, program, workType])
 
   const selectFaculty = (unit: AcademicUnit) => {
     setInstitution(unit.name)
@@ -113,6 +125,7 @@ export function OnboardingFlow({
       importedText: importedText.trim(),
       currentState,
       materials,
+      ...(academicContext ? { academicContext } : {}),
     })
   }
 
@@ -185,9 +198,27 @@ export function OnboardingFlow({
             loading={catalogLoading && Boolean(unitId)}
             emptyMessage="Za ovu vrstu rada nema profila u katalogu. Možeš ga upisati ručno."
             optionLabel={displayAcademicProfile}
+            optionBadge={(profile) => academicVisibilityForStatus(academicRuleStatusForProfile(profile)).label}
             onChange={(value) => { setProgram(value); setProfileId('') }}
             onSelect={selectProgram}
           />
+          {academicContext?.profileId && (
+            <section className="pis-academic-profile-preview" aria-label="Akademska pravila odabranog profila">
+              <div className="pis-academic-profile-preview-heading">
+                <b>Akademska pravila</b>
+                <strong data-status={academicContext.status}>{academicVisibilityForStatus(academicContext.status).label}</strong>
+              </div>
+              <p><b>{academicContext.profileLabel}</b></p>
+              <small>{academicContext.verifiedAt ? `Provjereno ${academicContext.verifiedAt}.` : 'Datum provjere nije naveden.'}</small>
+              <dl>
+                {(academicContext.wordRange?.min !== undefined || academicContext.wordRange?.max !== undefined) && <div><dt>Cilj riječi</dt><dd>{formatAcademicRange(academicContext.wordRange.min, academicContext.wordRange.max)}</dd></div>}
+                {academicContext.minimumReferences !== undefined && <div><dt>Minimalno izvora</dt><dd>{academicContext.minimumReferences}</dd></div>}
+                {academicContext.minimumBooks !== undefined && <div><dt>Minimalno knjiga</dt><dd>{academicContext.minimumBooks}</dd></div>}
+                {academicContext.citationStyle && <div><dt>Citatni stil</dt><dd>{academicContext.citationStyle}</dd></div>}
+              </dl>
+              {academicContext.sources[0] && <a href={academicContext.sources[0].url} target="_blank" rel="noreferrer">Službeni izvor pravila ↗</a>}
+            </section>
+          )}
           <p className="pis-catalog-note">Možeš upisati puni naziv, dio naziva ili kraticu. Ako fakultet nije na popisu, nastavi sa slobodnim unosom.</p>
           <div className="pis-onboarding-actions">
             <button type="button" className="pis-text-button" onClick={() => setStep(1)}>← Natrag</button>
@@ -291,6 +322,13 @@ export function OnboardingFlow({
   )
 }
 
+function formatAcademicRange(min?: number, max?: number): string {
+  const format = (value: number) => new Intl.NumberFormat('hr-HR').format(value)
+  if (min !== undefined && max !== undefined) return `${format(min)}–${format(max)}`
+  if (min !== undefined) return `najmanje ${format(min)}`
+  return `najviše ${format(max || 0)}`
+}
+
 function CatalogCombobox<T extends { id: string }>({
   label,
   value,
@@ -301,6 +339,7 @@ function CatalogCombobox<T extends { id: string }>({
   disabled = false,
   optionLabel,
   optionDetail,
+  optionBadge,
   onChange,
   onSelect,
 }: {
@@ -313,6 +352,7 @@ function CatalogCombobox<T extends { id: string }>({
   disabled?: boolean
   optionLabel: (option: T) => string
   optionDetail?: (option: T) => string
+  optionBadge?: (option: T) => string
   onChange: (value: string) => void
   onSelect: (option: T) => void
 }) {
@@ -384,6 +424,7 @@ function CatalogCombobox<T extends { id: string }>({
             <button id={`${inputId}-option-${index}`} key={option.id} type="button" role="option" aria-selected={activeIndex === index} className={activeIndex === index ? 'is-active' : ''} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseOption(option)}>
               <b>{optionLabel(option)}</b>
               {optionDetail?.(option) && <small>{optionDetail(option)}</small>}
+              {optionBadge?.(option) && <em aria-hidden="true">{optionBadge(option)}</em>}
             </button>
           ))}
           {!loading && !hasOptions && <p>{emptyMessage}</p>}

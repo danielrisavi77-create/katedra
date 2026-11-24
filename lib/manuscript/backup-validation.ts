@@ -15,6 +15,8 @@ const SECTION_STATUSES = new Set(['empty', 'draft', 'review', 'approved'])
 const WORK_TYPES = new Set(['s', 'z', 'd'])
 const NODE_TYPES = new Set(['doc', 'paragraph', 'heading', 'text', 'bulletList', 'orderedList', 'listItem', 'blockquote', 'hardBreak'])
 const MARK_TYPES = new Set(['bold', 'italic', 'link'])
+const SOURCE_VERIFICATION_STATUSES = new Set(['verified', 'needs_review', 'blocked'])
+const SOURCE_VERIFICATION_METHODS = new Set(['crossref', 'url_fetch'])
 
 type BackupFailureReason = 'invalid' | 'project_mismatch' | 'too_large'
 type BackupResult =
@@ -87,7 +89,11 @@ function validateSection(value: unknown): value is ManuscriptSectionV1 {
 
 function validateSource(value: unknown): boolean {
   if (!isRecord(value) || !nonEmptyString(value.id, 200) || !validString(value.title, MAX_SECTION_TITLE_LENGTH) || typeof value.verified !== 'boolean') return false
-  return ['authors', 'year', 'urlOrDoi', 'notes'].every((field) => value[field] === undefined || validString(value[field]))
+  if (!['authors', 'year', 'urlOrDoi', 'notes'].every((field) => value[field] === undefined || validString(value[field]))) return false
+  if (value.verification === undefined) return true
+  if (!isRecord(value.verification) || typeof value.verification.status !== 'string' || !SOURCE_VERIFICATION_STATUSES.has(value.verification.status) || typeof value.verification.method !== 'string' || !SOURCE_VERIFICATION_METHODS.has(value.verification.method) || !validString(value.verification.checkedAt, 100)) return false
+  if (value.verification.evidenceUrl !== undefined && !validString(value.verification.evidenceUrl, 2_000)) return false
+  return ['titleMatch', 'authorMatch', 'yearMatch', 'retracted'].every((field) => value.verification?.[field] === undefined || typeof value.verification[field] === 'boolean')
 }
 
 function validateMeta(value: unknown): boolean {

@@ -70,7 +70,7 @@ describe('POST /api/checkout runtime guards', () => {
       ...projectDb(
         { user_id: 'user-1', project_id: canonicalProjectId, guest_project_id: 'klegacy', work_type_canonical: 'graduate', topic: 'Tema' },
         [
-          { data: { user_id: 'user-1', project_id: canonicalProjectId, guest_project_id: 'klegacy' }, error: null },
+        { data: { user_id: 'user-1', project_id: canonicalProjectId, guest_project_id: 'klegacy', unit_id: 'fpzg', profile_id: 'fpzg-politologija-diplomski' }, error: null },
           { data: { project_id: canonicalProjectId, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
           { data: null, error: null },
         ],
@@ -109,7 +109,7 @@ describe('POST /api/checkout runtime guards', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000')
     mocks.createClient.mockResolvedValue({
       ...projectDb({ project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, [
-        { data: { user_id: 'user-daniel', project_id: projectId, guest_project_id: null, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
+        { data: { user_id: 'user-daniel', project_id: projectId, guest_project_id: null, work_type_canonical: 'graduate', topic: 'Tema', unit_id: 'fpzg', profile_id: 'fpzg-politologija-diplomski' }, error: null },
         { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
         { data: null, error: null },
       ]),
@@ -190,8 +190,8 @@ describe('POST /api/checkout runtime guards', () => {
       ...projectDb(
         { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' },
         [
-          { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
-          { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
+          { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema', unit_id: 'fpzg', profile_id: 'fpzg-politologija-diplomski' }, error: null },
+          { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema', unit_id: 'fpzg', profile_id: 'fpzg-politologija-diplomski' }, error: null },
           { data: null, error: null },
         ],
       ),
@@ -203,6 +203,23 @@ describe('POST /api/checkout runtime guards', () => {
 
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toEqual({ error: 'Plaćanje trenutno nije konfigurirano.' })
+    expect(mocks.getStripe).not.toHaveBeenCalled()
+  })
+
+  it('does not open Stripe for a partial academic profile', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000')
+    mocks.createClient.mockResolvedValue({
+      ...projectDb({ project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, [
+        { data: { user_id: 'user-1', project_id: projectId, guest_project_id: null, unit_id: 'fpzg', profile_id: 'fpzg-novinarstvo-zavrsni-av' }, error: null },
+        { data: { project_id: projectId, work_type_canonical: 'graduate', topic: 'Tema' }, error: null },
+      ]),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
+    })
+    mocks.validateCheckoutProject.mockReturnValue({ ok: true })
+
+    const response = await POST(request({ package: 'diplomski', projectId, topic: 'Tema', lockConfirmation: true }))
+
+    expect(response.status).toBe(403)
     expect(mocks.getStripe).not.toHaveBeenCalled()
   })
 })

@@ -1,9 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { recordKatedraProductEvent } from '@/lib/analytics/product-events'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
 import { readProjectLock, validateLockedProjectMutation } from '@/lib/academic-suite/project-lock'
-import { activateAgentRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun, replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
+import { activateAgentRun, cancelAgentRun, cleanupStaleInitializingAgentRun, createAgentRun, recordAgentRunSnapshotConsent, replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
 import { parseAgentRunRequest, validateAgentRunSectionSelection } from '@/lib/agents/run-request'
 import { validateAgentRunContext } from '@/lib/agents/run-context'
+import { validateResearchPlan } from '@/lib/research-plan/validation'
+import { validateAgentSnapshotConsent } from '@/lib/agents/privacy-consent'
+import { deleteAgentRunPayloads } from '@/lib/agents/run-payload-deletion'
 import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { resolveCanonicalProjectPass, resolveProjectCapability } from '@/lib/product/server-capabilities'
 import { privateJson } from '@/lib/observability/private-response.js'
@@ -53,6 +58,10 @@ async function handlePost(req) {
     const status = validatedContext.reason === 'project_mismatch' ? 403 : validatedContext.reason === 'too_large' ? 413 : 400
     return Response.json({ error: validatedContext.error }, { status })
   }
+  if (parsed.value.researchPlan !== undefined) {
+    const researchPlan = validateResearchPlan(parsed.value.researchPlan, project.projectId)
+    if (!researchPlan.ok) return Response.json({ error: researchPlan.error }, { status: 400 })
+  }
   const lock = await readProjectLock(supabase, { userId: user.id, projectId: project.projectId })
   if (!lock.ok) return Response.json({ error: 'Provjera zaključavanja projekta nije uspjela.' }, { status: 503 })
   if (!lock.lock) return Response.json({ error: 'Aktivan Pass za ovaj projekt je potreban.' }, { status: 402 })
@@ -95,6 +104,9 @@ async function handlePost(req) {
       : 'Ova agenticna mogućnost nije dostupna za ovaj projekt.' }, { status })
   }
 
+  const snapshotConsent = validateAgentSnapshotConsent(parsed.value.snapshotConsent, project.projectId)
+  if (!snapshotConsent.ok) return Response.json({ error: snapshotConsent.error }, { status: 400 })
+
   const recovered = await cleanupStaleInitializingAgentRun(supabase, {
     userId: user.id,
     projectId: project.projectId,
@@ -116,15 +128,28 @@ async function handlePost(req) {
     return Response.json({ error: 'Pokretanje agenta trenutno nije dostupno.' }, { status: 503 })
   }
 
+  const consentRecorded = await recordAgentRunSnapshotConsent(supabase, {
+    userId: user.id,
+    projectId: project.projectId,
+    runId: created.runId,
+    version: snapshotConsent.value.version,
+    acceptedAt: snapshotConsent.value.acceptedAt,
+  })
+  if (!consentRecorded.ok) {
+    await cancelFailedSetupRun(supabase, { userId: user.id, projectId: project.projectId, runId: created.runId }, consentRecorded.error)
+    return Response.json({ error: 'Potvrdu privatnosti nije moguće evidentirati u canonical runu.' }, { status: 503 })
+  }
+
   const context = await storeAgentRunContext(supabase, {
     userId: user.id,
     projectId: project.projectId,
     runId: created.runId,
     manuscript: validatedContext.manuscript,
+    researchPlan: parsed.value.researchPlan,
     bucket: BUCKET,
   })
   if (!context.ok) {
-    await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, context.error)
+    await cancelFailedSetupRun(supabase, { userId: user.id, projectId: project.projectId, runId: created.runId }, context.error)
     return Response.json({ error: context.error }, { status: context.status })
   }
 
@@ -138,16 +163,17 @@ async function handlePost(req) {
       materialIds: parsed.value.materialIds,
     })
     if (!attached.ok || attached.value.materialIds.length !== parsed.value.materialIds.length) {
-      await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, attached.ok ? 'material_selection_mismatch' : attached.error)
+      await cancelFailedSetupRun(supabase, { userId: user.id, projectId: project.projectId, runId: created.runId }, attached.ok ? 'material_selection_mismatch' : attached.error)
       return Response.json({ error: attached.ok ? 'Jedan ili više materijala više nije dostupan.' : 'Povezivanje materijala nije uspjelo.' }, { status: attached.ok ? 409 : 503 })
     }
   }
 
   const activated = await activateAgentRun(supabase, { userId: user.id, runId: created.runId })
   if (!activated.ok) {
-    await cancelFailedSetupRun(supabase, { userId: user.id, runId: created.runId }, activated.error)
+    await cancelFailedSetupRun(supabase, { userId: user.id, projectId: project.projectId, runId: created.runId }, activated.error)
     return Response.json({ error: 'Agent run nije moguće aktivirati.' }, { status: 503 })
   }
+  try { await recordKatedraProductEvent(createAdminClient(), { eventName: 'agent_run_started', userId: user.id, projectId: project.projectId, idempotencyKey: created.runId, properties: { mode: parsed.value.mode, sourcePolicy: parsed.value.sourcePolicy } }) } catch { /* telemetry never blocks a run */ }
 
   const { data: run, error: runError } = await supabase.from('agent_runs')
     .select('run_id, project_id, mode, source_policy, status, created_at, updated_at')
@@ -195,6 +221,11 @@ async function handleGet(req) {
 async function cancelFailedSetupRun(db, input, reason) {
   const cancelled = await cancelAgentRun(db, input)
   if (!cancelled.ok) {
-    logOperationalEvent({ eventName: 'cancel_agent_run_failed_after_setup', userId: input.userId, runId: input.runId, reason, error: cancelled.error }, 'error')
+      logOperationalEvent({ eventName: 'cancel_agent_run_failed_after_setup', userId: input.userId, runId: input.runId, reason, error: cancelled.error }, 'error')
+    return
   }
+  const projectId = input.projectId
+  if (!projectId) return
+  const cleanup = await deleteAgentRunPayloads(db, { userId: input.userId, projectId, runId: input.runId })
+  if (!cleanup.ok) logOperationalEvent({ eventName: 'cleanup_failed_agent_setup_run', userId: input.userId, projectId, runId: input.runId, reason: cleanup.status }, 'error')
 }

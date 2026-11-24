@@ -28,6 +28,18 @@ export interface ProcessFactSource {
   u: string
 }
 
+export interface ProcessFactRequirements {
+  aiDisclosure: {
+    required: boolean
+    note?: string
+  }
+  mentorApproval: {
+    required: boolean
+    scope?: string
+    note?: string
+  }
+}
+
 export interface ProcessFact {
   id: string
   unitId: string
@@ -40,6 +52,12 @@ export interface ProcessFact {
   source?: ProcessFactSource
   /** ISO date the policy took effect, if known. */
   effectiveDate?: string
+  /** Whether the source states a formal effective date. */
+  effectiveDateStatus?: 'stated' | 'not-stated'
+  /** Human-readable explanation when a formal effective date is not stated. */
+  effectiveDateNote?: string
+  /** Cross-cutting process obligations stated by the source. */
+  requirements?: ProcessFactRequirements
   /** ISO date a human last confirmed this against the source. */
   verifiedDate?: string
   status: ProcessFactStatus
@@ -91,7 +109,7 @@ export interface AiCapabilityCondition {
 
 export interface AiCapabilityFact {
   stance: AiCapabilityStance
-  /** Only meaningful when stance === 'conditional'. */
+  /** Obligations can also apply to an otherwise allowed capability. */
   condition?: AiCapabilityCondition
 }
 
@@ -180,6 +198,23 @@ export interface ResolvedCapability {
   sourceVerifiedDate?: string
 }
 
+export interface CapabilityExplanation {
+  capability: AiCapabilityId
+  label: string
+  stance: AiCapabilityStance
+  effective: 'allowed' | 'blocked'
+  reason: string
+  obligations: string[]
+  source?: ProcessFactSource
+  sourceFactId?: string
+  sourceStatus?: ProcessFactStatus
+  verifiedDate?: string
+  effectiveDate?: string
+  effectiveDateStatus?: 'stated' | 'not-stated'
+  effectiveDateNote?: string
+  requirements?: ProcessFactRequirements
+}
+
 /**
  * Resolves the effective answer for one AI capability against a unit's
  * process facts, most-specific-scope-first (course > program > faculty >
@@ -210,6 +245,62 @@ export function resolveCapability(
     }
   }
   return { capability, stance: 'unspecified', effective: DEFAULT_WHEN_UNSPECIFIED[capability] }
+}
+
+/**
+ * Builds the user-facing explanation for the same decision the server gate
+ * uses. This intentionally returns the source metadata, but never the raw
+ * policy document or private project content.
+ */
+export function explainCapability(
+  pack: ProcessFactPack | null,
+  unitId: string,
+  capability: AiCapabilityId,
+): CapabilityExplanation {
+  const resolved = resolveCapability(pack, unitId, capability)
+  const fact = resolved.sourceFactId
+    ? processFactsForUnit(pack, unitId).find((item) => item.id === resolved.sourceFactId)
+    : undefined
+  const condition = resolved.condition
+  const obligations = [
+    condition?.mentorApproval ? 'prethodna potvrda mentora' : '',
+    condition?.disclosureRequired ? 'jasna izjava o korištenju AI-ja' : '',
+  ].filter(Boolean)
+  const sourceLabel = fact?.label || 'verificirani institucionalni zapis'
+
+  let reason: string
+  if (!fact) {
+    reason = resolved.effective === 'blocked'
+      ? 'Za ovu ustanovu nema verificiranog AI policy zapisa za ovu radnju, pa je radnja blokirana dok se pravilo ne potvrdi.'
+      : 'Za ovu ustanovu nema posebnog AI policy zapisa za ovu pomoćnu radnju; dopuštena je samo uz provjeru korisnika i izvora.'
+  } else if (resolved.stance === 'banned') {
+    reason = `Službeni zapis „${sourceLabel}” ovu AI radnju izričito zabranjuje.`
+  } else if (resolved.stance === 'conditional') {
+    reason = obligations.length
+      ? `Službeni zapis „${sourceLabel}” dopušta ovu radnju samo uz: ${obligations.join(' i ')}.`
+      : `Službeni zapis „${sourceLabel}” ovu radnju dopušta samo pod dodatnim uvjetima.`
+  } else if (resolved.stance === 'allowed') {
+    reason = `Službeni zapis „${sourceLabel}” dopušta ovu pomoć, ali konačan sadržaj i provjera ostaju odgovornost autora.`
+  } else {
+    reason = `Službeni zapis „${sourceLabel}” ne uređuje ovu radnju dovoljno precizno, pa je Katedra blokira iz opreza.`
+  }
+
+  return {
+    capability,
+    label: AI_CAPABILITY_LABELS[capability],
+    stance: resolved.stance,
+    effective: resolved.effective,
+    reason,
+    obligations,
+    source: fact?.source,
+    sourceFactId: resolved.sourceFactId,
+    sourceStatus: resolved.sourceStatus,
+    verifiedDate: resolved.sourceVerifiedDate,
+    effectiveDate: fact?.effectiveDate,
+    effectiveDateStatus: fact?.effectiveDateStatus,
+    effectiveDateNote: fact?.effectiveDateNote,
+    requirements: fact?.requirements,
+  }
 }
 
 export const AI_POLICY_LABELS: Record<AiPolicyStance, string> = {

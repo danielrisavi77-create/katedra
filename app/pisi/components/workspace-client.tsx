@@ -5,24 +5,37 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { normalizeLektaHandoffHashForLegacyEngine } from '../../../lib/academic-suite/handoff'
 import { ensureGuestProjectIdentity } from '../../../lib/academic-suite/guest-project'
 import { buildProjectAuthRedirect } from '../../../lib/auth/project-redirect'
+import { compileAcademicContext } from '../../../lib/academic-context/compile-context'
+import { createAcademicCatalog } from '../../../lib/academic-context/load-pack'
+import { academicContextExportWarning } from '../../../lib/academic-context/presentation'
+import type { AcademicContext } from '../../../lib/academic-context/types'
+import { AI_CAPABILITY_LABELS, explainCapability, loadProcessFacts, type CapabilityExplanation, type ProcessFactPack } from '../../../lib/academic-suite/process-facts'
 import { useAuth } from '../../../lib/hooks/useAuth'
 import { createTextDeltaParser } from '../../../lib/manuscript/client-sse'
 import { mergeVerifiedAgenticSections } from '../../../lib/manuscript/agentic-merge'
 import { createCompletionScan } from '../../../lib/project/completion-scan'
 import { hasCanonicalAgenticPass } from '../../../lib/product/workflow-access'
+import { getClientAnonymousId, recordClientProductEvent } from '../../../lib/analytics/client-events'
 import type { AgenticDraftV1 } from '../../../lib/manuscript/agentic-revisions'
 import { shouldShowManuscriptOnboarding } from '../../../lib/manuscript/onboarding-state'
 import { buildAiMessages, capabilityForAction, type ManuscriptAiAction, type ManuscriptMaterialContext } from '../../../lib/manuscript/context'
 import { exportManuscriptDocx } from '../../../lib/manuscript/export-docx'
 import { migrateLegacyProject } from '../../../lib/manuscript/migration'
 import { serverStateToManifest } from '../../../lib/manuscript/server-project'
-import { appendPlainText, countDocumentWords, createSection, moveSection, plainTextDocument, removeSection } from '../../../lib/manuscript/model'
+import { appendPlainText, applyAcademicRequiredSections, countDocumentWords, createSection, moveSection, plainTextDocument, removeSection } from '../../../lib/manuscript/model'
 import { createAutosaveController } from '../../../lib/manuscript/autosave'
 import { validateImportedText, validateTextImport } from '../../../lib/manuscript/import-validation'
 import { validateManuscriptBackup } from '../../../lib/manuscript/backup-validation'
 import { createAiProposal, proposalApplyTarget } from '../../../lib/manuscript/proposals'
 import { canApplyProposal, isCurrentAiRequest } from '../../../lib/manuscript/proposal-guards'
 import { createManuscriptStore } from '../../../lib/manuscript/storage'
+import { createResearchPlanStore } from '../../../lib/research-plan/storage'
+import { createEmptyResearchPlan, transitionResearchPlan } from '../../../lib/research-plan/validation'
+import type { ResearchPlanStatus, ResearchPlanV1 } from '../../../lib/research-plan/types'
+import type { ResearchPlanAccess } from '../../../lib/research-plan/access'
+import { appendAiLedgerEntry, boundedInstruction, readAiLedger, updateAiLedgerEntry, type ManuscriptAiLedgerEntry } from '../../../lib/manuscript/ai-ledger'
+import { restoreTargetManuscript, type VersionRestoreTarget } from '../../../lib/manuscript/version-browser'
+import { planManualEditSnapshot, type ManualEditSnapshotState } from '../../../lib/manuscript/manual-edit-snapshot'
 import { getBrowserStorage, readStorage, writeStorage } from '../../../lib/manuscript/browser-storage'
 import { createUnreadableMaterial, isDocxFile, readLocalTextMaterial, readStoredComposerMaterials, writeStoredComposerMaterials, type ComposerMaterialV1 } from '../../../lib/manuscript/composer-materials'
 import { syncMetadata, type SyncStatus } from '../../../lib/manuscript/sync-status'
@@ -32,6 +45,8 @@ import { selectWorkspaceProject } from '../../../lib/manuscript/workspace-projec
 import type {
   AiProposalV1,
   LegacyWorkType,
+  ManuscriptChangeKind,
+  ManuscriptSnapshotV1,
   ManuscriptSectionStatus,
   ManuscriptSourceV1,
   ManuscriptV1,
@@ -48,6 +63,7 @@ import { FreeProjectPlan } from './free-project-plan'
 import { ProjectHome } from './project-home'
 import { ProjectModeOnboarding } from './project-mode-onboarding'
 import { ProjectDrawer } from './project-drawer'
+import { DeadlineReminderBanner } from './deadline-reminder-banner'
 import { WritingComposer } from './writing-composer'
 import type { ProjectNavItem } from './project-navigation'
 import { projectNavigationDestination, type ProjectDrawerTab } from './project-navigation-routing'
@@ -72,12 +88,16 @@ export type LektaWorkspaceSummary = {
 export default function WorkspaceClient({ agenticAvailable = false, webResearchAvailable = false }: { agenticAvailable?: boolean; webResearchAvailable?: boolean }) {
   const { user, loading: authLoading } = useAuth()
   const storeRef = useRef<ReturnType<typeof createManuscriptStore> | null>(null)
+  const researchPlanStoreRef = useRef<ReturnType<typeof createResearchPlanStore> | null>(null)
   const composerMaterialsHydratedRef = useRef(false)
   const localManuscriptFoundRef = useRef(false)
   const serverProjectHydratedRef = useRef<string | null>(null)
   const aiRequestRef = useRef<{ id: string; sectionId: string; controller: AbortController } | null>(null)
   const activeSectionIdRef = useRef<string | null>(null)
+  const manualEditSnapshotRef = useRef<ManualEditSnapshotState>({ sessionKey: null, lastActivityAt: null })
+  const manualEditSnapshotTimerRef = useRef<number | null>(null)
   const manuscriptRef = useRef<ManuscriptV1 | null>(null)
+  const researchPlanRef = useRef<ResearchPlanV1 | null>(null)
   const bootingRef = useRef(true)
   const onboardingRef = useRef(true)
   const autosaveRef = useRef<ReturnType<typeof createAutosaveController<ManuscriptV1>> | null>(null)
@@ -87,8 +107,14 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   const [initialTip, setInitialTip] = useState<LegacyWorkType | undefined>()
   const [scanMode, setScanMode] = useState(false)
   const [completionScan, setCompletionScan] = useState<ReturnType<typeof createCompletionScan> | null>(null)
+  const [academicContext, setAcademicContext] = useState<AcademicContext | null>(null)
+  const [processFacts, setProcessFacts] = useState<ProcessFactPack | null>(null)
   const [projectHome, setProjectHome] = useState(false)
   const [manuscript, setManuscript] = useState<ManuscriptV1 | null>(null)
+  const [researchPlan, setResearchPlan] = useState<ResearchPlanV1 | null>(null)
+  const [researchPlanSnapshots, setResearchPlanSnapshots] = useState<Array<{ id: string; reason: string; createdAt: string }>>([])
+  const [researchPlanStorageStatus, setResearchPlanStorageStatus] = useState<'saving' | 'saved' | 'error'>('saved')
+  const [researchPlanAccess, setResearchPlanAccess] = useState<ResearchPlanAccess | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('local_only')
   const [mobileView, setMobileView] = useState<MobileView>('editor')
@@ -106,11 +132,41 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   const [applyRequest, setApplyRequest] = useState<EditorApplyRequest | null>(null)
   const [acceptedFlash, setAcceptedFlash] = useState(false)
   const [mentorTasks, setMentorTasks] = useState<MentorTask[]>([])
+  const [versionEntries, setVersionEntries] = useState<ManuscriptSnapshotV1[]>([])
+  const [aiLedgerEntries, setAiLedgerEntries] = useState<ManuscriptAiLedgerEntry[]>([])
+
+  useEffect(() => {
+    if (!showOnboarding) return
+    recordClientProductEvent({ eventName: 'onboarding_started', idempotencyKey: `onboarding_started:${getClientAnonymousId()}` })
+  }, [showOnboarding])
   const [legacyChecks, setLegacyChecks] = useState<Record<string, boolean>>({})
   const [passStatus, setPassStatus] = useState<PassStatus>('idle')
   const [passOpen, setPassOpen] = useState(false)
   const [checkoutNotice, setCheckoutNotice] = useState('')
   const [lektaSummary, setLektaSummary] = useState<LektaWorkspaceSummary>({ score: null, checkedAt: '', fixedTotal: 0, issues: [] })
+  const academicContextProjectId = manuscript?.projectId
+  const academicContextUnitId = manuscript?.meta.unitId
+  const academicContextProfileId = manuscript?.meta.profileId
+  const academicContextWorkType = manuscript?.workType
+  const academicContextInstitutionName = manuscript?.meta.institution
+  const academicContextProgram = manuscript?.meta.program
+  const hasAcademicContextSource = manuscript !== null
+  const academicContextSource = useMemo(() => hasAcademicContextSource ? {
+    projectId: academicContextProjectId,
+    unitId: academicContextUnitId,
+    profileId: academicContextProfileId,
+    workType: academicContextWorkType,
+    institutionName: academicContextInstitutionName,
+    program: academicContextProgram,
+  } : null, [academicContextInstitutionName, academicContextProfileId, academicContextProgram, academicContextProjectId, academicContextUnitId, academicContextWorkType, hasAcademicContextSource])
+  const policyExplanations = useMemo<Partial<Record<keyof typeof AI_CAPABILITY_LABELS, CapabilityExplanation>>>(() => {
+    if (!academicContextUnitId) return {}
+    return Object.keys(AI_CAPABILITY_LABELS).reduce((result, capability) => {
+      const id = capability as keyof typeof AI_CAPABILITY_LABELS
+      result[id] = explainCapability(processFacts, academicContextUnitId, id)
+      return result
+    }, {} as Partial<Record<keyof typeof AI_CAPABILITY_LABELS, CapabilityExplanation>>)
+  }, [academicContextUnitId, processFacts])
   useEffect(() => {
     autosaveRef.current = createAutosaveController<ManuscriptV1>({
       save: async (value) => { await storeRef.current?.save(value) },
@@ -121,11 +177,44 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     }
   }, [])
 
+  useEffect(() => () => {
+    if (manualEditSnapshotTimerRef.current !== null) window.clearTimeout(manualEditSnapshotTimerRef.current)
+  }, [])
+
   useEffect(() => {
     manuscriptRef.current = manuscript
+    researchPlanRef.current = researchPlan
     bootingRef.current = booting
     onboardingRef.current = showOnboarding
-  }, [booting, manuscript, showOnboarding])
+  }, [booting, manuscript, researchPlan, showOnboarding])
+
+  useEffect(() => {
+    let active = true
+    if (!academicContextSource) return () => { active = false }
+    void fetch('/katedra-pack.json', { cache: 'force-cache' })
+      .then(async (response) => response.ok ? createAcademicCatalog(await response.json()) : null)
+      .then((catalog) => {
+        if (!active || !catalog || !academicContextSource) return
+        setAcademicContext(compileAcademicContext({
+          catalog,
+          unitId: academicContextSource.unitId,
+          profileId: academicContextSource.profileId,
+          workType: academicContextSource.workType,
+          institutionName: academicContextSource.institutionName,
+          program: academicContextSource.program,
+        }))
+      })
+    .catch(() => { if (active) setAcademicContext(null) })
+    return () => { active = false }
+  }, [academicContextSource])
+
+  useEffect(() => {
+    let active = true
+    void loadProcessFacts().then((facts) => {
+      if (active) setProcessFacts(facts)
+    })
+    return () => { active = false }
+  }, [])
 
   const flushCurrentManuscript = useCallback(() => {
     const value = !bootingRef.current && !onboardingRef.current ? manuscriptRef.current : null
@@ -155,13 +244,26 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
         : null
       const migrated = migrateLegacyProject({ manifest, legacyState })
       storeRef.current = createManuscriptStore()
+      researchPlanStoreRef.current = createResearchPlanStore()
       let stored: ManuscriptV1 | null = null
+      let storedResearchPlan: ResearchPlanV1 | null = null
       try {
         stored = await withTimeout(storeRef.current.load(migrated.projectId), 2000)
       } catch {
         // IndexedDB can be unavailable in private/restricted browser modes.
         // Continue in memory and surface the persistence limitation.
         setBootError('Lokalna pohrana nije dostupna; rukopis će trajati samo dok je ova kartica otvorena.')
+      }
+      try {
+        setVersionEntries(await withTimeout(storeRef.current.listSnapshots(migrated.projectId), 2000))
+      } catch {
+        setVersionEntries([])
+      }
+      try {
+        storedResearchPlan = await withTimeout(researchPlanStoreRef.current.load(migrated.projectId), 2000)
+        setResearchPlanSnapshots((await withTimeout(researchPlanStoreRef.current.listSnapshots(migrated.projectId), 2000)).map((snapshot) => ({ id: snapshot.id, reason: snapshot.reason, createdAt: snapshot.createdAt })))
+      } catch {
+        setResearchPlanSnapshots([])
       }
       if (cancelled) return
       const storage = getBrowserStorage()
@@ -170,6 +272,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       const projectSetupConfirmed = readStorage(storage, `${PROJECT_SETUP_PREFIX}${migrated.projectId}`) === '1'
       const persistedMobileView = normalizeMobileView(readStorage(storage, `${MOBILE_VIEW_PREFIX}${migrated.projectId}`))
       const restoredManuscript = stored || migrated
+      setResearchPlan(storedResearchPlan || createEmptyResearchPlan(migrated.projectId))
       localManuscriptFoundRef.current = Boolean(stored)
       const persistedView = parseWorkspaceView(readStorage(storage, `${WORKSPACE_VIEW_PREFIX}${migrated.projectId}`))
       const persistedAgenticPhase = initialAgenticWorkspacePhase(readStorage(storage, `${AGENTIC_PHASE_PREFIX}${migrated.projectId}`))
@@ -217,6 +320,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       aiRequestRef.current?.controller.abort()
       aiRequestRef.current = null
       void flushCurrentManuscript().catch(() => undefined).finally(() => storeRef.current?.close())
+      researchPlanStoreRef.current?.close()
     }
   }, [agenticAvailable, flushCurrentManuscript])
 
@@ -308,6 +412,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
         setPassStatus('error')
         return
       }
+      recordClientProductEvent({ eventName: 'project_attached', projectId: syncResult.canonicalProjectId || syncProjectId, idempotencyKey: `project_attached:${syncResult.canonicalProjectId || syncProjectId}` })
       try {
         const balanceProjectId = syncResult.canonicalProjectId || syncProjectId
         const response = await fetch(`/api/balance?projectId=${encodeURIComponent(balanceProjectId)}`, { cache: 'no-store' })
@@ -321,6 +426,47 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     void refresh()
     return () => { cancelled = true }
   }, [booting, showOnboarding, syncDeadline, syncProfileId, syncProjectId, syncTitle, syncUnitId, syncWorkType, user])
+
+  useEffect(() => {
+    const projectId = manuscript?.projectId
+    if (!projectId || booting || showOnboarding || authLoading || !user) return
+    let cancelled = false
+    void fetch(`/api/project-capabilities?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((body) => {
+        if (cancelled) return
+        setResearchPlanAccess(body?.capabilities || null)
+        const canonicalProjectId = typeof body?.projectId === 'string' ? body.projectId : projectId
+        if (canonicalProjectId === projectId || !researchPlanStoreRef.current) return
+        void (async () => {
+          const canonicalPlan = await researchPlanStoreRef.current?.load(canonicalProjectId)
+          if (canonicalPlan) {
+            setResearchPlan(canonicalPlan)
+          } else {
+            const current = manuscriptRef.current?.projectId === projectId ? researchPlanRef.current : null
+            if (current) {
+              const now = new Date().toISOString()
+              setResearchPlan({ ...current, projectId: canonicalProjectId, updatedAt: now, revision: `${now}:${current.revision}` })
+            }
+          }
+          const canonicalSnapshots = await researchPlanStoreRef.current?.listSnapshots(canonicalProjectId)
+          setResearchPlanSnapshots((canonicalSnapshots || []).map((snapshot) => ({ id: snapshot.id, reason: snapshot.reason, createdAt: snapshot.createdAt })))
+        })().catch(() => undefined)
+      })
+      .catch(() => { if (!cancelled) setResearchPlanAccess(null) })
+    return () => { cancelled = true }
+  }, [authLoading, booting, manuscript?.projectId, showOnboarding, user])
+
+  useEffect(() => {
+    if (!researchPlan || booting || showOnboarding) return
+    const timer = window.setTimeout(() => {
+      setResearchPlanStorageStatus('saving')
+      void researchPlanStoreRef.current?.save({ ...researchPlan, updatedAt: new Date().toISOString(), revision: `${new Date().toISOString()}:${researchPlan.revision}` })
+        .then(() => setResearchPlanStorageStatus('saved'))
+        .catch(() => setResearchPlanStorageStatus('error'))
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [booting, researchPlan, showOnboarding])
 
   useEffect(() => {
     const current = manuscriptRef.current
@@ -348,6 +494,79 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     setSaveStatus('saving')
     setManuscript((current) => current ? { ...recipe(current), updatedAt: new Date().toISOString() } : current)
   }, [])
+
+  const refreshSnapshots = useCallback(async (projectId: string) => {
+    try {
+      const snapshots = await storeRef.current?.listSnapshots(projectId)
+      setVersionEntries(snapshots || [])
+    } catch {
+      // Snapshot history is helpful but must never block the editor.
+    }
+  }, [])
+
+  const snapshotManuscript = useCallback(async (value: ManuscriptV1, reason: string, options: { changeKind?: ManuscriptChangeKind; sectionIds?: string[]; after?: ManuscriptV1 } = {}) => {
+    await storeRef.current?.snapshot(value, reason, options)
+    await refreshSnapshots(value.projectId)
+  }, [refreshSnapshots])
+
+  const refreshResearchPlanSnapshots = useCallback(async (projectId: string) => {
+    try {
+      const snapshots = await researchPlanStoreRef.current?.listSnapshots(projectId)
+      setResearchPlanSnapshots((snapshots || []).map((snapshot) => ({ id: snapshot.id, reason: snapshot.reason, createdAt: snapshot.createdAt })))
+    } catch {
+      // Plan history must never prevent editing the current local plan.
+    }
+  }, [])
+
+  const updateResearchPlan = useCallback((next: ResearchPlanV1) => {
+    const now = new Date().toISOString()
+    setResearchPlanStorageStatus('saving')
+    setResearchPlan({ ...next, updatedAt: now, revision: `${now}:${next.revision}` })
+  }, [])
+
+  const transitionResearchPlanStatus = useCallback(async (status: ResearchPlanStatus) => {
+    const current = researchPlan
+    if (!current) return
+    try {
+      if (status !== current.status) {
+        await researchPlanStoreRef.current?.snapshot(current, `Prije prijelaza u status: ${status}`)
+        await refreshResearchPlanSnapshots(current.projectId)
+      }
+      const result = transitionResearchPlan(current, status)
+      if (result.ok === false) {
+        setAssistantError(result.error)
+        return
+      }
+      setResearchPlan(result.value)
+      setResearchPlanStorageStatus('saving')
+    } catch {
+      setResearchPlanStorageStatus('error')
+      setAssistantError('Lokalnu reviziju istraživačkog plana nije moguće spremiti.')
+    }
+  }, [refreshResearchPlanSnapshots, researchPlan])
+
+  const snapshotResearchPlan = useCallback(async (reason: string) => {
+    if (!researchPlan) return
+    try {
+      await researchPlanStoreRef.current?.snapshot(researchPlan, reason)
+      await refreshResearchPlanSnapshots(researchPlan.projectId)
+    } catch {
+      setResearchPlanStorageStatus('error')
+    }
+  }, [refreshResearchPlanSnapshots, researchPlan])
+
+  const restoreResearchPlan = useCallback(async (snapshotId: string) => {
+    if (!researchPlan) return
+    try {
+      const restored = await researchPlanStoreRef.current?.restore(snapshotId, researchPlan.projectId)
+      if (!restored) return
+      await researchPlanStoreRef.current?.snapshot(researchPlan, 'Prije vraćanja istraživačkog plana')
+      setResearchPlan({ ...restored, updatedAt: new Date().toISOString(), revision: `${new Date().toISOString()}:${restored.revision}` })
+      await refreshResearchPlanSnapshots(researchPlan.projectId)
+    } catch {
+      setAssistantError('Istraživački plan nije moguće vratiti.')
+    }
+  }, [refreshResearchPlanSnapshots, researchPlan])
 
   const activeSection = useMemo(() => manuscript?.sections.find((section) => section.id === manuscript.activeSectionId) || manuscript?.sections[0], [manuscript])
   useEffect(() => {
@@ -395,7 +614,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
 
   const completeOnboarding = (result: OnboardingResult) => {
     if (!manuscript) return
-    const next = migrateLegacyProject({
+    let next = migrateLegacyProject({
       manifest: {
         projectId: manuscript.projectId,
         topic: result.title,
@@ -408,6 +627,9 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       },
       legacyState: { gen: { f_fakultet: result.institution, f_smjer: result.program, f_mentor: result.mentor } },
     })
+    if (result.academicContext && !result.importedText && !['outline', 'draft', 'review', 'almost_done'].includes(result.currentState)) {
+      next = applyAcademicRequiredSections(next, result.academicContext)
+    }
     const scan = createCompletionScan({
       startMode: result.startMode,
       currentState: result.currentState,
@@ -416,6 +638,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       mentor: result.mentor,
       deadline: result.deadline,
       materials: result.materials,
+      academicContext: result.academicContext,
     })
     next.meta = { ...next.meta, currentState: result.currentState, materials: result.materials }
     if (result.importedText) next.sections[0].content = plainTextDocument(result.importedText)
@@ -426,9 +649,12 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     enterProjectOverview(next.projectId)
     persistManifest(next)
     setManuscript(next)
+    setAcademicContext(result.academicContext || null)
     setCompletionScan(scan)
+    recordClientProductEvent({ eventName: 'completion_scan_completed', projectId: next.projectId, idempotencyKey: `completion_scan_completed:${next.projectId}` })
     setShowOnboarding(false)
     void syncMetadata(next, Boolean(user)).then((result) => setSyncStatus(result.status))
+    if (user) recordClientProductEvent({ eventName: 'project_attached', projectId: next.projectId, idempotencyKey: `project_attached:${next.projectId}` })
   }
 
   const completeProjectMode = (mode: ProjectMode) => {
@@ -447,16 +673,42 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   }
 
   const updateSectionContent = (content: TiptapNode) => {
-    if (!activeSection) return
-    updateManuscript((current) => ({
+    const current = manuscriptRef.current
+    if (!activeSection || !current) return
+    const now = new Date()
+    const nowIso = now.toISOString()
+    const next = {
       ...current,
       sections: current.sections.map((section) => section.id === activeSection.id ? {
         ...section,
         content,
         status: section.status === 'empty' && countDocumentWords(content) ? 'draft' : section.status,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso,
       } : section),
-    }))
+      updatedAt: nowIso,
+    }
+    const wasEmpty = countDocumentWords(activeSection.content) === 0
+    if (wasEmpty && countDocumentWords(content) > 0) recordClientProductEvent({ eventName: 'first_section_written', projectId: current.projectId, idempotencyKey: `first_section_written:${current.projectId}` })
+    const decision = planManualEditSnapshot({
+      state: manualEditSnapshotRef.current,
+      projectId: current.projectId,
+      sectionId: activeSection.id,
+      now: now.getTime(),
+    })
+    manualEditSnapshotRef.current = decision.nextState
+    if (decision.shouldSnapshot) {
+      void snapshotManuscript(current, `Korisnička promjena: ${activeSection.title}`, { changeKind: 'user_change', sectionIds: [activeSection.id], after: next }).catch(() => {
+        // Version history must never block typing when IndexedDB is unavailable.
+      })
+    }
+    if (manualEditSnapshotTimerRef.current !== null) window.clearTimeout(manualEditSnapshotTimerRef.current)
+    manualEditSnapshotTimerRef.current = window.setTimeout(() => {
+      const state = manualEditSnapshotRef.current
+      if (state.sessionKey === decision.nextState.sessionKey && state.lastActivityAt === decision.nextState.lastActivityAt) {
+        manualEditSnapshotRef.current = { sessionKey: state.sessionKey, lastActivityAt: null }
+      }
+    }, 1200)
+    updateManuscript(() => next)
   }
 
   const acceptAgenticDraft = async (draft: AgenticDraftV1, sectionIds?: string[]): Promise<boolean> => {
@@ -467,7 +719,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       return false
     }
     try {
-      await storeRef.current?.snapshot(manuscript, 'Prije prihvata verificiranog agenticnog rezultata')
+      await snapshotManuscript(manuscript, 'Prije prihvata verificiranog agenticnog rezultata')
       setManuscript(merged.manuscript)
       setSaveStatus('saving')
       clearAiContext()
@@ -487,6 +739,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     }
     setAssistantError('')
     setAssistantBusy(true)
+    recordClientProductEvent({ eventName: 'first_ai_request', projectId: manuscript.projectId, properties: { action }, idempotencyKey: `first_ai_request:${manuscript.projectId}` })
     const requestId = globalThis.crypto?.randomUUID?.() || `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
     const controller = new AbortController()
     const requestSectionId = activeSection.id
@@ -501,19 +754,34 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       selectedTo: selection?.to,
     })
     setProposal(base)
+    const aiMessages = buildAiMessages({ manuscript, sectionId: requestSectionId, action, selectionText: selection?.text, instruction, materialContext: composerMaterials, academicContext: academicContext || undefined, researchPlan })
+    const ledgerEntry: ManuscriptAiLedgerEntry = {
+      id: base.id,
+      occurredAt: new Date().toISOString(),
+      projectId: manuscript.projectId,
+      sectionId: requestSectionId,
+      sectionTitle: activeSection.title,
+      action,
+      requestId,
+      sentSummary: { instruction: boundedInstruction(instruction), messageCount: aiMessages.length, charCount: JSON.stringify(aiMessages).length, selectionChars: selection?.text?.length || 0, attachments: composerMaterials.length, contextKinds: ['active_section', ...(selection?.text ? ['selection'] : []), ...(academicContext ? ['academic_context'] : [])] },
+      outcome: 'pending',
+      sources: manuscript.sources.slice(0, 20).map((source) => source.title.slice(0, 120) || source.id),
+    }
+    setAiLedgerEntries(appendAiLedgerEntry(manuscript.projectId, ledgerEntry, getBrowserStorage()))
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          messages: buildAiMessages({ manuscript, sectionId: requestSectionId, action, selectionText: selection?.text, instruction, materialContext: composerMaterials }),
+          messages: aiMessages,
           projectId: manuscript.projectId,
           capability: capabilityForAction(action),
         }),
       })
       if (response.status === 402) setPassOpen(true)
       if (!response.ok || !response.body) throw new Error(await responseMessage(response))
+      setAiLedgerEntries(updateAiLedgerEntry(manuscript.projectId, base.id, { provider: response.headers.get('x-katedra-provider') || undefined, model: response.headers.get('x-katedra-model') || undefined, requestId: response.headers.get('x-katedra-request-id') || requestId }, getBrowserStorage()))
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       const parser = createTextDeltaParser()
@@ -533,6 +801,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       if (error instanceof DOMException && error.name === 'AbortError') return
       if (!isCurrentAiRequest(requestId, aiRequestRef.current?.id || null, requestSectionId, activeSectionIdRef.current || '')) return
       setProposal(null)
+      setAiLedgerEntries(updateAiLedgerEntry(manuscript.projectId, base.id, { outcome: 'error' }, getBrowserStorage()))
       setAssistantError(error instanceof Error ? error.message : 'AI prijedlog nije uspio.')
     } finally {
       if (aiRequestRef.current?.id === requestId) {
@@ -552,7 +821,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       return
     }
     try {
-      await storeRef.current?.snapshot(manuscript, `AI prijedlog: ${proposal.action}`)
+      await snapshotManuscript(manuscript, `AI prijedlog: ${proposal.action}`)
     } catch {
       setAssistantError('Prijedlog nije moguće spremiti u lokalnu verziju.')
       return
@@ -577,6 +846,8 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       return
     }
     updateSectionContent(content)
+    recordClientProductEvent({ eventName: 'ai_proposal_accepted', projectId: manuscript?.projectId, properties: { action: proposal?.action || 'unknown' }, idempotencyKey: `ai_proposal_accepted:${proposal?.id || Date.now().toString(36)}` })
+    setAiLedgerEntries(updateAiLedgerEntry(manuscript?.projectId || '', proposal?.id || '', { outcome: 'accepted' }, getBrowserStorage()))
     appendProcessLog(manuscript?.projectId || '', proposal?.action || 'AI prijedlog', activeSection?.id || '')
     setProposal((current) => current ? { ...current, status: 'accepted' } : current)
     setApplyRequest(null)
@@ -584,11 +855,27 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
     setTimeout(() => { setAcceptedFlash(false); setProposal(null) }, 900)
   }
 
+  const rejectProposal = () => {
+    if (manuscript && proposal) setAiLedgerEntries(updateAiLedgerEntry(manuscript.projectId, proposal.id, { outcome: 'rejected' }, getBrowserStorage()))
+    setProposal(null)
+    setApplyRequest(null)
+  }
+
+  const editProposal = (text: string) => {
+    if (manuscript && proposal) setAiLedgerEntries(updateAiLedgerEntry(manuscript.projectId, proposal.id, { outcome: 'edited' }, getBrowserStorage()))
+    setProposal((current) => current ? { ...current, proposedText: text } : current)
+  }
+
   const exportDocx = async () => {
     if (!manuscript) return
     try {
-      await exportManuscriptDocx(manuscript)
+      await exportManuscriptDocx(manuscript, academicContext)
+      recordClientProductEvent({ eventName: 'docx_exported', projectId: manuscript.projectId, idempotencyKey: `docx_exported:${manuscript.projectId}:${manuscript.updatedAt}` })
+      if (academicContext) {
+        window.alert(academicContextExportWarning(academicContext))
+      } else {
       window.alert('DOCX je izrađen iz rukopisa, ali nije tehnički verificiran. Otvori ga u Wordu i provjeri u Lekti prije predaje.')
+      }
     } catch {
       window.alert('DOCX izvoz nije uspio. Lokalni rukopis ostao je sačuvan.')
     }
@@ -607,7 +894,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
       window.alert('Odabrana datoteka nema tekstualni sadržaj.')
       return
     }
-      await storeRef.current?.snapshot(manuscript, `Uvoz teksta: ${file.name}`)
+      await snapshotManuscript(manuscript, `Uvoz teksta: ${file.name}`)
       clearAiContext()
       updateManuscript((current) => ({
         ...current,
@@ -783,6 +1070,7 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
   return (
     <>
       {bootError && <div className="pis-storage-warning" role="status">{bootError}</div>}
+      {!showOnboarding && !booting && manuscript.meta.deadline && <DeadlineReminderBanner projectId={manuscript.projectId} deadline={manuscript.meta.deadline} stage={manuscript.sections.some((section) => section.status === 'review') ? 'review' : manuscript.sections.some((section) => section.status !== 'empty') ? 'writing' : 'plan'} authenticated={Boolean(user)} institution={manuscript.meta.unitId} workType={manuscript.workType} onNavigate={() => { setProjectHome(false); changeMobileView('editor') }} />}
       <WorkspaceShell
         manuscript={manuscript}
         saveStatus={saveStatus}
@@ -798,8 +1086,8 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
          projectLocked={effectiveAgenticMode && agenticPassActive}
          projectMode={effectiveProjectMode}
          focusMode={focusMode}
-        agenticContent={effectiveAgenticMode ? <AgentStudioShell manuscript={manuscript} passActive={agenticPassActive} phase={agenticView} onOpenWriting={effectiveProjectMode === 'autonomous' ? undefined : () => navigateProject('writing')}><PaidProjectSetup projectId={manuscript.projectId} passActive={agenticPassActive} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} requestedPhase={agenticView} onPhaseChange={selectAgenticPhase} onContextUpdated={(nextManuscript) => updateManuscript(() => nextManuscript)} onAcceptDraft={acceptAgenticDraft} onOpenSection={openManuscriptSection} onOpenAssistant={effectiveProjectMode === 'autonomous' ? undefined : openAssistantForStep} lockedMode={effectiveProjectMode === 'autonomous' ? 'autonomous' : undefined} webResearchAvailable={webResearchAvailable} /></AgentStudioShell> : undefined}
-        projectHome={projectHome ? <ProjectHome manuscript={manuscript} passActive={passActive} syncStatus={syncStatus} onNavigate={navigateNextAction} /> : undefined}
+        agenticContent={effectiveAgenticMode ? <AgentStudioShell manuscript={manuscript} passActive={agenticPassActive} phase={agenticView} onOpenWriting={effectiveProjectMode === 'autonomous' ? undefined : () => navigateProject('writing')}><PaidProjectSetup projectId={manuscript.projectId} passActive={agenticPassActive} sectionIds={manuscript.sections.map((section) => section.id)} manuscript={manuscript} requestedPhase={agenticView} onPhaseChange={selectAgenticPhase} onContextUpdated={(nextManuscript) => updateManuscript(() => nextManuscript)} onAcceptDraft={acceptAgenticDraft} onOpenSection={openManuscriptSection} onOpenAssistant={effectiveProjectMode === 'autonomous' ? undefined : openAssistantForStep} lockedMode={effectiveProjectMode === 'autonomous' ? 'autonomous' : undefined} webResearchAvailable={webResearchAvailable && academicContext?.capabilities.webResearch === true} /></AgentStudioShell> : undefined}
+        projectHome={projectHome ? <ProjectHome manuscript={manuscript} academicContext={academicContext} passActive={passActive} syncStatus={syncStatus} lektaSummary={lektaSummary} onNavigate={navigateNextAction} /> : undefined}
         account={authLoading ? <span className="pis-account">Provjera računa…</span> : user ? (
           <div className="pis-account-group">
             <a className="pis-account" href="/racun">{user.email || 'Moj račun'}</a>
@@ -820,10 +1108,10 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
           />
         }
         editor={<>
-          <WritingComposer sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} materials={composerMaterials} onRun={(action, instruction) => void runAi(action, instruction)} onUpload={uploadComposerMaterial} onRemoveUpload={(name) => setComposerMaterials((current) => current.filter((material) => material.name !== name))} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />
+          <WritingComposer sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} materials={composerMaterials} onRun={(action, instruction) => void runAi(action, instruction)} onUpload={uploadComposerMaterial} onRemoveUpload={(name) => setComposerMaterials((current) => current.filter((material) => material.name !== name))} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={rejectProposal} onEdit={editProposal} />
           <ManuscriptEditor section={activeSection} acceptedFlash={acceptedFlash} onChange={updateSectionContent} onSelectionChange={setSelection} applyRequest={applyRequest} onApplied={onApplied} />
         </>}
-         assistant={<AssistantPanel sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} error={assistantError} initialTab="helpers" showProposal={false} showPrompt={false} onToggleFocus={() => setFocusMode((current) => !current)} onRun={(action, instruction) => void runAi(action, instruction)} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={() => { setProposal(null); setApplyRequest(null) }} onEdit={(text) => setProposal((current) => current ? { ...current, proposedText: text } : current)} />}
+         assistant={<AssistantPanel sectionTitle={activeSection.title} selectionText={selection?.text} proposal={visibleProposal} busy={assistantBusy} error={assistantError} policyExplanations={policyExplanations} initialTab="helpers" showProposal={false} showPrompt={false} onToggleFocus={() => setFocusMode((current) => !current)} onRun={(action, instruction) => void runAi(action, instruction)} onAccept={() => void applyProposal('replace')} onInsert={() => void applyProposal('append')} onReject={rejectProposal} onEdit={editProposal} />}
       />
       <ProjectDrawer
         open={drawerOpen}
@@ -832,16 +1120,22 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
         mentorTasks={mentorTasks}
         lektaSummary={lektaSummary}
         passActive={agenticPassActive}
+        academicContext={academicContext}
+        researchPlan={researchPlan}
+        researchPlanAccess={user && !authLoading && !booting && !showOnboarding ? researchPlanAccess : null}
+        researchPlanSnapshots={researchPlanSnapshots}
+        researchPlanStorageStatus={researchPlanStorageStatus}
         onClose={() => setDrawerOpen(false)}
         onMetaChange={(field, value) => updateManuscript((current) => ({ ...current, meta: { ...current.meta, [field]: value } }))}
         onAddSource={(source: ManuscriptSourceV1) => updateManuscript((current) => ({ ...current, sources: [...current.sources, source] }))}
         onRemoveSource={(id) => updateManuscript((current) => ({ ...current, sources: current.sources.filter((source) => source.id !== id) }))}
+        onUpdateSource={(source: ManuscriptSourceV1) => updateManuscript((current) => ({ ...current, sources: current.sources.map((item) => item.id === source.id ? source : item) }))}
         onAddMentorTask={(text) => { const next = [...mentorTasks, { id: `mentor-${Date.now().toString(36)}`, text, done: false, sectionId: activeSection.id }]; setMentorTasks(next); writeStorage(getBrowserStorage(), `${MENTOR_PREFIX}${manuscript.projectId}`, JSON.stringify(next)) }}
         onToggleMentorTask={(id) => { const next = mentorTasks.map((task) => task.id === id ? { ...task, done: !task.done } : task); setMentorTasks(next); writeStorage(getBrowserStorage(), `${MENTOR_PREFIX}${manuscript.projectId}`, JSON.stringify(next)) }}
         onBackup={() => downloadJson(manuscript)}
         onRestore={(file) => void (async () => {
           try {
-            await storeRef.current?.snapshot(manuscript, 'Prije vraćanja backupa')
+            await snapshotManuscript(manuscript, 'Prije vraćanja backupa')
             const restored = await restoreJson(file, manuscript.projectId)
              clearAiContext()
              setManuscript(restored)
@@ -852,8 +1146,30 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
         })()}
         onImportText={(file) => void importTextFile(file)}
         onAcceptDraft={acceptAgenticDraft}
+        onResearchPlanChange={updateResearchPlan}
+        onResearchPlanTransition={(status) => void transitionResearchPlanStatus(status)}
+        onResearchPlanSnapshot={(reason) => void snapshotResearchPlan(reason)}
+        onRestoreResearchPlan={(snapshotId) => void restoreResearchPlan(snapshotId)}
         requestedTab={drawerTab}
         onTabChange={setDrawerTab}
+        versionEntries={versionEntries}
+        aiLedgerEntries={aiLedgerEntries.length ? aiLedgerEntries : readAiLedger(manuscript.projectId, getBrowserStorage())}
+        onLektaHandoff={() => recordClientProductEvent({ eventName: 'lekta_handoff_started', projectId: manuscript.projectId, idempotencyKey: `lekta_handoff_started:${manuscript.projectId}` })}
+        onRecordVersion={() => void snapshotManuscript(manuscript, 'Mentorova revizija', { changeKind: 'mentor_review' })}
+        onRestoreVersion={(snapshot, sectionId, target: VersionRestoreTarget = 'before') => void (async () => {
+          try {
+            await snapshotManuscript(manuscript, 'Prije vraćanja lokalne verzije')
+            clearAiContext()
+            const targetManuscript = restoreTargetManuscript(snapshot, target)
+            const restored = sectionId
+              ? { ...manuscript, sections: manuscript.sections.map((section) => section.id === sectionId ? (targetManuscript.sections.find((item) => item.id === sectionId) || section) : section), updatedAt: new Date().toISOString() }
+              : { ...targetManuscript, updatedAt: new Date().toISOString() }
+            setManuscript(restored)
+            setSaveStatus('saving')
+          } catch {
+            setAssistantError('Lokalnu verziju nije moguće vratiti.')
+          }
+        })()}
         historyEntries={(readJson<Array<{ occurredAt?: unknown; action?: unknown; sectionId?: unknown }>>(`katedra_manuscript_log:${manuscript.projectId}`) || []).flatMap((entry) => typeof entry.occurredAt === 'string' && typeof entry.action === 'string' && typeof entry.sectionId === 'string' ? [{ occurredAt: entry.occurredAt, action: entry.action, sectionId: entry.sectionId }] : [])}
       />
       {checkoutNotice && <div className="pis-checkout-notice" role="status"><span>{checkoutNotice}</span><button type="button" onClick={() => setCheckoutNotice('')} aria-label="Zatvori obavijest">×</button></div>}
@@ -864,8 +1180,12 @@ export default function WorkspaceClient({ agenticAvailable = false, webResearchA
         projectTitle={manuscript.title}
         institution={manuscript.meta.institution}
         program={manuscript.meta.program}
+        profileId={manuscript.meta.profileId}
         mentor={manuscript.meta.mentor}
         deadline={manuscript.meta.deadline}
+        academicContext={academicContext}
+        onOpen={() => recordClientProductEvent({ eventName: 'pass_dialog_opened', projectId: manuscript.projectId, idempotencyKey: `pass_dialog_opened:${manuscript.projectId}` })}
+        onCheckoutStarted={() => recordClientProductEvent({ eventName: 'checkout_started', projectId: manuscript.projectId, idempotencyKey: `checkout_started:${manuscript.projectId}:${manuscript.updatedAt}` })}
         onClose={() => setPassOpen(false)}
       />
     </>

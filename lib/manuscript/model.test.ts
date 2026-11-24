@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 
 import {
   appendPlainText,
+  applyAcademicRequiredSections,
   countDocumentWords,
   createManuscript,
   createSection,
   documentText,
   moveSection,
   removeSection,
+  plainTextDocument,
 } from './model'
+import type { AcademicContext } from '../academic-context/types'
 
 describe('manuscript model', () => {
   it('creates a graduate manuscript with a stable academic outline', () => {
@@ -66,5 +69,32 @@ describe('manuscript model', () => {
     expect(documentText(content)).toContain('Postojeći odlomak.')
     expect(documentText(content)).toContain('Novi odlomak.')
     expect(content.content).toHaveLength(3)
+  })
+
+  it('builds a profile-specific outline while preserving an existing approved section', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', workType: 'd', now: '2026-08-13T12:00:00.000Z' })
+    manuscript.sections[0].status = 'approved'
+    manuscript.sections[0].content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Odobren uvod.' }] }] }
+    const context = { requiredSections: ['Sažetak', 'Uvod', 'Metodologija', 'Zaključak', 'Literatura'] } as AcademicContext
+
+    const next = applyAcademicRequiredSections(manuscript, context)
+
+    expect(next.sections.map((section) => section.title)).toEqual([...context.requiredSections, 'Teorijski okvir', 'Analiza i rasprava'])
+    expect(documentText(next.sections.find((section) => section.title === 'Uvod')?.content)).toContain('Odobren uvod.')
+    expect(next.sections.find((section) => section.title === 'Metodologija')?.status).toBe('empty')
+  })
+
+  it('merges required academic sections with an existing user outline', () => {
+    const manuscript = createManuscript({ projectId: 'project-2', workType: 'd', now: '2026-08-13T12:00:00.000Z' })
+    manuscript.sections = [
+      { ...manuscript.sections[0], title: 'Teorijski okvir', status: 'draft', content: plainTextDocument('Odobreni teorijski okvir.') },
+      createSection({ title: 'Analiza', order: 1 }),
+    ]
+    const context = { requiredSections: ['Uvod', 'ZakljuÄŤak', 'Literatura'] } as AcademicContext
+
+    const next = applyAcademicRequiredSections(manuscript, context)
+
+    expect(next.sections.map((section) => section.title)).toEqual(['Uvod', 'ZakljuÄŤak', 'Literatura', 'Teorijski okvir', 'Analiza'])
+    expect(documentText(next.sections.find((section) => section.title === 'Teorijski okvir')?.content)).toContain('Odobreni teorijski okvir.')
   })
 })

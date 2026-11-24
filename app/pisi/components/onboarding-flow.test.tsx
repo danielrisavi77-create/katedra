@@ -203,4 +203,62 @@ describe('OnboardingFlow', () => {
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('listbox')).toBeNull()
   })
+
+  it('returns a compiled academic context without placing the pack in the project manifest', async () => {
+    const user = userEvent.setup()
+    const onComplete = vi.fn()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      units: [{ id: 'fpzg', name: 'Fakultet političkih znanosti', inst: 'Sveučilište u Zagrebu', profiles: ['fpzg-politologija-diplomski'] }],
+      profiles: [{
+        id: 'fpzg-politologija-diplomski', unitId: 'fpzg', label: 'FPZG · diplomska Politologija · diplomski rad',
+        status: 'verified', verifiedAt: '2026-06-28', workTypes: ['graduate'], wordMin: 10000, wordMax: 12000,
+        minReferences: 15, facts: ['Najmanje 3 knjige.'], sections: ['Uvod', 'Metodologija'], manualChecks: [], submissionFacts: [], sources: [{ t: 'Upute', u: 'https://fpzg.example/upute' }],
+      }],
+    }) }))
+    render(<ThemeProvider><OnboardingFlow initialTip="d" onComplete={onComplete} /></ThemeProvider>)
+
+    await user.click(screen.getByRole('button', { name: /novi rad/i }))
+    await user.type(screen.getByLabelText(/fakultet ili ustanova/i), 'FPZG')
+    await user.click(await screen.findByRole('option', { name: /fakultet političkih znanosti/i }))
+    await user.click(screen.getByLabelText(/smjer.*studij/i))
+    await user.click(await screen.findByRole('option', { name: /politologija/i }))
+    await user.click(screen.getByRole('button', { name: /dalje/i }))
+    await user.click(screen.getByRole('button', { name: /imam temu/i }))
+    await user.click(screen.getByRole('button', { name: /dalje/i }))
+    await user.click(screen.getByRole('button', { name: /dalje/i }))
+    await user.click(screen.getByRole('button', { name: /otvori projekt/i }))
+
+    expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({
+      unitId: 'fpzg',
+      profileId: 'fpzg-politologija-diplomski',
+      academicContext: expect.objectContaining({ status: 'verified', wordRange: { min: 10000, max: 12000 } }),
+    }))
+  })
+
+  it('shows the selected profile status, verification date, source and compiled rules before continuing', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      units: [{ id: 'fpzg', name: 'Fakultet političkih znanosti', inst: 'Sveučilište u Zagrebu', profiles: ['fpzg-politologija-diplomski'] }],
+      profiles: [{
+        id: 'fpzg-politologija-diplomski', unitId: 'fpzg', label: 'FPZG · diplomska Politologija · diplomski rad',
+        status: 'verified', verifiedAt: '2026-06-28', workTypes: ['graduate'], wordMin: 10000, wordMax: 12000,
+        minReferences: 15, facts: ['Najmanje 3 knjige.'], sections: ['Uvod'], manualChecks: [], submissionFacts: [],
+        sources: [{ t: 'Službene upute FPZG-a', u: 'https://fpzg.example/upute' }],
+      }],
+    }) }))
+    render(<ThemeProvider><OnboardingFlow initialTip="d" onComplete={vi.fn()} /></ThemeProvider>)
+
+    await user.click(screen.getByRole('button', { name: /novi rad/i }))
+    await user.type(screen.getByLabelText(/fakultet ili ustanova/i), 'FPZG')
+    await user.click(await screen.findByRole('option', { name: /fakultet političkih znanosti/i }))
+    await user.click(screen.getByLabelText(/smjer.*studij/i))
+    await user.click(await screen.findByRole('option', { name: /^Politologija$/i }))
+
+    const preview = screen.getByRole('region', { name: /akademska pravila odabranog profila/i })
+    expect(preview.textContent).toContain('Pravila verificirana')
+    expect(preview.textContent).toContain('2026-06-28')
+    expect(preview.textContent).toContain('10.000–12.000')
+    expect(preview.textContent).toContain('15')
+    expect(screen.getByRole('link', { name: /službeni izvor pravila/i }).getAttribute('href')).toBe('https://fpzg.example/upute')
+  })
 })

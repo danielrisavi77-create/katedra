@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 
+import type { AiCapabilityId, CapabilityExplanation } from '../../../lib/academic-suite/process-facts'
 import type { ManuscriptAiAction } from '../../../lib/manuscript/context'
 import type { AiProposalV1 } from '../../../lib/manuscript/types'
 
@@ -40,6 +41,7 @@ export function AssistantPanel({
   onReject,
   onEdit,
   onToggleFocus,
+  policyExplanations,
   initialTab = 'context',
   showProposal = true,
   showPrompt = true,
@@ -55,6 +57,7 @@ export function AssistantPanel({
   onReject: () => void
   onEdit: (text: string) => void
   onToggleFocus?: () => void
+  policyExplanations?: Partial<Record<AiCapabilityId, CapabilityExplanation>>
   initialTab?: 'context' | 'helpers'
   showProposal?: boolean
   showPrompt?: boolean
@@ -78,7 +81,13 @@ export function AssistantPanel({
       {tab === 'context' && <>
         {selectionText && <blockquote className="pis-selection-preview">„{selectionText.slice(0, 180)}{selectionText.length > 180 ? '…' : ''}”</blockquote>}
         {!proposal && <div className="pis-action-list">
-          {ACTIONS.map((action) => <button type="button" key={action.id} disabled={busy || (['expand', 'shorten'].includes(action.id) && !selectionText)} onClick={() => onRun(action.id)}><b>{action.label}</b><small>{action.hint}</small><span>→</span></button>)}
+          {ACTIONS.map((action) => {
+            const policy = policyExplanations?.[policyCapabilityForAction(action.id)]
+            return <div className="pis-action-row" key={action.id}>
+              <button type="button" disabled={busy || (['expand', 'shorten'].includes(action.id) && !selectionText)} onClick={() => onRun(action.id)}><b>{action.label}</b><small>{action.hint}</small><span>→</span></button>
+              {policy && <PolicyRationale policy={policy} />}
+            </div>
+          })}
         </div>}
         {showProposal && proposal && <Proposal proposal={proposal} onAccept={onAccept} onInsert={onInsert} onReject={onReject} onEdit={onEdit} />}
         {error && <div className="pis-assistant-error" role="alert">{error}</div>}
@@ -88,13 +97,57 @@ export function AssistantPanel({
         </form>}
       </>}
 
-      {tab === 'helpers' && <div className="pis-helper-list">
+      {tab === 'helpers' && <>
+        {policyExplanations?.generate_large_sections && <div className="pis-policy-summary">
+          <p>Pravila za AI pisanje</p>
+          <PolicyRationale policy={policyExplanations.generate_large_sections} />
+        </div>}
+        <div className="pis-helper-list">
         <p className="pis-helper-intro">Pomagala za aktivnu sekciju. Rezultat se vraća u chat iznad rukopisa gdje ga možeš pregledati.</p>
         {HELPERS.map((helper, index) => <button type="button" key={helper.title} onClick={() => helper.action ? onRun(helper.action, helper.instruction) : onToggleFocus?.()}><span>{String(index + 1).padStart(2, '0')}</span><strong>{helper.title}</strong><small>{helper.description}</small><em aria-hidden="true">→</em></button>)}
         {onToggleFocus && <button type="button" onClick={onToggleFocus}><span>10</span><strong>Fokus način rada</strong><small>Sakrij pomoćne stupce i ostavi samo rukopis.</small><em aria-hidden="true">→</em></button>}
-      </div>}
+        </div>
+      </>}
     </section>
   )
+}
+
+function policyCapabilityForAction(action: ManuscriptAiAction): AiCapabilityId | null {
+  if (['draft', 'expand', 'improve'].includes(action)) return 'generate_large_sections'
+  if (action === 'shorten') return 'paraphrase_for_submission'
+  if (action === 'coach') return 'brainstorming'
+  if (action === 'next') return 'structure_assist'
+  if (action === 'review') return 'language_editing'
+  return null
+}
+
+function PolicyRationale({ policy }: { policy: CapabilityExplanation }) {
+  const [open, setOpen] = useState(false)
+  const decision = policy.effective === 'allowed'
+    ? policy.obligations.length ? 'Dopušteno uz uvjete' : 'Dopušteno'
+    : 'Blokirano'
+
+  return <div className={`pis-policy-rationale is-${policy.effective}`}>
+    <button
+      type="button"
+      className="pis-policy-rationale-trigger"
+      aria-expanded={open}
+      onClick={() => setOpen((current) => !current)}
+    >
+      Zašto je ova AI radnja dopuštena ili blokirana?
+    </button>
+    {open && <div className="pis-policy-rationale-detail" role="region" aria-label={`Objašnjenje: ${policy.label}`}>
+      <strong>{decision}</strong>
+      <p>{policy.reason}</p>
+      {policy.obligations.length > 0 && <p>Obavezno: {policy.obligations.join(' · ')}.</p>}
+      {policy.requirements && <p>Institucijski zahtjevi: {policy.requirements.aiDisclosure.required ? 'AI disclosure' : 'bez obavezne izjave'}; {policy.requirements.mentorApproval.required ? `mentor approval${policy.requirements.mentorApproval.scope ? `: ${policy.requirements.mentorApproval.scope}` : ''}` : 'bez obaveznog odobrenja mentora'}.</p>}
+      <dl>
+        <div><dt>Provjereno</dt><dd>{policy.verifiedDate || 'nije navedeno'}</dd></div>
+        <div><dt>Stupanje na snagu</dt><dd>{policy.effectiveDate || policy.effectiveDateNote || 'nije navedeno'}</dd></div>
+      </dl>
+      {policy.source && <a href={policy.source.u} target="_blank" rel="noreferrer">Otvori službeni izvor</a>}
+    </div>}
+  </div>
 }
 
 function Proposal({ proposal, onAccept, onInsert, onReject, onEdit }: { proposal: AiProposalV1; onAccept: () => void; onInsert: () => void; onReject: () => void; onEdit: (text: string) => void }) {

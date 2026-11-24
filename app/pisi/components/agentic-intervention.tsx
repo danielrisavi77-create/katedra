@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 
 import { MaterialLibrary } from './material-library'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import { createAgentSnapshotConsent, readStoredAgentSnapshotConsent } from '../../../lib/agents/privacy-consent'
 
 export function AgenticIntervention({ runId, projectId, manuscript, reason, onResumed }: { runId: string; projectId: string; manuscript: ManuscriptV1; reason: string; onResumed: (manuscript: ManuscriptV1) => void }) {
   const [draft, setDraft] = useState(manuscript)
@@ -31,7 +32,7 @@ export function AgenticIntervention({ runId, projectId, manuscript, reason, onRe
       const context = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}/context`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ manuscript: draft, materialIds }),
+        body: JSON.stringify({ manuscript: draft, materialIds, snapshotConsent: readStoredAgentSnapshotConsent(projectId) || createAgentSnapshotConsent(projectId) }),
       })
       const contextBody = await context.json().catch(() => ({}))
       if (!context.ok) throw new Error(agentRequestMessage(context.status, contextBody.error, 'Novi kontekst nije moguće spremiti.'))

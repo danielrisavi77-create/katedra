@@ -16,6 +16,8 @@ export async function createAgentRun(db: RpcClient, input: {
   mode: AgentRunMode
   sourcePolicy: SourcePolicy
   sectionIds?: string[]
+  snapshotConsentVersion?: string
+  snapshotConsentAt?: string
 }): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
   const params: Record<string, unknown> = {
     p_user_id: input.userId,
@@ -24,11 +26,31 @@ export async function createAgentRun(db: RpcClient, input: {
     p_source_policy: input.sourcePolicy,
   }
   if (input.sectionIds?.length) params.p_section_ids = input.sectionIds
+  if (input.snapshotConsentVersion) params.p_snapshot_consent_version = input.snapshotConsentVersion
+  if (input.snapshotConsentAt) params.p_snapshot_consent_at = input.snapshotConsentAt
   const result = await callRpc(db, 'create_agent_run', params)
   if (result.ok === false) return { ok: false, error: result.error }
   const row = firstRecord(result.data)
   const runId = String(row?.run_id ?? row?.runId ?? '')
   return runId ? { ok: true, runId } : { ok: false, error: 'Lekta create_agent_run nije vratio runId.' }
+}
+
+export async function recordAgentRunSnapshotConsent(db: RpcClient, input: {
+  userId: string
+  projectId: string
+  runId: string
+  version: string
+  acceptedAt: string
+}): Promise<AgentBackendResult<null>> {
+  const result = await callRpc(db, 'record_agent_run_snapshot_consent', {
+    p_user_id: input.userId,
+    p_project_id: input.projectId,
+    p_run_id: input.runId,
+    p_consent_version: input.version,
+    p_consent_at: input.acceptedAt,
+  })
+  if (result.ok === false) return { ok: false, error: result.error }
+  return { ok: true, value: null }
 }
 
 export async function cleanupStaleInitializingAgentRun(db: RpcClient, input: { userId: string; projectId: string }): Promise<AgentBackendResult<{ runId: string; status: string } | null>> {

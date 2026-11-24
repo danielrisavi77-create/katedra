@@ -1,4 +1,4 @@
-import type { ManuscriptSnapshotV1, ManuscriptV1 } from './types'
+import type { ManuscriptChangeKind, ManuscriptSnapshotV1, ManuscriptV1 } from './types'
 import { validateStoredManuscript } from './runtime-validation'
 
 const DB_VERSION = 1
@@ -25,7 +25,7 @@ export function createManuscriptStore({ databaseName = 'katedra-manuscripts' } =
       await transactionDone(db.transaction(MANUSCRIPTS, 'readwrite'), (store) => store.put(manuscript))
     },
 
-    async snapshot(manuscript: ManuscriptV1, reason: string): Promise<void> {
+    async snapshot(manuscript: ManuscriptV1, reason: string, options: { changeKind?: ManuscriptChangeKind; sectionIds?: string[]; after?: ManuscriptV1 } = {}): Promise<void> {
       const db = await database()
       const snapshot: ManuscriptSnapshotV1 = {
         id: `${manuscript.projectId}:${manuscript.updatedAt}:${Math.random().toString(36).slice(2)}`,
@@ -33,6 +33,9 @@ export function createManuscriptStore({ databaseName = 'katedra-manuscripts' } =
         reason,
         createdAt: manuscript.updatedAt,
         manuscript: structuredClone(manuscript),
+        ...(options.changeKind ? { changeKind: options.changeKind } : {}),
+        ...(options.sectionIds ? { sectionIds: [...options.sectionIds] } : {}),
+        ...(options.after ? { after: structuredClone(options.after) } : {}),
       }
       await transactionDone(db.transaction(SNAPSHOTS, 'readwrite'), (store) => store.put(snapshot))
       const snapshots = await this.listSnapshots(manuscript.projectId)

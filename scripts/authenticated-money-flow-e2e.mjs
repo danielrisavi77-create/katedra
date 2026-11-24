@@ -26,6 +26,11 @@ const context = await browser.newContext()
 const page = await context.newPage()
 const browserErrors = []
 const chatResponses = []
+let stateProjectId = ''
+page.on('request', (request) => {
+  const url = new URL(request.url())
+  if (url.pathname === '/api/state') stateProjectId = url.searchParams.get('projectId') || stateProjectId
+})
 page.on('pageerror', (error) => browserErrors.push(String(error)))
 page.on('response', (response) => {
   if (new URL(response.url()).pathname === '/api/chat') {
@@ -83,6 +88,16 @@ try {
   await editor.fill('Authenticated staging odlomak rukopisa.')
   await page.waitForTimeout(800)
 
+  if (stateProjectId) {
+    const stateProbe = await page.evaluate(async (projectId) => {
+      const response = await fetch(`/api/state?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+      return { status: response.status, body: await response.json().catch(() => null) }
+    }, stateProjectId)
+    assert.equal(stateProbe.status, 200, `authenticated state read failed: ${JSON.stringify(stateProbe)}`)
+    assert.equal(Object.prototype.hasOwnProperty.call(stateProbe.body || {}, 'manuscript'), false, 'shared state must not contain the manuscript')
+    assert.equal(Object.prototype.hasOwnProperty.call(stateProbe.body || {}, 'sections'), false, 'shared state must not contain manuscript sections')
+  }
+
   if (RUN_CHECKOUT) {
     const passButton = page.getByRole('button', { name: /Aktiviraj Pass/i })
     if (await passButton.isVisible().catch(() => false)) {
@@ -106,6 +121,28 @@ try {
   await page.getByRole('button', { name: 'Prihvati' }).click()
   await page.waitForTimeout(900)
   assert.ok(await editor.textContent(), 'accepted AI proposal must leave manuscript content')
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const reloadedEditor = page.locator('.pis-prosemirror')
+  await reloadedEditor.waitFor({ state: 'visible', timeout: 30_000 })
+  assert.match(await reloadedEditor.textContent(), /Authenticated staging odlomak rukopisa/i, 'manuscript must survive a reload')
+
+  const foreignProjectId = '00000000-0000-4000-8000-000000000042'
+  const foreignState = await page.evaluate(async (projectId) => {
+    const response = await fetch(`/api/state?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+    return response.status
+  }, foreignProjectId)
+  assert.ok([403, 404].includes(foreignState), `foreign project must be rejected, received ${foreignState}`)
+
+  const secondPage = await context.newPage()
+  try {
+    await secondPage.goto(`${KATEDRA_URL}/pisi`, { waitUntil: 'domcontentloaded' })
+    const secondEditor = secondPage.locator('.pis-prosemirror')
+    await secondEditor.waitFor({ state: 'visible', timeout: 30_000 })
+    assert.match(await secondEditor.textContent(), /Authenticated staging odlomak rukopisa/i, 'a second tab must see the same local project')
+  } finally {
+    await secondPage.close()
+  }
 
   if (browserErrors.length) throw new Error(`Browser page errors:\n${browserErrors.join('\n')}`)
   console.log('AUTHENTICATED_MONEY_FLOW_BROWSER_E2E_PASS')

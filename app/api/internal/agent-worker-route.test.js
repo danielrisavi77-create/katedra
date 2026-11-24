@@ -14,7 +14,7 @@ describe('internal agent worker route contract', () => {
     expect(source).toContain('runAgentWorkerLoop')
     expect(source).toContain('maxSteps: 1')
     expect(source).toContain("import { privateJson } from '@/lib/observability/private-response.js'")
-    expect(source).toContain('return privateJson({ runId, ...result })')
+    expect(source).toContain('return privateJson({ runId, ...result, ...(privacy ? { privacy } : {}) })')
     expect(source).not.toContain('Response.json(')
     expect(source).toContain('agent_worker_admin_client_unavailable')
     expect(source).toContain('Agent worker storage trenutno nije konfiguriran.')

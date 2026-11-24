@@ -7,7 +7,8 @@ const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/project-
 describe('project drawer source copy', () => {
   it('describes source identity verification without claiming semantic truth', () => {
     expect(source).toContain("'Identitet izvora provjeren'")
-    expect(source).toContain("'provjeri prije uporabe'")
+    expect(source).toContain("'Potrebna je ručna provjera'")
+    expect(source).toContain("'Provjeri izvor'")
     expect(source).not.toContain("source.verified ? 'provjereno'")
   })
 })

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { MaterialAssetV1, MaterialExtractionStatus, MaterialKind } from '../../../lib/materials/types'
+import type { AgentSnapshotConsentV1 } from '../../../lib/agents/privacy-consent'
 
 const MATERIAL_KINDS: Array<{ value: MaterialKind; label: string }> = [
   { value: 'draft', label: 'Moj postojeći rad' },
@@ -13,7 +14,7 @@ const MATERIAL_KINDS: Array<{ value: MaterialKind; label: string }> = [
   { value: 'scan', label: 'Sken ili slika' },
 ]
 
-export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { projectId: string; onUploaded?: (material: MaterialAssetV1) => void; onMaterialsChange?: (materials: MaterialAssetV1[]) => void }) {
+export function MaterialLibrary({ projectId, snapshotConsent = null, onUploaded, onMaterialsChange }: { projectId: string; snapshotConsent?: AgentSnapshotConsentV1 | null; onUploaded?: (material: MaterialAssetV1) => void; onMaterialsChange?: (materials: MaterialAssetV1[]) => void }) {
   const [kind, setKind] = useState<MaterialKind>('notes')
   const [materials, setMaterials] = useState<MaterialAssetV1[]>([])
   const [busy, setBusy] = useState(false)
@@ -49,11 +50,16 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
   }, [loadMaterials])
 
   const upload = async (file: File, uploadKind = kind, replaceId = '') => {
+    if (!snapshotConsent) {
+      setMessage('Prije dodavanja materijala potvrdi privremenu obradu sadržaja.')
+      return
+    }
     setBusy(true)
     setMessage('')
     const form = new FormData()
     form.set('projectId', projectId)
     form.set('kind', uploadKind)
+    form.set('snapshotConsent', JSON.stringify(snapshotConsent))
     form.set('file', file)
     try {
       const response = await fetch('/api/materials', { method: 'POST', body: form }).catch(() => null)
@@ -106,7 +112,7 @@ export function MaterialLibrary({ projectId, onUploaded, onMaterialsChange }: { 
 
   return <section className="pis-material-library" aria-labelledby="pis-material-title">
     <div className="pis-agent-section-heading"><div><p className="pis-kicker">Ulazni materijali</p><h3 id="pis-material-title">Dodaj kontekst za rad.</h3></div><span>{materials.length} učitano</span></div>
-    <p className="pis-agent-copy">Dodaj postojeći rad, literaturu, mentorove upute ili pravila fakulteta. Materijali su privremeni i privatni; rukopis ostaje lokalno spremljen.</p>
+    <p className="pis-agent-copy">Dodaj postojeći rad, literaturu, mentorove upute ili pravila fakulteta. Materijali su privatni i privremeni, čuvaju se najviše 72 sata; rukopis ostaje lokalno spremljen.</p>
     <div className="pis-material-upload"><select aria-label="Vrsta materijala" value={kind} onChange={(event) => setKind(event.target.value as MaterialKind)}>{MATERIAL_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><label className="pis-file-button">{busy ? 'Čitamo…' : 'Dodaj datoteku'}<input type="file" accept=".docx,.pdf,.txt,.md,image/*" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.currentTarget.value = '' }} /></label></div>
     {message && <p className="pis-agent-message" role="status">{message}</p>}
     <input ref={reuploadInput} type="file" accept=".docx,.pdf,.txt,.md,image/*" hidden aria-label="Odaberi zamjenski materijal" onChange={(event) => { const file = event.target.files?.[0]; const material = materials.find((item) => item.id === reuploadId); if (file && material) void upload(file, material.kind, material.id); event.currentTarget.value = '' }} />

@@ -18,7 +18,7 @@ describe('ProjectNavigation', () => {
     expect(screen.queryByRole('button', { name: 'Generator' })).toBeNull()
   })
 
-  it('hides defense for seminarski work', () => {
+  it('hides the future defense module from the paid V1 workspace', () => {
     render(<ProjectNavigation activeItem="home" workType="s" onNavigate={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Obrana' })).toBeNull()
@@ -35,10 +35,10 @@ describe('ProjectNavigation', () => {
     const onNavigate = vi.fn()
     render(<ProjectNavigation activeItem="home" workType="d" onNavigate={onNavigate} />)
 
-    for (const label of ['Početna', 'Plan', 'Literatura', 'Pisanje', 'Mentor', 'Revizija', 'Provjera u Lekti', 'Obrana', 'Povijest']) {
+    for (const label of ['Početna', 'Plan', 'Literatura', 'Pisanje', 'Mentor', 'Revizija', 'Provjera u Lekti', 'Povijest']) {
       await user.click(screen.getByRole('button', { name: label }))
     }
 
-    expect(onNavigate.mock.calls.map(([item]) => item)).toEqual(['home', 'plan', 'sources', 'writing', 'mentor', 'review', 'lekta', 'defense', 'history'])
+    expect(onNavigate.mock.calls.map(([item]) => item)).toEqual(['home', 'plan', 'sources', 'writing', 'mentor', 'review', 'lekta', 'history'])
   })
 })

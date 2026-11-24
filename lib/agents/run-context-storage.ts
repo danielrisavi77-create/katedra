@@ -1,6 +1,8 @@
 import { registerAgentPayload } from './backend-contract'
 import { MAX_AGENT_CONTEXT_BYTES, runContextStoragePaths, validateAgentRunContext } from './run-context'
 import type { ManuscriptV1 } from '../manuscript/types'
+import { validateResearchPlan } from '../research-plan/validation'
+import type { ResearchPlanV1 } from '../research-plan/types'
 
 const DEFAULT_BUCKET = 'katedra-temporary-materials'
 const CONTEXT_TTL_MS = 72 * 60 * 60 * 1000
@@ -26,6 +28,7 @@ export async function storeAgentRunContext(
     projectId: string
     runId: string
     manuscript: unknown
+    researchPlan?: unknown
     bucket?: string
     now?: () => number
   },
@@ -37,7 +40,13 @@ export async function storeAgentRunContext(
     error: validated.error,
   }
 
-  const body = new TextEncoder().encode(JSON.stringify({ manuscript: validated.manuscript }))
+  let validatedResearchPlan: ResearchPlanV1 | undefined
+  if (input.researchPlan !== undefined) {
+    const researchPlan = validateResearchPlan(input.researchPlan, input.projectId)
+    if (researchPlan.ok === false) return { ok: false, status: 400, error: researchPlan.error }
+    validatedResearchPlan = researchPlan.value
+  }
+  const body = new TextEncoder().encode(JSON.stringify({ manuscript: validated.manuscript, ...(validatedResearchPlan ? { researchPlan: validatedResearchPlan } : {}) }))
   if (body.byteLength > MAX_AGENT_CONTEXT_BYTES) return { ok: false, status: 413, error: 'Kontekst rukopisa je prevelik.' }
 
   const { storagePath, manifestPath } = runContextStoragePaths(input.userId, input.projectId, input.runId)

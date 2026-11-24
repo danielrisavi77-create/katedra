@@ -10,6 +10,9 @@ it('agenticni authenticated E2E koristi canonical staging preflight prije browse
   expect(source).toContain('evaluateAgenticStagingEnvironment(process.env)')
   expect(source).toContain('BLOCKED_EXTERNAL')
   expect(source).toContain('KATEDRA_E2E_REQUIRE_CONFIG')
+  expect(source).toContain('attachPageObservers')
+  expect(source).toContain('await page.close()')
+  expect(source).toContain('browser close/resume')
 })
 
 it('ne proglašava stale intervention banner uspješnim nastavkom runa', () => {

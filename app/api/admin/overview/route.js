@@ -23,7 +23,7 @@ export async function GET() {
     }, 'error')
     return privateJson({ error: 'Admin pregled trenutno nije dostupan.' }, { status: 503 })
   }
-  const [projects, agentRuns, usage] = await Promise.all([
+  const [projects, agentRuns, usage, productAnalytics] = await Promise.all([
     safeQuery(() => db.from('katedra_projects')
       .select('project_id, topic, unit_id, profile_id, work_type, work_type_canonical, deadline, lekta_score, lekta_checked_at, updated_at, user_id')
       .eq('user_id', user.id)
@@ -38,6 +38,7 @@ export async function GET() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(500)),
+    safeQuery(() => db.rpc('katedra_product_loop_stats')),
   ])
 
   return privateJson({
@@ -46,16 +47,19 @@ export async function GET() {
     projects: projects.error ? null : projects.data,
     agentRuns: agentRuns.error ? null : agentRuns.data,
     usage: usage.error ? null : summarizeUsage(usage.data),
+    productAnalytics: productAnalytics.error ? null : (productAnalytics.data?.[0] || productAnalytics.data || null),
     featureFlags: {
       projectLocks: process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true',
       agentRuns: process.env.KATEDRA_AGENT_RUNS_ENABLED === 'true',
       materials: process.env.KATEDRA_MATERIALS_ENABLED === 'true',
+      researchModules: process.env.KATEDRA_RESEARCH_MODULES_ENABLED === 'true',
       billingContract: process.env.KATEDRA_BILLING_RPC_CONTRACT || 'not_configured',
     },
     warnings: [
       ...(projects.error ? ['Projekti nisu dostupni.'] : []),
       ...(agentRuns.error ? ['Agent runovi nisu dostupni; Lekta ugovor možda još nije aktivan.'] : []),
       ...(usage.error ? ['AI potrošnja nije dostupna.'] : []),
+      ...(productAnalytics.error ? ['Product analytics još nije dostupna; provjeri je li Lekta migracija primijenjena.'] : []),
     ],
   })
 }

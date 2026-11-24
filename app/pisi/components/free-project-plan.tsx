@@ -26,6 +26,24 @@ export function FreeProjectPlan({ projectId, title, scan, authenticated = false,
           </section>
         )}
 
+        {scan.academicContext && (
+          <section className="pis-scan-section pis-academic-scan" aria-labelledby="scan-academic-title">
+            <h2 id="scan-academic-title">Akademski profil</h2>
+            <p>
+              <strong>{scan.academicContext.profileLabel}</strong>{' '}
+              <span>{scan.academicContext.status === 'verified' ? 'Pravila verificirana' : 'Pravila nisu u potpunosti potvrđena'}</span>
+              {scan.academicContext.verifiedAt ? ` · provjereno ${scan.academicContext.verifiedAt}` : ''}
+            </p>
+            {scan.academicContext.sources.length > 0 && (
+              <ul>
+                {scan.academicContext.sources.slice(0, 3).map((source) => (
+                  <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title} ↗</a></li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
         <section className="pis-scan-section" aria-labelledby="scan-next-title">
           <h2 id="scan-next-title">Sljedeća tri koraka</h2>
           <ol>{scan.nextActions.map((item) => <li key={item}>{item}</li>)}</ol>

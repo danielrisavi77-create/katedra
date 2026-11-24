@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentProvider } from './contracts'
 import { createProviderBackedExecutor } from './provider-worker'
 import { loadRunManuscriptContext } from './run-context-loader'
+import pack from '../../public/katedra-pack.json'
+import { compileAcademicContext } from '../academic-context/compile-context'
+import { createAcademicCatalog } from '../academic-context/load-pack'
+import { createEmptyResearchPlan } from '../research-plan/validation'
 
 const manuscript = {
   schemaVersion: 1 as const,
@@ -61,6 +65,88 @@ describe('provider-backed worker context', () => {
       provider: 'fake',
       citations: [{ id: 'source-1', verified: false }],
     })
+  })
+
+  it('passes the compiled academic context for the canonical profile without the whole pack', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run(input) {
+        const payload = JSON.stringify(input.payload)
+        expect(payload).toContain('fpzg-politologija-diplomski')
+        expect(payload).toContain('10000')
+        expect(payload).toContain('minimumReferences')
+        expect(payload).toContain('sourcePlan')
+        expect(payload).toContain('methodologyPlan')
+        expect(payload).not.toContain('fpzg-novinarstvo-diplomski')
+        yield { type: 'completed', value: { output: 'Nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => ({ ...manuscript, workType: 'd' as const, meta: { unitId: 'fpzg', profileId: 'fpzg-politologija-diplomski' } }),
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Nacrt.' })
+  })
+
+  it('passes only the bounded research plan context to the provider worker', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run(input) {
+        const payload = JSON.stringify(input.payload)
+        expect(payload).toContain('researchPlan')
+        expect(payload).toContain('Kvalitativni dizajn')
+        expect(payload).not.toContain('project-1')
+        yield { type: 'completed', value: { output: 'Planiran nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const researchPlan = createEmptyResearchPlan('project-1')
+    researchPlan.status = 'draft'
+    researchPlan.methodology.design = 'Kvalitativni dizajn'
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      loadContext: async () => manuscript,
+      loadResearchPlan: async () => researchPlan,
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-1', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Planiran nacrt.' })
+  })
+
+  it('uses a server-resolved academic context instead of snapshot profile metadata', async () => {
+    const provider: AgentProvider = {
+      id: 'fake',
+      capabilities: ['text'],
+      async *run(input) {
+        const payload = JSON.stringify(input.payload)
+        expect(payload).toContain('fpzg-politologija-diplomski')
+        expect(payload).not.toContain('fpzg-novinarstvo-zavrsni')
+        yield { type: 'completed', value: { output: 'Canonicalni nacrt.', usage: { inputTokens: 10, outputTokens: 4 } } }
+      },
+    }
+    const academicContext = compileAcademicContext({
+      catalog: createAcademicCatalog(pack),
+      unitId: 'fpzg',
+      profileId: 'fpzg-politologija-diplomski',
+      workType: 'd',
+    })
+    const execute = createProviderBackedExecutor({
+      projectId: 'project-1',
+      runId: 'run-1',
+      academicContext,
+      loadContext: async () => ({ ...manuscript, workType: 'd' as const, meta: { unitId: 'fpzg', profileId: 'fpzg-novinarstvo-zavrsni' } }),
+      router: { providerFor: () => provider },
+      billing: billingDependencies(),
+    })
+
+    await expect(execute({ id: 'step-canonical', agent: 'writing', verifier: 'writing_verifier', sectionId: 'section-1', order: 1, attempt: 1, status: 'pending' })).resolves.toMatchObject({ output: 'Canonicalni nacrt.' })
   })
 
   it('passes verified outputs from earlier agents into the next provider context', async () => {

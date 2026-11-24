@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createGatewayAgentProvider: vi.fn(),
   createProviderRouter: vi.fn(),
   createProviderBackedExecutor: vi.fn(),
+  resolveOwnedProjectResult: vi.fn(),
   runAgentWorkerLoop: vi.fn(),
   loadRunManuscriptContext: vi.fn(),
   loadRunMaterialContexts: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('@/lib/agents/anthropic-provider', () => ({ createAnthropicAgentProvider
 vi.mock('@/lib/agents/provider-gateway', () => ({ createGatewayAgentProvider: mocks.createGatewayAgentProvider }))
 vi.mock('@/lib/agents/provider-router', () => ({ createProviderRouter: mocks.createProviderRouter }))
 vi.mock('@/lib/agents/provider-worker', () => ({ createProviderBackedExecutor: mocks.createProviderBackedExecutor }))
+vi.mock('@/lib/academic-suite/repositories/projects', () => ({ resolveOwnedProjectResult: mocks.resolveOwnedProjectResult }))
 vi.mock('@/lib/agents/worker-loop', () => ({ runAgentWorkerLoop: mocks.runAgentWorkerLoop }))
 vi.mock('@/lib/agents/run-context-loader', () => ({
   createSupabaseRunPayloadManifestStore: vi.fn(),
@@ -35,6 +37,14 @@ const run = {
   project_id: 'project-1',
   source_policy: 'uploaded_only',
   status: 'running',
+}
+
+const project = {
+  projectId: 'project-1',
+  guestProjectId: 'project-1',
+  unitId: 'fpzg',
+  profileId: 'fpzg-politologija-diplomski',
+  workType: 'd',
 }
 
 function request(body = { runId: 'run-1' }) {
@@ -79,6 +89,7 @@ beforeEach(() => {
   vi.stubEnv('KATEDRA_AGENT_MODEL', 'claude-sonnet-5')
   vi.stubEnv('ANTHROPIC_API_KEY', 'provider-secret')
   mocks.createAdminClient.mockReturnValue(database())
+  mocks.resolveOwnedProjectResult.mockResolvedValue({ ok: true, value: project })
   mocks.createAnthropicAgentProvider.mockReturnValue({ id: 'anthropic', capabilities: ['text'] })
   mocks.createGatewayAgentProvider.mockReturnValue({ id: 'gateway', capabilities: ['text'] })
   mocks.createProviderRouter.mockReturnValue({ providerFor: vi.fn() })

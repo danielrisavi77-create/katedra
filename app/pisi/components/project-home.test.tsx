@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createManuscript, plainTextDocument } from '../../../lib/manuscript/model'
 import { ProjectHome } from './project-home'
+import pack from '../../../public/katedra-pack.json'
+import { compileAcademicContext } from '../../../lib/academic-context/compile-context'
+import { createAcademicCatalog } from '../../../lib/academic-context/load-pack'
 
 afterEach(cleanup)
 
@@ -38,6 +41,33 @@ describe('ProjectHome', () => {
     const steps = within(screen.getByRole('region', { name: 'Od teme do predaje' })).getAllByRole('listitem')
     expect(steps.map((step) => step.textContent)).toEqual(['Tema', 'Plan', 'Literatura', 'Pisanje', 'Revizija', 'Lekta', 'Predaja'])
     expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(['complete', 'complete', 'complete', 'active', 'upcoming', 'upcoming', 'upcoming'])
+  })
+
+  it('shows the academic AI scope selected by the project profile', () => {
+    const manuscript = createManuscript({ projectId: 'project-1', title: 'Istraživanje', workType: 'd' })
+    const academicContext = compileAcademicContext({
+      catalog: createAcademicCatalog(pack),
+      unitId: 'fpzg',
+      profileId: 'fpzg-politologija-diplomski',
+      workType: 'd',
+    })
+
+    render(<ProjectHome manuscript={manuscript} academicContext={academicContext} passActive syncStatus="local_only" onNavigate={vi.fn()} />)
+
+    expect(screen.getByText('AI prema profilu')).toBeTruthy()
+    expect(screen.getByText(/Kontekstualna pomoć/)).toBeTruthy()
+    expect(screen.getByText(/Istraživački dizajn/)).toBeTruthy()
+
+    const finalManuscript = createManuscript({ projectId: 'project-2', title: 'Završni rad', workType: 'z' })
+    const finalContext = compileAcademicContext({
+      catalog: createAcademicCatalog(pack),
+      unitId: 'fpzg',
+      profileId: 'fpzg-politologija-zavrsni',
+      workType: 'z',
+    })
+    const finalView = render(<ProjectHome manuscript={finalManuscript} academicContext={finalContext} passActive syncStatus="local_only" onNavigate={vi.fn()} />)
+    expect(within(finalView.container).queryByText(/Istraživački dizajn/)).toBeNull()
+    finalView.unmount()
   })
 
   it('uses a local source as Completion Scan material context', () => {

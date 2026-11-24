@@ -19,7 +19,7 @@ const manuscript = {
   updatedAt: '2026-08-14T10:00:00.000Z',
 }
 
-afterEach(() => cleanup())
+afterEach(() => { cleanup(); window.localStorage.clear() })
 
 describe('paid project setup', () => {
   it('keeps the agent flow unavailable until the Pass is active', () => {
@@ -49,8 +49,12 @@ describe('paid project setup', () => {
     expect(screen.getByText(/Opseg Passa: Seminarski rad/i)).toBeTruthy()
     await user.click(screen.getByRole('radiogroup', { name: 'Način rada agenata' }).querySelectorAll('label')[2])
     await user.click(screen.getByRole('radiogroup', { name: 'Pravila izvora' }).querySelectorAll('label')[2])
+    await user.click(screen.getByRole('checkbox', { name: /Razumijem/ }))
     await user.click(screen.getByRole('button', { name: 'Pokreni autonomni tijek' }))
-    expect(fetch).toHaveBeenCalledWith('/api/agent-runs?projectId=project-1', expect.objectContaining({ method: 'POST', body: JSON.stringify({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro', 'analysis'], materialIds: [], manuscript }) }))
+    const call = (fetch as unknown as { mock: { calls: Array<Array<{ body?: string }>> } }).mock.calls.find((entry) => typeof entry[1]?.body === 'string')
+    const request = JSON.parse(call?.[1].body as string) as Record<string, unknown>
+    expect(request).toMatchObject({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro', 'analysis'], materialIds: [], manuscript })
+    expect(request.snapshotConsent).toMatchObject({ version: 'agentic-snapshot-v1', projectId: 'project-1' })
     expect(onPhaseChange).toHaveBeenCalledWith('dashboard')
     vi.unstubAllGlobals()
   })

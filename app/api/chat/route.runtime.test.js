@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   reserveUserRequest: vi.fn(),
   ensureFreeStarterGrant: vi.fn(),
   resolveCapability: vi.fn(),
+  explainCapability: vi.fn(),
   loadProcessFactsFromDisk: vi.fn(),
   lookupActiveProjectPass: vi.fn(),
   createAnthropicUsageParser: vi.fn(),
@@ -55,7 +56,7 @@ vi.mock('@/lib/ai/rate-limit', () => ({
 }))
 vi.mock('@/lib/limits', () => ({ MIN_BALANCE: 100 }))
 vi.mock('@/lib/katedra-free-starter', () => ({ ensureFreeStarterGrant: mocks.ensureFreeStarterGrant }))
-vi.mock('@/lib/academic-suite/process-facts', () => ({ resolveCapability: mocks.resolveCapability }))
+vi.mock('@/lib/academic-suite/process-facts', () => ({ resolveCapability: mocks.resolveCapability, explainCapability: mocks.explainCapability }))
 vi.mock('@/lib/academic-suite/process-facts.server', () => ({ loadProcessFactsFromDisk: mocks.loadProcessFactsFromDisk }))
 vi.mock('@/lib/academic-suite/repositories/entitlements', () => ({ lookupActiveProjectPass: mocks.lookupActiveProjectPass }))
 vi.mock('@/lib/ai/anthropic-sse', () => ({ createAnthropicUsageParser: mocks.createAnthropicUsageParser }))
@@ -220,6 +221,18 @@ describe('POST /api/chat runtime guards', () => {
     mocks.lookupActiveProjectPass.mockResolvedValue({ ok: true, active: true })
     mocks.loadProcessFactsFromDisk.mockResolvedValue({})
     mocks.resolveCapability.mockReturnValue({ effective: 'blocked', condition: {}, sourceFactId: 'policy-1', stance: 'banned' })
+    mocks.explainCapability.mockReturnValue({
+      capability: 'generate_submission_text',
+      label: 'Generiranje teksta za predaju',
+      stance: 'banned',
+      effective: 'blocked',
+      reason: 'Službeni zapis ovu AI radnju izričito zabranjuje.',
+      obligations: [],
+      source: { t: 'FPZG AI smjernice', u: 'https://fpzg.unizg.hr/policy.pdf' },
+      sourceFactId: 'policy-1',
+      sourceStatus: 'verified',
+      verifiedDate: '2026-08-22',
+    })
     vi.stubGlobal('fetch', vi.fn())
 
     const response = await POST(request({
@@ -229,6 +242,10 @@ describe('POST /api/chat runtime guards', () => {
     }))
 
     expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toMatchObject({
+      reason: 'ACADEMIC_POLICY_BLOCK',
+      policy: { reason: 'Službeni zapis ovu AI radnju izričito zabranjuje.', source: { u: 'https://fpzg.unizg.hr/policy.pdf' } },
+    })
     expect(globalThis.fetch).not.toHaveBeenCalled()
     expect(release).toHaveBeenCalledTimes(1)
   })

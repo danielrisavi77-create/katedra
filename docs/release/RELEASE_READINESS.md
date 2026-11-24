@@ -1,7 +1,7 @@
 # Release readiness
 
 Za zadnji lokalni snapshot provjera vidi
-[`LOCAL_VERIFICATION_2026-08-17.md`](./LOCAL_VERIFICATION_2026-08-17.md). Stariji
+[`LOCAL_VERIFICATION_2026-08-22.md`](./LOCAL_VERIFICATION_2026-08-22.md). Stariji
 snapshoti ostaju povijesna evidencija i ne smiju se koristiti kao trenutni
 release status. Taj zapis
 razdvaja lokalne quality gateove od staging dokaza i ne zamjenjuje canonical

@@ -45,6 +45,14 @@ describe('resolveOwnedProject', () => {
     ]) as never, { userId: 'user-1', projectId: 'klegacy', allowGuestAlias: false })).resolves.toBeNull()
   })
 
+  it('returns canonical academic profile identifiers for server capability checks', async () => {
+    await expect(resolveOwnedProject(createProjectDb([
+      { user_id: 'user-1', project_id: 'project-uuid', guest_project_id: 'klegacy', unit_id: 'fpzg', profile_id: 'fpzg-politologija-diplomski', work_type_canonical: 'graduate' },
+    ]) as never, { userId: 'user-1', projectId: 'project-uuid' })).resolves.toMatchObject({
+      projectId: 'project-uuid', unitId: 'fpzg', profileId: 'fpzg-politologija-diplomski', workType: 'graduate',
+    })
+  })
+
   it('fails closed when the project client throws', async () => {
     await expect(resolveOwnedProject({
       from() { throw new Error('database unavailable') },

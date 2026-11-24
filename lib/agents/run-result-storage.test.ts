@@ -66,7 +66,7 @@ describe('agent result payload storage', () => {
       { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json' },
       { materialId: 'source-1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'source.json', manifestPath: 'source.manifest.json' },
     ]) }
-    const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2026-08-17T10:00:00.000Z', verification }
+    const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2099-08-17T10:00:00.000Z', verification }
     const storage = { download: vi.fn(async (path: string) => path.endsWith('/manifest.json') ? JSON.stringify({ ...payload, storagePath: 'result.json', materialId: 'agent-result:step-1:1' }) : JSON.stringify(payload)) }
     const loaded = await loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' })
     expect(loaded).toHaveLength(1)
@@ -127,7 +127,7 @@ describe('agent result payload storage', () => {
     const manifests = { list: vi.fn(async () => [
       { materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', storageBucket: 'bucket', storagePath: 'user-1/project-1/run-1/result.json', manifestPath: 'user-1/project-1/run-1/manifest.json' },
     ]) }
-    const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2026-08-17T10:00:00.000Z', verification, citations: [{ id: '', verified: 'yes' }], usage: { inputTokens: -1, outputTokens: 4 } }
+    const payload = { ...result, agent: 'writing', stepId: 'step-1', materialId: 'agent-result:step-1:1', projectId: 'project-1', runId: 'run-1', schemaVersion: 1, kind: 'agent-step-result', verifier: 'writing_verifier', attempt: 1, createdAt: '2026-08-14T10:00:00.000Z', expiresAt: '2099-08-17T10:00:00.000Z', verification, citations: [{ id: '', verified: 'yes' }], usage: { inputTokens: -1, outputTokens: 4 } }
     const storage = { download: vi.fn(async (path: string) => path.endsWith('/manifest.json') ? JSON.stringify({ ...payload, storagePath: 'result.json' }) : JSON.stringify(payload)) }
 
     await expect(loadAgentRunResults(manifests, storage, { runId: 'run-1', projectId: 'project-1', userId: 'user-1', bucket: 'bucket' })).resolves.toEqual([])
@@ -150,7 +150,7 @@ describe('agent result payload storage', () => {
       verifier: 'writing_verifier',
       attempt: 1,
       createdAt: '2026-08-14T10:00:00.000Z',
-      expiresAt: '2026-08-17T10:00:00.000Z',
+      expiresAt: '2099-08-17T10:00:00.000Z',
       verification,
     }
     const storage = {
@@ -180,7 +180,7 @@ describe('agent result payload storage', () => {
       verifier: 'writing_verifier',
       attempt: 1,
       createdAt: '2026-08-14T10:00:00.000Z',
-      expiresAt: '2026-08-17T10:00:00.000Z',
+      expiresAt: '2099-08-17T10:00:00.000Z',
       verification,
     }
     const storage = {

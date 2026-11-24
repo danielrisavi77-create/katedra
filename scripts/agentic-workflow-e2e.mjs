@@ -22,26 +22,31 @@ if (externalProblems.length) {
 const { chromium } = await import('playwright')
 const browser = await chromium.launch({ headless: true })
 const context = await browser.newContext()
-const page = await context.newPage()
 const apiResponses = []
 const runRequests = []
 const browserErrors = []
-page.on('pageerror', (error) => browserErrors.push(String(error)))
-page.on('request', (request) => {
-  if (new URL(request.url()).pathname !== '/api/agent-runs' || request.method() !== 'POST') return
-  try {
-    const body = JSON.parse(request.postData() || '{}')
-    runRequests.push({ hasManuscript: Boolean(body.manuscript), sectionCount: Array.isArray(body.sectionIds) ? body.sectionIds.length : 0 })
-  } catch {
-    runRequests.push({ hasManuscript: false, sectionCount: 0 })
-  }
-})
-page.on('response', (response) => {
-  const pathname = new URL(response.url()).pathname
-  if (pathname.startsWith('/api/agent-runs') || pathname === '/api/materials') {
-    apiResponses.push({ pathname, status: response.status() })
-  }
-})
+let page = await context.newPage()
+
+function attachPageObservers(target) {
+  target.on('pageerror', (error) => browserErrors.push(String(error)))
+  target.on('request', (request) => {
+    if (new URL(request.url()).pathname !== '/api/agent-runs' || request.method() !== 'POST') return
+    try {
+      const body = JSON.parse(request.postData() || '{}')
+      runRequests.push({ hasManuscript: Boolean(body.manuscript), sectionCount: Array.isArray(body.sectionIds) ? body.sectionIds.length : 0 })
+    } catch {
+      runRequests.push({ hasManuscript: false, sectionCount: 0 })
+    }
+  })
+  target.on('response', (response) => {
+    const pathname = new URL(response.url()).pathname
+    if (pathname.startsWith('/api/agent-runs') || pathname === '/api/materials') {
+      apiResponses.push({ pathname, status: response.status() })
+    }
+  })
+}
+
+attachPageObservers(page)
 
 async function completeOnboarding() {
   const newWork = page.getByRole('button', { name: /Novi rad/i })
@@ -90,6 +95,15 @@ try {
   const pass = page.getByText('Pass aktivan', { exact: true })
   await pass.waitFor({ state: 'visible', timeout: 30_000 })
   await page.getByRole('button', { name: /Pokreni (autonomni )?tijek/i }).click()
+
+  // The run is server-side. This browser close/resume check proves that
+  // closing the tab does not cancel the run or lose its last checkpoint.
+  await page.close()
+  page = await context.newPage()
+  attachPageObservers(page)
+  await page.goto(`${KATEDRA_URL}/pisi`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.pis-agentic-dashboard').waitFor({ state: 'visible', timeout: 30_000 })
+  console.log('AGENTIC_BROWSER_CLOSE_RESUME_CHECK')
 
   let terminalText = await waitForTerminalRun()
   if (/Potrebna je intervencija/i.test(terminalText)) {

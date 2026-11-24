@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, cleanupStaleInitializingAgentRun, completeAgentStep, createAgentRun, pauseAgentRun, registerAgentPayload, replaceAgentPayloadsForRun, resumeAgentRun } from './backend-contract'
+import { activateAgentRun, attachAgentPayloadsToRun, cancelAgentRun, claimAgentStep, cleanupStaleInitializingAgentRun, completeAgentStep, createAgentRun, pauseAgentRun, recordAgentRunSnapshotConsent, registerAgentPayload, replaceAgentPayloadsForRun, resumeAgentRun } from './backend-contract'
 
 describe('canonical agent backend contract', () => {
   it('creates a run through the Lekta RPC and normalizes its id', async () => {
@@ -21,6 +21,17 @@ describe('canonical agent backend contract', () => {
     })).resolves.toEqual({ ok: true, value: { runId: 'run-stale', status: 'cancelled' } })
     expect(rpc).toHaveBeenCalledWith('cleanup_stale_initializing_agent_run', {
       p_user_id: 'user-1', p_project_id: 'project-1',
+    })
+  })
+
+  it('records snapshot consent before private run context is uploaded', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null })
+    await expect(recordAgentRunSnapshotConsent({ rpc }, {
+      userId: 'user-1', projectId: 'project-1', runId: 'run-1', version: 'agentic-snapshot-v1', acceptedAt: '2026-08-22T10:00:00.000Z',
+    })).resolves.toEqual({ ok: true, value: null })
+    expect(rpc).toHaveBeenCalledWith('record_agent_run_snapshot_consent', {
+      p_user_id: 'user-1', p_project_id: 'project-1', p_run_id: 'run-1',
+      p_consent_version: 'agentic-snapshot-v1', p_consent_at: '2026-08-22T10:00:00.000Z',
     })
   })
 

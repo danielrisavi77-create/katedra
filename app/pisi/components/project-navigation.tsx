@@ -33,9 +33,7 @@ export function ProjectNavigation({ activeItem, workType, projectMode, onNavigat
   onNavigate: (item: ProjectNavItem) => void
 }) {
   const baseItems = projectMode === 'manual' ? BASE_ITEMS.filter(([item]) => !['studio', 'review'].includes(item)) : BASE_ITEMS
-  const items = workType === 's'
-    ? baseItems
-    : [...baseItems.slice(0, 7), ['defense', 'Obrana'] as [ProjectNavItem, string], ...baseItems.slice(7)]
+  const items = baseItems
 
   return (
     <nav className="pis-project-nav" aria-label="Projekt">

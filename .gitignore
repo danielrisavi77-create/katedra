@@ -26,3 +26,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local Codex and QA scratch artifacts
+.codex-temp/
+.codex-pr-build/
+
+# Local cross-repo checkout and generated QA output
+/Lekta/
+/.superpowers/brainstorm/
+/Microsoft/
+/audit-*.png
+/debug.log
+/dev-server*.log

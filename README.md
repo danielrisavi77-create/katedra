@@ -1,5 +1,9 @@
 # Katedra
 
+## Privatnost agentičkog tijeka
+
+Rukopis i lokalne verzije ostaju canonical kopija na korisnikovom uređaju. Agenticni tijek nije lokal-only: prije prvog pokretanja korisnik mora izričito potvrditi privremeni snapshot rukopisa i odabranih materijala u privatnoj Supabase Storage pohrani preko zaštićene veze. Snapshot i agentički rezultati čuvaju se najviše 72 sata, brišu se nakon terminalnog runa kad god je moguće, a korisnik može zatražiti brisanje iz prikaza runa. To nije end-to-end šifriranje; server nikad ne smije prikazati terminalni status brisanja bez dokaza da su obrisani i sadržaj i manifest.
+
 AI kopilot za seminarske, završne i diplomske radove na hrvatskom: lokalno-first manuscript workspace, Completion Scan, kontekstualni streaming chat, agentički workflow i integracija s [Lektom](https://lektahr.netlify.app), determinističkim provjeriteljem formalne usklađenosti rada.
 
 Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0.1 dijele jedan Academic Suite backend. **Postojeći Lekta Supabase projekt (`zrrjttizjyfcxmcpgzml`) je canonical identity/data backend za oba proizvoda.** Katedra nema zaseban Supabase authority niti zasebnu migration history.
@@ -7,13 +11,20 @@ Katedra i Lekta ostaju **odvojene aplikacije i proizvodi**, ali od foundation v0
 - Katedra: vodi proces, planiranje, pisanje, semantičku recenziju i pripremu obrane.
 - Lekta: čita stvarni `.docx`, provjerava verificirana pravila i jedina smije deterministički potvrditi da je nalaz riješen.
 - Lekta Supabase: isti account, isti akademski projekt, postojeći Lekta commerce i Katedra-owned workflow/AI-credit tablice.
-- Raw `.docx` i tekst rada ne ulaze u shared backend.
+- Raw `.docx` i tekst rada nisu dio canonical shared statea. Ako korisnik izričito
+  odobri agentički run, validirani snapshot može privremeno biti u privatnom
+  Storage payloadu najviše 72 sata.
 
 Lokalni manuskript je canonical sadržaj uređivanja. Agenticni runovi, uploadi i
 plaćeni project-lock tok ostaju fail-closed dok canonical Lekta ugovor, worker,
 RLS i staging money-flow ne budu deployani i dokazani; aktualni status je u
-[`docs/release/LOCAL_VERIFICATION_2026-08-16.md`](docs/release/LOCAL_VERIFICATION_2026-08-16.md)
+[`docs/release/LOCAL_VERIFICATION_2026-08-22.md`](docs/release/LOCAL_VERIFICATION_2026-08-22.md)
 i [`docs/autonomous/BLOCKERS.md`](docs/autonomous/BLOCKERS.md).
+
+Autonomous mode, kada bude aktiviran, može voditi cijeli rad po sekcijama samo
+unutar zaključanog projekta i prethodno odobrenog opsega. I dalje obavezno
+prolazi kroz source gate, neovisni verifier, quality gate i lokalni snapshot;
+ne znači tihu ili neograničenu zamjenu korisnikovog rukopisa.
 
 Za nepregovorljive produktne granice vidi `PRODUCT_CONSTITUTION.md`. Database authority i migracije žive u `danielrisavi77-create/Lekta/supabase/`.
 
@@ -328,7 +339,6 @@ Lokalni Katedra SQL marker nije zamjena za Lekta migration history i ne smije se
 - runtime cross-product Thesis/Diplomski Pass UX;
 - Lekta cloud persistence u `lekta_checks`;
 - model-tier routing;
-- aktivni deadline reminders;
 - potpuni AI-policy projection iz Lekte.
 
 ## Važne produktne ograde
@@ -341,3 +351,10 @@ Lokalni Katedra SQL marker nije zamjena za Lekta migration history i ne smije se
 - Raw dokument ne ulazi u shared Supabase foundation.
 
 Za detaljni charter vidi `VIZIJA.md`. Database release authority i migration history su u Lekta repou.
+
+## Lokalni Claude Code + Grok workflow
+
+Pokreni `Katedra-AI.cmd` i unesi razvojni zadatak. Claude Code implementira,
+Grok pregledava, a zatim se pokrecu typecheck, lint, testovi i build.
+Obje AI sesije su interaktivne; izlaskom iz jedne nastavlja se sljedeci korak.
+Upute i pokretanje bez AI poziva: [lokalni AI workflow](docs/LOCAL_AI_WORKFLOW.md).

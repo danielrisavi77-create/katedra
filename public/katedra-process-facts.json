@@ -1,5 +1,70 @@
 {
   "schemaVersion": "0.1",
-  "generatedAt": "2026-08-03",
-  "entries": []
+  "generatedAt": "2026-08-22",
+  "entries": [
+    {
+      "id": "fpzg-genui-guidelines-2026",
+      "unitId": "fpzg",
+      "scope": "faculty",
+      "scopeLabel": "Fakultetske smjernice za studentske radove",
+      "label": "FPZG — Smjernice za uporabu generativne umjetne inteligencije u nastavi i izradi studentskih radova",
+      "aiPolicy": "restricted",
+      "note": "FPZG GenUI tretira kao pomoćno sredstvo: student zadržava intelektualnu kontrolu, mora provjeriti rezultate i transparentno opisati korištenje. Smjernice izričito zabranjuju generiranje dijelova ili cijelih seminarskih, završnih i diplomskih radova te preuzimanje AI-generiranog sadržaja kao vlastitog rada.",
+      "requirements": {
+        "aiDisclosure": { "required": true, "note": "Svaka uporaba mora biti jasno dokumentirana, uključujući alat, svrhu i fazu rada." },
+        "mentorApproval": { "required": true, "scope": "završni i diplomski radovi", "note": "Student se prije uporabe GenUI-ja u završnom ili diplomskom radu treba konzultirati s mentorom." }
+      },
+      "source": {
+        "t": "FPZG — Smjernice za uporabu generativne umjetne inteligencije u nastavi i izradi studentskih radova (21. 5. 2026.)",
+        "u": "https://www.fpzg.unizg.hr/_download/repository/Smjernice%20za%20uporabu%20generativne%20umjetne%20inteligencije%20u%20nastavi%20i%20izradi%20studentskih%20radova_21.5.2026.pdf"
+      },
+      "effectiveDate": "2026-05-21",
+      "effectiveDateStatus": "stated",
+      "verifiedDate": "2026-08-22",
+      "status": "verified",
+      "aiCapabilities": {
+        "research_discovery": { "stance": "allowed", "condition": { "disclosureRequired": true, "note": "Dopušteno je pronalaženje znanstvene i stručne literature i informacija, uz obaveznu provjeru relevantnosti i autentičnosti izvora." } },
+        "brainstorming": { "stance": "allowed", "condition": { "disclosureRequired": true, "note": "Ideje se smiju koristiti samo uz aktivno sudjelovanje studenta u razvoju argumentacije; AI ne smije zamijeniti vlastito promišljanje." } },
+        "structure_assist": { "stance": "allowed", "condition": { "disclosureRequired": true, "note": "Strukturiranje je pomoćno; konačni obuhvat, argumentaciju i tekst mora osmisliti i oblikovati student." } },
+        "language_editing": { "stance": "allowed", "condition": { "disclosureRequired": true, "note": "Lektura i jezična provjera vlastitog teksta izričito su navedene kao primjerena uporaba." } },
+        "translation": { "stance": "allowed", "condition": { "disclosureRequired": true, "note": "Prijevod je dopušten uz obaveznu provjeru značenja i terminologije." } },
+        "paraphrase_for_submission": { "stance": "unspecified", "condition": { "disclosureRequired": true, "note": "Smjernice ne daju izričito dopuštenje za parafraziranje za predaju. Preuzimanje AI-generiranog sadržaja kao vlastitog nije dopušteno, pa je radnja blokirana dok ustanova ne da preciznije pravilo." } },
+        "generate_submission_text": { "stance": "banned", "condition": { "disclosureRequired": true, "note": "Smjernice izričito navode generiranje dijelova ili cijelih seminarskih, završnih i diplomskih radova kao neprimjerenu uporabu." } },
+        "generate_large_sections": { "stance": "banned", "condition": { "disclosureRequired": true, "note": "AI ne smije generirati dijelove ili cijela poglavlja rada za predaju." } },
+        "defense_assistance": { "stance": "unspecified", "condition": { "disclosureRequired": true, "note": "Smjernice ne uređuju simulator obrane zasebno; Katedra zato nudi samo vođenje pitanjima i ne generira obrambene odgovore kao vlastiti rad." } }
+      }
+    },
+    {
+      "id": "foi-genai-guidelines-2026",
+      "unitId": "foi",
+      "scope": "faculty",
+      "scopeLabel": "Fakultetske smjernice za završne i diplomske radove",
+      "label": "FOI — Smjernice za korištenje umjetne inteligencije u nastavi i studentskim radovima",
+      "aiPolicy": "restricted",
+      "note": "FOI za završne i diplomske radove polazi od razine 0, bez uporabe AI-ja. Mentor može pri prijavi teme odobriti višu razinu kada je to pedagoški i metodološki opravdano; tada su obavezni provjera, dokumentiranje i transparentno referenciranje. Službena stranica navodi datum kreiranja dokumenta, ali ne navodi zaseban formalni datum stupanja na snagu.",
+      "requirements": {
+        "aiDisclosure": { "required": true, "note": "Razine 1–4 zahtijevaju navođenje alata, svrhe, načina korištenja i odgovarajuće referenciranje." },
+        "mentorApproval": { "required": true, "scope": "završni i diplomski radovi; viša razina od osnovne razine 0", "note": "Mentor pri prijavi teme odobrava višu razinu samo kada je pedagoški i metodološki opravdana." }
+      },
+      "source": {
+        "t": "FOI — Smjernice za korištenje umjetne inteligencije u nastavi i studentskim radovima (veljača 2026.)",
+        "u": "https://www.foi.unizg.hr/sites/default/files/smjernice_za_koristenje_umjetne_inteligencije_u_nastavi_i_studentskim_radovima_suzg_foi.pdf"
+      },
+      "effectiveDateStatus": "not-stated",
+      "effectiveDateNote": "Službena stranica dokumenta navodi da je kreiran 20. 02. 2026.; zaseban datum stupanja na snagu nije naveden.",
+      "verifiedDate": "2026-08-22",
+      "status": "verified",
+      "aiCapabilities": {
+        "research_discovery": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "U višoj od osnovne razine istraživanje i preporuke literature mogu biti dopušteni uz provjeru izvora, odobrenu razinu uporabe i dokumentiranje." } },
+        "brainstorming": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Razina 2 navodi ideaciju kao dopuštenu pomoć, ali za završne i diplomske radove osnovna je razina 0; višu razinu odobrava mentor." } },
+        "structure_assist": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Predlaganje strukture je primjer dopuštene razine 2, uz odobrenu razinu i obavezno čuvanje/dokumentiranje interakcije." } },
+        "language_editing": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Jezična dorada bez promjene sadržaja i strukture odgovara razini 1, ali završni i diplomski radovi u osnovi počinju na razini 0." } },
+        "translation": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Prijevod je primjer razine 1; potrebno je odobrenje primjenjive razine, provjera prijevoda i navođenje korištenog alata." } },
+        "paraphrase_for_submission": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Parafraziranje je navedeno tek među primjerima razine 4; ne može se koristiti bez posebno odobrene razine i detaljne evidencije." } },
+        "generate_submission_text": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Generiranje teksta pojavljuje se kao primjer razine 4, koja za završne i diplomske radove nije zadana i mora biti posebno opravdana i odobrena." } },
+        "generate_large_sections": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "Generiranje većih cjelina nije standardno dopušteno; može se razmatrati samo u opravdanoj, dokumentiranoj i odobrenoj razini 4." } },
+        "defense_assistance": { "stance": "conditional", "condition": { "mentorApproval": true, "disclosureRequired": true, "note": "FOI dopušta AI u pripremi i obrani samo u okviru odobrene razine i uz mogućnost provjere da student razumije i može objasniti rezultat." } }
+      }
+    }
+  ]
 }

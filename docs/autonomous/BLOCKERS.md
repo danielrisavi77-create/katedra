@@ -34,12 +34,15 @@ G9-G10 with real test accounts and test payment events.
 
 ## BLOCKED_EXTERNAL: account deletion authority
 
-`POST /api/account/delete` intentionally fails closed until the canonical
-identity service is connected. The account UI exposes the control honestly; it
-does not claim deletion succeeded.
+`POST /api/account/delete` now performs storage-first cleanup for every
+temporary agent payload and then calls the canonical Supabase identity delete.
+It still intentionally fails closed until `KATEDRA_ACCOUNT_DELETE_ENABLED=true`
+and the Lekta `0086_agent_snapshot_privacy_and_cleanup.sql` contract is deployed
+and integration-tested. The local route does not claim deletion succeeded when
+cleanup or identity deletion fails.
 
-Required owner action: define and connect the canonical identity deletion
-workflow, then add its authenticated integration test.
+Required owner action: deploy the account-wide cleanup RPCs, verify Storage
+deletion evidence, and add the authenticated integration test against staging.
 
 ## BLOCKED_EXTERNAL: atomic paid project-lock idempotency
 
@@ -129,3 +132,33 @@ Required owner action: configure and test the provider router with the approved
 web and vision adapters, then add a staging run proving research, OCR, citation
 evidence, independent citation/review routing and the three-attempt quality
 gate before enabling those capabilities.
+
+## BLOCKED_EXTERNAL: canonical completion telemetry deployment
+
+The local Lekta branch contains
+`0088_katedra_product_completion_contract.sql`. Its service-role-only
+RPC requires a canonical `latest_analysis_id`, a clean score-100 Lekta result,
+and no open findings before it writes `project_completed` and marks the
+academic project complete. The same migration replaces the north-star stats
+function so only events tagged `source = canonical_lekta_completion` count as
+completed loops. This is source evidence only until the migration is deployed
+and exercised against staging with the real Lekta handoff.
+
+Read-only inspection of the linked canonical Supabase project on 2026-08-22
+shows migrations through `0095` and confirms that project-lock, agent-run,
+payload, reservation and billing tables exist. It also confirms that
+`katedra_product_events`, `katedra_record_project_completion()` and the
+source-filtered loop-stats function are not deployed there. Do not apply this
+contract to the canonical project from the local workspace; the owner must
+choose and provision a staging target first.
+
+## BLOCKED_EXTERNAL: reminder cron secret rotation
+
+The tracked Lekta migration source no longer contains a reminder bearer
+credential. Migrations `0059_secure_reminder_cron.sql` and
+`0089_secure_reminder_cron_vault.sql` resolve `REMINDER_CRON_SECRET` from
+Supabase Vault at request time and leave the cron job disabled when Vault is
+unavailable. The owner must rotate the previously exposed credential, store
+the replacement in the canonical Vault, deploy `0089` to staging, and verify
+one authorized plus one unauthorized `send-reminders` request before any
+production reminder schedule is trusted.

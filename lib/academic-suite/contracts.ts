@@ -411,7 +411,20 @@ export type AcademicSuiteEventName =
   | 'defense_stage_started'
   | 'paywall_shown'
   | 'pass_purchase_started'
-  | 'purchase_completed';
+  | 'purchase_completed'
+  | 'onboarding_started'
+  | 'completion_scan_completed'
+  | 'project_attached'
+  | 'first_section_written'
+  | 'first_ai_request'
+  | 'ai_proposal_accepted'
+  | 'pass_dialog_opened'
+  | 'checkout_started'
+  | 'agent_run_started'
+  | 'agent_run_completed'
+  | 'docx_exported'
+  | 'lekta_handoff_started'
+  | 'project_completed';
 
 export interface SharedAnalyticsEvent<T = Record<string, unknown>> {
   eventName: AcademicSuiteEventName;

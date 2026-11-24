@@ -1,6 +1,6 @@
 import type { AgentRunMode, SourcePolicy } from './run-state'
 
-export type AgentRunRequest = { mode: AgentRunMode; sourcePolicy: SourcePolicy; sectionIds: string[]; materialIds?: string[]; manuscript?: unknown }
+export type AgentRunRequest = { mode: AgentRunMode; sourcePolicy: SourcePolicy; sectionIds: string[]; materialIds?: string[]; manuscript?: unknown; researchPlan?: unknown; snapshotConsent?: unknown }
 
 export type AgentRunSectionSelection =
   | { ok: true; value: string[] }
@@ -25,6 +25,8 @@ export function parseAgentRunRequest(body: unknown):
     value.materialIds = [...new Set(materialIds)]
   }
   if (Object.prototype.hasOwnProperty.call(body, 'manuscript')) value.manuscript = (body as Record<string, unknown>).manuscript
+  if (Object.prototype.hasOwnProperty.call(body, 'researchPlan')) value.researchPlan = (body as Record<string, unknown>).researchPlan
+  if (Object.prototype.hasOwnProperty.call(body, 'snapshotConsent')) value.snapshotConsent = (body as Record<string, unknown>).snapshotConsent
   return { ok: true, value }
 }
 

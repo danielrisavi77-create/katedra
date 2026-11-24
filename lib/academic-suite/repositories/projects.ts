@@ -5,6 +5,9 @@ import { logOperationalEvent } from '../../observability/operational-events'
 export type ProjectLookup = {
   projectId: string
   guestProjectId: string
+  unitId?: string
+  profileId?: string
+  workType?: string
 }
 
 export type ProjectLookupResult =
@@ -15,6 +18,9 @@ type ProjectRow = {
   user_id: string
   project_id: string | null
   guest_project_id: string | null
+  unit_id?: string | null
+  profile_id?: string | null
+  work_type_canonical?: string | null
 }
 
 // The checked-in Database projection intentionally contains only the
@@ -27,7 +33,7 @@ async function findByResult(db: ProjectDb, userId: string, column: 'project_id' 
   try {
     result = await db
       .from('katedra_projects')
-      .select('user_id, project_id, guest_project_id')
+      .select('user_id, project_id, guest_project_id, unit_id, profile_id, work_type_canonical')
       .eq('user_id', userId)
       .eq(column, value)
       .maybeSingle()
@@ -72,6 +78,9 @@ function projectLookupFromRow(row: ProjectRow | null): ProjectLookupResult {
     value: {
       projectId: row.project_id,
       guestProjectId: row.guest_project_id || row.project_id,
+      ...(row.unit_id ? { unitId: row.unit_id } : {}),
+      ...(row.profile_id ? { profileId: row.profile_id } : {}),
+      ...(row.work_type_canonical ? { workType: row.work_type_canonical } : {}),
     },
   }
 }

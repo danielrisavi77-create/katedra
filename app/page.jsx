@@ -2,6 +2,7 @@ import Link from 'next/link'
 import './katedra-scoped.css'
 import LandingMotion from './landing-motion'
 import { ThemeToggle } from './theme-toggle'
+import { passModulesForWorkType } from '../lib/product/v1-modules'
 
 // Cijene su klikabilne — svaka vodi ravno u wizard s već pretpostavljenim
 // tipom rada (?tip=s|z|d preskače pitanje "koji rad pišeš"). Ne vodi izravno
@@ -9,9 +10,9 @@ import { ThemeToggle } from './theme-toggle'
 // Audit 4), pa je najpošteniji izravan korak "kreni od tog tipa rada", ne
 // lažna "kupi odmah" tipka koja bi svejedno morala prvo tražiti prijavu.
 const PASSES = [
-  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: 'plan, izvori, pisanje i sadržajna revizija', days: 120, includes: ['Plan i literatura', 'Pisanje po sekcijama', 'Sadržajna revizija'] },
-  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: 'istraživačko pitanje, metodologija i mentorov workflow', days: 240, includes: ['Istraživačko pitanje i metodologija', 'Literatura i pisanje', 'Mentorov workflow i obrana'] },
-  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'istraživački dizajn, više revizija i priprema obrane', days: 365, includes: ['Istraživački dizajn i literatura', 'Pisanje i više revizija', 'Priprema obrane'] },
+  { tip: 's', name: 'Seminarski Pass', price: '29,90 €', desc: 'V1 tijek za seminarski rad: plan, rukopis, izvori i Lekta', days: 120, modules: passModulesForWorkType('s') },
+  { tip: 'z', name: 'Završni Pass', price: '79,90 €', desc: 'V1 tijek za završni rad: plan, rukopis, izvori i Lekta', days: 240, modules: passModulesForWorkType('z') },
+  { tip: 'd', name: 'Diplomski Pass', price: '129,90 €', desc: 'V1 tijek za diplomski rad: plan, rukopis, izvori i Lekta', days: 365, modules: passModulesForWorkType('d') },
 ]
 
 export default function LandingPage() {
@@ -24,7 +25,7 @@ export default function LandingPage() {
             <div className="logo-badge">K</div>
             <div>
               <h1 className="landing-brand-title" style={{ fontSize: 21, fontWeight: 800, letterSpacing: '-.4px' }}>Katedra</h1>
-              <p className="landing-brand-subtitle" style={{ fontSize: 12.5, color: 'var(--mut)', marginTop: 1 }}>Od teme do obrane</p>
+              <p className="landing-brand-subtitle" style={{ fontSize: 12.5, color: 'var(--mut)', marginTop: 1 }}>Od teme do rukopisa</p>
             </div>
           </div>
           <div className="landing-header-actions"><ThemeToggle /><Link href="/prijava" style={{ color: 'var(--acc)', fontSize: 13.5, fontWeight: 700 }}>Prijavi se</Link></div>
@@ -37,7 +38,7 @@ export default function LandingPage() {
             Završi rad bez nagađanja.
           </h2>
           <p style={{ fontSize: 16, color: 'var(--mut)', marginTop: 16, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.55 }}>
-            Katedra te vodi od teme do obrane, prati što je još otvoreno, što tvoj fakultet
+            Katedra te vodi od teme do rukopisa, prati što je još otvoreno, što tvoj fakultet
             dopušta uz AI i što mentor čeka. Lekta provjerava stvarni dokument prije predaje.
           </p>
           <div className="landing-actions" style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 28, flexWrap: 'wrap' }}>
@@ -72,13 +73,13 @@ export default function LandingPage() {
            <div className="landing-proof-intro">
              <p className="landing-proof-kicker">PROIZVOD U PRAKSI</p>
              <h3 id="landing-proof-title">Kako izgleda jedan projekt</h3>
-             <p>Ne dobivaš samo odgovor u chatu. Dobivaš trag rada: što je pronađeno, što je provjereno, što još nedostaje i koji je sljedeći potez.</p>
-             <strong>Ilustrativni FPZG projekt</strong>
+             <p>Ne dobivaš samo odgovor u chatu. Dobivaš trag rada: što je uneseno, što je provjereno, što još nedostaje i koji je sljedeći potez.</p>
+             <strong>Ilustrativni projekt</strong>
            </div>
            <ol className="landing-proof-flow" aria-label="Primjer tijeka projekta">
-             <li><span>01</span><b>Istraživanje</b><em>18 izvora pronađeno</em></li>
-             <li><span>02</span><b>Provjera izvora</b><em>16 izvora potvrđeno</em></li>
-             <li><span>03</span><b>Plan rada</b><em>6 poglavlja i istraživačko pitanje</em></li>
+             <li><span>01</span><b>Projektni plan</b><em>tema, rok i sljedeći korak</em></li>
+             <li><span>02</span><b>Rukopis po sekcijama</b><em>pišeš i uređuješ na jednom mjestu</em></li>
+             <li><span>03</span><b>Izvori i AI zapis</b><em>provjerljivi tragovi i lokalne verzije</em></li>
              <li><span>04</span><b>Lekta provjera</b><em>formalna provjera stvarnog DOCX-a</em></li>
            </ol>
           <p className="landing-proof-note">Primjer tijeka, ne jamstvo rezultata. Stvarni opseg ovisi o radu, materijalima i pravilima ustanove.</p>
@@ -146,7 +147,7 @@ export default function LandingPage() {
                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
                  <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--acc)', margin: '6px 0' }}>{p.price}</div>
                  <div style={{ fontSize: 12, color: 'var(--mut)' }}>{p.desc}</div>
-                 <ul className="landing-pass-includes">{p.includes.map(item => <li key={item}>{item}</li>)}</ul>
+                  <ul className="landing-pass-includes">{p.modules.map(module => <li key={module.id}>{module.label}</li>)}</ul>
                  <div className="landing-pass-term">Vrijedi {p.days} dana</div>
                  <div style={{ fontSize: 12, color: 'var(--acc)', fontWeight: 700, marginTop: 10 }}>Odaberi →</div>
                </a>

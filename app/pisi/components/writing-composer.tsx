@@ -112,6 +112,7 @@ export function WritingComposer({
               <span aria-hidden="true">+</span>
               <input type="file" multiple accept={MATERIAL_ACCEPT} aria-label="Dodaj materijal u chat" disabled={uploading} onChange={(event) => void upload(event)} />
             </label>}
+            {onUpload && <small className="pis-chat-privacy-note">Dodani materijali šalju se u privatnu privremenu pohranu, najviše 72 sata.</small>}
             {attachments.length > 0 && <ul className="pis-chat-attachments" aria-label="Dodani materijali">
               {attachments.map((name, index) => <li key={`${name}-${index}`}><span title={name}>{name}</span>{attachmentWarnings[name]?.map((warning) => <small key={warning}>{warning}</small>)}<button type="button" aria-label={`Ukloni materijal ${name}`} onClick={() => { setRemovedAttachments((current) => current.includes(name) ? current : [...current, name]); setLocalAttachments((current) => current.filter((entry) => entry !== name)); setLocalAttachmentWarnings((current) => { const next = { ...current }; delete next[name]; return next }); onRemoveUpload?.(name) }}>×</button></li>)}
             </ul>}

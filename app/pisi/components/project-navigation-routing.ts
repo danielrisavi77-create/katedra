@@ -1,6 +1,6 @@
 import type { ProjectNavItem } from './project-navigation'
 
-export type ProjectDrawerTab = 'plan' | 'agents' | 'sources' | 'mentor' | 'rules' | 'lekta' | 'history' | 'defense' | 'help'
+export type ProjectDrawerTab = 'plan' | 'agents' | 'sources' | 'mentor' | 'rules' | 'research' | 'lekta' | 'history' | 'defense' | 'help'
 
 export type ProjectNavigationDestination =
   | { kind: 'home' }
@@ -20,6 +20,6 @@ export function projectNavigationDestination(item: ProjectNavItem): ProjectNavig
     case 'mentor': return { kind: 'drawer', tab: 'mentor' }
     case 'lekta': return { kind: 'drawer', tab: 'lekta' }
     case 'history': return { kind: 'drawer', tab: 'history' }
-    case 'defense': return { kind: 'drawer', tab: 'defense' }
+    case 'defense': return { kind: 'drawer', tab: 'plan' }
   }
 }

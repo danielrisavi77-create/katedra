@@ -11,13 +11,15 @@ import {
 
 import { manuscriptToExportModel, type ExportBlock, type ExportRun } from './docx-model'
 import type { ManuscriptV1 } from './types'
+import type { AcademicContext } from '../academic-context/types'
+import { academicContextExportWarning } from '../academic-context/presentation'
 
-export async function exportManuscriptDocx(manuscript: ManuscriptV1): Promise<void> {
+export async function exportManuscriptDocx(manuscript: ManuscriptV1, academicContext?: AcademicContext | null): Promise<void> {
   const model = manuscriptToExportModel(manuscript)
   const document = new Document({
     creator: 'Katedra',
     title: model.title,
-    description: 'Radni DOCX izvezen iz Katedrine radionice rukopisa.',
+    description: academicContextExportWarning(academicContext),
     numbering: {
       config: [{
         reference: 'default-numbering',

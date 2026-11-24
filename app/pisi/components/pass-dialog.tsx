@@ -1,21 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import LegalSummaryModal from '../../legal-summary-modal'
 import type { LegacyWorkType } from '../../../lib/manuscript/types'
+import type { AcademicContext } from '../../../lib/academic-context/types'
+import { academicVisibilityForStatus } from '../../../lib/academic-context/visibility'
+import { KATEDRA_PACKAGES } from '../../../lib/stripe/catalog'
+import { productPromiseForWorkType } from '../../../lib/product/promise-contract'
+import { passModulesForWorkType } from '../../../lib/product/v1-modules'
 import { FocusTrap } from './focus-trap'
 
 const PASS_PACKAGES: Record<LegacyWorkType, { key: string; name: string; price: string }> = {
-  s: { key: 'seminarski', name: 'Seminarski Pass', price: '29,90 €' },
-  z: { key: 'zavrsni', name: 'Završni Pass', price: '79,90 €' },
-  d: { key: 'diplomski', name: 'Diplomski Pass', price: '129,90 €' },
-}
-
-const PASS_INCLUDES: Record<LegacyWorkType, string[]> = {
-  s: ['struktura i izvori', 'pisanje po sekcijama', 'revizija i Lekta handoff'],
-  z: ['istraživačko pitanje i metodologija', 'pisanje i mentor review', 'priprema obrane i Lekta handoff'],
-  d: ['istraživački dizajn i podatci', 'više revizijskih krugova', 'simulator obrane i Lekta handoff'],
+  s: { key: 'seminarski', name: KATEDRA_PACKAGES.seminarski.name, price: formatPrice(KATEDRA_PACKAGES.seminarski.eur) },
+  z: { key: 'zavrsni', name: KATEDRA_PACKAGES.zavrsni.name, price: formatPrice(KATEDRA_PACKAGES.zavrsni.eur) },
+  d: { key: 'diplomski', name: KATEDRA_PACKAGES.diplomski.name, price: formatPrice(KATEDRA_PACKAGES.diplomski.eur) },
 }
 
 export function PassDialog({
@@ -25,9 +24,13 @@ export function PassDialog({
   projectTitle = 'Rad bez naslova',
   institution,
   program,
+  profileId,
   mentor,
   deadline,
+  academicContext,
   onClose,
+  onOpen,
+  onCheckoutStarted,
   onRedirect = (url) => window.location.assign(url),
 }: {
   open: boolean
@@ -36,9 +39,13 @@ export function PassDialog({
   projectTitle?: string
   institution?: string
   program?: string
+  profileId?: string
   mentor?: string
   deadline?: string
+  academicContext?: AcademicContext | null
   onClose: () => void
+  onOpen?: () => void
+  onCheckoutStarted?: () => void
   onRedirect?: (url: string) => void
 }) {
   const [consent, setConsent] = useState(false)
@@ -46,12 +53,18 @@ export function PassDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const pkg = PASS_PACKAGES[workType]
+  const promise = productPromiseForWorkType(pkg.key)
+  const academicVisibility = academicContext ? academicVisibilityForStatus(academicContext.status) : null
+  const canPurchasePass = Boolean(academicContext && academicContext.status === 'verified' && academicVisibility?.canPurchasePass === true)
+
+  useEffect(() => { if (open) onOpen?.() }, [onOpen, open])
 
   if (!open) return null
 
   const checkout = async () => {
-    if (!consent || !lockConsent || busy) return
+    if (!consent || !lockConsent || busy || !canPurchasePass) return
     setBusy(true)
+    onCheckoutStarted?.()
     setError('')
     try {
       const response = await fetch('/api/checkout', {
@@ -79,13 +92,22 @@ export function PassDialog({
           <div><b>{pkg.name}</b><span>za ovaj konkretan akademski projekt</span></div>
           <strong>{pkg.price}</strong>
         </div>
-        <p id="pis-pass-description" className="pis-pass-copy">Pass otključava Katedrina uređivanja za ovaj rukopis. Tekst rada ostaje lokalno na ovom uređaju; Stripe obrađuje plaćanje.</p>
-        <ul className="pis-pass-includes" aria-label="Uključeno u Pass">{PASS_INCLUDES[workType].map((item) => <li key={item}>{item}</li>)}</ul>
+        <p id="pis-pass-description" className="pis-pass-copy">Pass otključava Katedrina uređivanja za ovaj rukopis. Uobičajeno pisanje i lokalne verzije ostaju na ovom uređaju. Ako pokreneš agentički tijek, prije prvog pokretanja zasebno potvrđuješ privremeni prijenos snapshot-a rukopisa i odabranih materijala u privatnu pohranu, najviše 72 sata. Stripe obrađuje plaćanje.</p>
+        <ul className="pis-pass-includes" aria-label="Uključeno u Pass">{passModulesForWorkType(workType).filter((module) => promise.modules.some((id) => id === module.id)).map((module) => <li key={module.id}><b>{module.label}</b><small>{module.actionLabel} · {module.surface}</small></li>)}</ul>
         <div className="pis-pass-summary" aria-label="Sažetak projekta">
           <div><span>Projekt</span><b>{projectTitle}</b></div>
           <div><span>Fakultet / smjer</span><b>{[institution, program].filter(Boolean).join(' · ') || 'Nije uneseno'}</b></div>
           <div><span>Mentor / rok</span><b>{[mentor, deadline].filter(Boolean).join(' · ') || 'Nije uneseno'}</b></div>
         </div>
+        {academicContext && academicVisibility && (
+          <div className="pis-pass-academic-context" role="status">
+            <strong>{academicVisibility.label}</strong>
+            <span>{academicContext.profileLabel}</span>
+            <small>{academicContext.verifiedAt ? `Provjereno ${academicContext.verifiedAt}.` : 'Datum provjere nije naveden.'}</small>
+            {academicContext.sources[0] && <a href={academicContext.sources[0].url} target="_blank" rel="noreferrer">Službeni izvor pravila ↗</a>}
+          </div>
+        )}
+        {!canPurchasePass && <p className="pis-pass-error" role={academicContext ? 'alert' : 'status'}>{academicContext ? 'Ovaj profil trenutno nije moguće kupiti Pass. Nastavi u općem akademskom načinu rada ili odaberi profil s verificiranim pravilima.' : 'Pass je dostupan tek nakon povezivanja verificiranog akademskog profila.'}</p>}
         <div className="pis-pass-warning" role="note">
           <strong>VAŽNO</strong>
           <p>Ovaj Pass vrijedi samo za ovaj projekt i potvrđenu temu. Tema se nakon naplate ne može promijeniti. Za drugi rad potreban je novi projekt i novi Pass.</p>
@@ -100,7 +122,7 @@ export function PassDialog({
           <span>Potvrđujem da su podaci točni i razumijem da se nakon naplate tema ne može promijeniti.</span>
         </label>
         {error && <p className="pis-pass-error" role="alert">{error}</p>}
-        <button type="button" className="pis-pass-submit" disabled={!consent || !lockConsent || busy} onClick={() => void checkout()}>
+        <button type="button" className="pis-pass-submit" disabled={!consent || !lockConsent || busy || !canPurchasePass} onClick={() => void checkout()}>
           {busy ? 'Otvaram Stripe…' : 'Nastavi na sigurno plaćanje'}
         </button>
         <small className="pis-pass-footnote">Jednokratno plaćanje. Katedra ne vidi podatke tvoje kartice.</small>
@@ -108,4 +130,8 @@ export function PassDialog({
       </FocusTrap>
     </div>
   )
+}
+
+function formatPrice(value: number): string {
+  return new Intl.NumberFormat('hr-HR', { style: 'currency', currency: 'EUR' }).format(value)
 }

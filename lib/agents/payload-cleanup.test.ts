@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { logOperationalEvent } from '../observability/operational-events'
 import { cleanupExpiredAgentPayloads } from './payload-cleanup'
+
+vi.mock('../observability/operational-events', () => ({
+  logOperationalEvent: vi.fn(),
+}))
 
 describe('temporary agent payload cleanup', () => {
   it('deletes private objects before finalizing expired manifests', async () => {
@@ -25,6 +30,7 @@ describe('temporary agent payload cleanup', () => {
 
     await expect(cleanupExpiredAgentPayloads(store, '2026-08-14T10:00:00.000Z')).resolves.toMatchObject({ ok: false, deleted: 0 })
     expect(finalize).not.toHaveBeenCalled()
+    expect(logOperationalEvent).toHaveBeenCalledWith({ eventName: 'agent_payload_ttl_cleanup_failed', reason: 'storage' }, 'error')
   })
 
   it('treats an already empty expiry set as a successful no-op', async () => {

@@ -26,12 +26,15 @@ Postavi ih u staging Secret Storeu, nikad u Git ili browser:
 KATEDRA_WORKER_APP_URL=https://<staging-katedra-origin>
 KATEDRA_AGENT_WORKER_TOKEN=<random-long-secret>
 KATEDRA_AGENT_WORKER_CRON_SECRET=<random-long-secret>
+KATEDRA_AGENT_PAYLOAD_CLEANUP_CRON_SECRET=<different-random-long-secret>
 ```
 
 Edge Function mora imati i standardne Supabase varijable
 `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`. Worker token mora biti potpuno
-isti u Edge Functionu i Katedrinoj server-side konfiguraciji. Cron secret se
-koristi samo za poziv Edge Functiona.
+isti u Edge Functionu i Katedrinoj server-side konfiguraciji. Worker cron secret
+koristi se samo za poziv worker Edge Functiona, a
+`KATEDRA_AGENT_PAYLOAD_CLEANUP_CRON_SECRET` samo za TTL cleanup funkciju. To
+moraju biti dvije različite tajne.
 
 ## 3. Katedra staging environment
 
@@ -69,11 +72,18 @@ npm.cmd run preflight:agentic
 Oba preflighta moraju proći u deployment environmentu. Vrijednosti tajni se
 ne ispisuju.
 
+Migracija `0086_agent_snapshot_privacy_and_cleanup.sql` mora biti deployana
+tek nakon pregleda staging sheme. Ona dodaje explicit snapshot consent,
+72-satni TTL, terminalni deletion evidence, retry-safe cleanup scheduler i
+account-wide cleanup prije brisanja identityja. Ne uključuj agenticni flag ako
+preflight prijavljuje bilo koji od tih RPC-a kao missing.
+
 Za redoslijed deploya, cron tick, secret boundary, rollback i provjeru
 `cron.job_run_details` koristi [Agent worker staging runbook](./AGENT_WORKER_RUNBOOK.md).
-Scheduler šalje samo `KATEDRA_AGENT_WORKER_CRON_SECRET` Lekta funkciji; Lekta
-funkcija Katedri šalje `KATEDRA_AGENT_WORKER_TOKEN`, a service-role ključ nikad
-ne napušta Lekta okruženje.
+Scheduler šalje samo `KATEDRA_AGENT_WORKER_CRON_SECRET` worker funkciji, a TTL
+scheduler samo `KATEDRA_AGENT_PAYLOAD_CLEANUP_CRON_SECRET`. Lekta funkcija
+Katedri šalje `KATEDRA_AGENT_WORKER_TOKEN`, a service-role ključ nikad ne napušta
+Lekta okruženje.
 
 ## 4. GitHub manualni release gate
 
@@ -84,12 +94,14 @@ Postavi sljedeće GitHub Actions secrets:
 - `KATEDRA_AUTH_E2E_PASSWORD`
 - `KATEDRA_AGENT_WORKER_TOKEN`
 - `KATEDRA_AGENT_WORKER_CRON_SECRET`
+- `KATEDRA_AGENT_PAYLOAD_CLEANUP_CRON_SECRET`
 
 Postavi repository variable:
 
 - `KATEDRA_AGENT_MODEL`
 - `KATEDRA_AGENT_RUNS_ENABLED=true`
 - `KATEDRA_PROJECT_LOCKS_ENABLED=true`
+- `KATEDRA_AGENT_PAYLOAD_CLEANUP_URL=https://<staging-project-ref>.supabase.co/functions/v1/cleanup-agent-payloads`
 
 Zatim ručno pokreni workflow `Academic Suite browser E2E`. On mora proći
 sljedećim redom:
@@ -98,6 +110,9 @@ sljedećim redom:
 2. authenticated money-flow;
 3. agentic staging preflight;
 4. agenticni run do verificiranog terminalnog stanja.
+
+Workflow `Agent temporary payload cleanup` pokreÄ‡e cleanup svakih 15 minuta i
+može se ruÄŤno pokrenuti za staging provjeru.
 
 Ako dispatcher nije deployan, worker token nije jednak na obje strane ili
 provider nije konfiguriran, workflow mora ostati neuspješan.
@@ -111,9 +126,15 @@ agenticni browser gate:
 npm.cmd run test:e2e:agentic
 ```
 
-Nakon testa provjeri da shared state ne sadrži tekst rukopisa, raw upload,
-prompt ili AI odgovor. Privremeni payloadi moraju imati TTL, a lokalni
-rukopis mora ostati u IndexedDB-u.
+Nakon testa provjeri da canonical shared state ne sadrži tekst rukopisa, raw
+upload, prompt ili AI odgovor. Privremeni payloadi moraju imati TTL i izričit
+snapshot consent. Nakon terminala run mora imati deletion evidence za sadržaj i
+manifest, a lokalni rukopis mora ostati u IndexedDB-u kao canonical kopija.
+Namjerno izazovi jedan neuspjeh Storage brisanja i potvrdi da scheduler vidi
+isti tombstonirani manifest ponovno, bez lažnog statusa `deleted`. Account-delete
+test mora prije `auth.admin.deleteUser` dokazati brisanje svih content i manifest
+objekata za korisnika. U `cron.job_run_details` mora postojati uspješan cleanup
+tick nakon ponovnog pokušaja, a terminalni run mora imati `payload_deleted_at`.
 
 Production ostaje isključen dok cijeli tok checkout → webhook → entitlement →
 worker → provider → verifier → billing → DOCX/Lekta handoff ne prođe na

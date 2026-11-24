@@ -26,6 +26,10 @@ import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
 import { getRequestId, withRequestId } from '../../../lib/observability/request-id.js'
 import { logOperationalEvent } from '../../../lib/observability/operational-events'
+import { compileAcademicContext } from '@/lib/academic-context/compile-context'
+import { loadAcademicPack } from '@/lib/academic-context/server-load-pack'
+import { recordKatedraProductEvent } from '@/lib/analytics/product-events'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // tokens = obračunski tokeni (input + 5×output) za interni wallet hard cap,
 // NEPROMIJENJENI od prije repricinga — VIZIJA.md: "cijena mora signalizirati
@@ -91,6 +95,15 @@ async function handlePOST(req) {
     workTypeCanonical: project.work_type_canonical,
   }, pkgKey)
   if (!validation.ok) return Response.json({ error: validation.error }, { status: validation.status })
+  const academicContext = compileAcademicContext({
+    catalog: loadAcademicPack(),
+    unitId: ownedProject.unitId,
+    profileId: ownedProject.profileId,
+    workType: project.work_type_canonical,
+  })
+  if (academicContext.status !== 'verified') {
+    return Response.json({ error: 'Pass je dostupan samo za profil s verificiranim akademskim pravilima.', reason: 'academic_profile_unverified' }, { status: 403 })
+  }
   const confirmation = validateCheckoutConfirmation({ topic, projectTopic: project.topic, lockConfirmation })
   if (!confirmation.ok) return Response.json({ error: confirmation.error }, { status: confirmation.status })
 
@@ -140,6 +153,7 @@ async function handlePOST(req) {
       success_url: `${appUrl}/pisi?placeno=1`,
       cancel_url: `${appUrl}/pisi?placeno=0`,
     })
+    try { await recordKatedraProductEvent(createAdminClient(), { eventName: 'checkout_started', userId: user.id, projectId: project.project_id, idempotencyKey: session.id, properties: { productKey: pkgKey, amountEur: pkg.eur } }) } catch { /* telemetry never blocks checkout */ }
     return Response.json({ url: session.url })
   } catch (error) {
     logOperationalEvent({ eventName: 'checkout_stripe_session_failed', userId: user.id, projectId: project.project_id, error }, 'error')

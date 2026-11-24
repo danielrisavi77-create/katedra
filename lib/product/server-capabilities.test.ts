@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveCanonicalProjectPass, resolveProjectCapability } from './server-capabilities'
 
-function createDb({ userId = 'u1', userEmail = null, emailConfirmedAt = null, projectId = 'p1', lock = null, entitlement = true, entitlementError = null, projectLookupError = null }: { userId?: string; userEmail?: string | null; emailConfirmedAt?: string | null; projectId?: string; lock?: Record<string, unknown> | null; entitlement?: boolean; entitlementError?: { message: string } | null; projectLookupError?: { message: string } | null } = {}) {
+function createDb({ userId = 'u1', userEmail = null, emailConfirmedAt = null, projectId = 'p1', lock = null, entitlement = true, entitlementError = null, projectLookupError = null, unitId = 'fpzg', profileId = 'fpzg-politologija-zavrsni' }: { userId?: string; userEmail?: string | null; emailConfirmedAt?: string | null; projectId?: string; lock?: Record<string, unknown> | null; entitlement?: boolean; entitlementError?: { message: string } | null; projectLookupError?: { message: string } | null; unitId?: string; profileId?: string } = {}) {
   return {
     auth: { async getUser() { return { data: { user: { id: userId, email: userEmail, email_confirmed_at: emailConfirmedAt } }, error: null } } },
     from(table: string) {
@@ -14,7 +14,7 @@ function createDb({ userId = 'u1', userEmail = null, emailConfirmedAt = null, pr
         gt() { return query },
         limit() { return query },
         async maybeSingle() {
-          if (table === 'katedra_projects') return { data: filters.some(([key, value]) => key === 'project_id' && value === projectId) ? { user_id: userId, project_id: projectId, guest_project_id: null } : null, error: projectLookupError }
+          if (table === 'katedra_projects') return { data: filters.some(([key, value]) => key === 'project_id' && value === projectId) ? { user_id: userId, project_id: projectId, guest_project_id: null, unit_id: unitId, profile_id: profileId } : null, error: projectLookupError }
           if (table === 'katedra_project_locks') return { data: lock, error: null }
           if (table === 'entitlements') return { data: entitlement ? { id: 'e1', product_id: 'katedra_pass_zavrsni' } : null, error: entitlementError }
           return { data: null, error: null }
@@ -48,9 +48,10 @@ describe('resolveProjectCapability', () => {
     await expect(resolveProjectCapability(createDb({ userId: 'u2' }) as never, { userId: 'u1', projectId: 'p1', capability: 'basic_plan' })).resolves.toMatchObject({ allowed: false, code: 'unauthenticated' })
   })
 
-  it('requires the canonical lock and matching product entitlement', async () => {
+  it('requires the canonical lock and matching product entitlement for the real V1 workflow', async () => {
     const db = createDb({ lock: lockFixture() })
-    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toEqual({ allowed: true, tier: 'zavrsni', projectId: 'p1' })
+    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'section_writing' })).resolves.toEqual({ allowed: true, tier: 'zavrsni', projectId: 'p1' })
+    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toMatchObject({ allowed: false, code: 'capability_unavailable', tier: 'zavrsni', projectId: 'p1' })
   })
 
   it('fails closed when the lock work type and product key disagree', async () => {
@@ -58,9 +59,9 @@ describe('resolveProjectCapability', () => {
     await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'methodology' })).resolves.toMatchObject({ allowed: false, code: 'capability_unavailable' })
   })
 
-  it('never allows web research from a caller-supplied policy flag', async () => {
-    const db = createDb({ lock: lockFixture() })
-    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'web_research' })).resolves.toMatchObject({ allowed: false, code: 'policy_unverified' })
+  it('never allows web research from a caller-supplied policy flag on a partial profile', async () => {
+    const db = createDb({ lock: lockFixture(), profileId: 'fpzg-novinarstvo-zavrsni-av' })
+    await expect(resolveProjectCapability(db as never, { userId: 'u1', projectId: 'p1', capability: 'web_research' })).resolves.toMatchObject({ allowed: false, code: 'capability_unavailable' })
   })
 
   it('fails closed as unavailable when entitlement lookup errors', async () => {

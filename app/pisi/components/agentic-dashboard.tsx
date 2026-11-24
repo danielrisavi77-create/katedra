@@ -14,9 +14,10 @@ import { AgenticEventFeed } from './agentic-event-feed'
 import { ReadOnlyManuscriptPreview } from './read-only-manuscript-preview'
 import { AiUsageLedger } from './ai-usage-ledger'
 import { buildAiUsageLedger } from '../../../lib/agents/usage-ledger'
+import { AgentRunPrivacyStatus, type AgentRunPrivacySnapshot } from './agent-run-privacy'
 
 type RunStatus = 'pending' | 'running' | 'paused' | 'completed' | 'blocked' | 'failed' | 'cancelled'
-type AgenticRun = { runId: string; status: RunStatus; mode?: string; steps: AgenticTimelineStep[] }
+type AgenticRun = { runId: string; status: RunStatus; mode?: string; steps: AgenticTimelineStep[]; privacy?: AgentRunPrivacySnapshot }
 type LocalDraftOverride = {
   sectionId: string
   baseRevision: string
@@ -233,6 +234,7 @@ export function AgenticDashboard({ runId, projectId, manuscript, requestedPhase,
       <div><p className="pis-kicker">{requestedPhase === 'review' ? 'Pregled rezultata' : 'Radionica rada'}</p><h2>Tijek izrade rada</h2><p>{run ? studioStatus.label : activeSummary ? activeSummaryCopy(activeSummary) : loading ? 'Učitavam zadnji checkpoint…' : 'Tijek nije moguće učitati.'}</p><span className="pis-agentic-live-summary">{run ? studioStatus.summary : 'Katedra će prikazati svaki provjereni korak čim proces započne.'}</span></div>
       {run && <span className="pis-agent-run-mode">{modeLabel(run.mode)}</span>}
     </header>
+    {run && <AgentRunPrivacyStatus key={run.runId} projectId={projectId} runId={run.runId} runStatus={run.status} initial={run.privacy} />}
     {run && <div className="pis-agentic-dashboard-actions">
       {run.status === 'running' && <button type="button" onClick={() => void transition('pause')}>Pauziraj tijek</button>}
       {run.status === 'paused' && <button type="button" className="is-primary" onClick={() => void transition('resume')}>Nastavi tijek</button>}
@@ -410,10 +412,12 @@ function isSafeTiptapNode(value: unknown): value is TiptapNode {
 function normalizeRun(body: Record<string, unknown>): AgenticRun {
   const rawRun = body.run as Record<string, unknown>
   const steps = Array.isArray(body.steps) ? body.steps : []
+  const privacy = normalizePrivacy(rawRun.privacy)
   return {
     runId: String(rawRun.run_id || rawRun.runId || ''),
     status: rawRun.status as RunStatus,
     mode: typeof rawRun.mode === 'string' ? rawRun.mode : undefined,
+    ...(privacy ? { privacy } : {}),
     steps: steps.map((value) => {
       const step = value as Record<string, unknown>
       const verification = step.last_verification || step.lastVerification
@@ -424,6 +428,18 @@ function normalizeRun(body: Record<string, unknown>): AgenticRun {
 
 function runDescription(status: RunStatus) {
   return ({ pending: 'Tijek je pripremljen i čeka prvi checkpoint.', running: 'Katedra radi po redoslijedu.', paused: 'Tijek je pauziran; rukopis je siguran.', completed: 'Tijek je završen i čeka tvoj pregled.', blocked: 'Jedan rezultat treba tvoju odluku.', failed: 'Tijek je zaustavljen zbog greške.', cancelled: 'Tijek je otkazan; rukopis je ostao nepromijenjen.' } as Record<RunStatus, string>)[status] || 'Status tijeka nije poznat.'
+}
+
+function normalizePrivacy(value: unknown): AgentRunPrivacySnapshot | null {
+  if (!value || typeof value !== 'object') return null
+  const item = value as Record<string, unknown>
+  if (!['local', 'temporarily_uploaded', 'deletion_scheduled', 'deleted', 'deletion_failed'].includes(String(item.status))) return null
+  return {
+    status: item.status as AgentRunPrivacySnapshot['status'],
+    ...(typeof item.expiresAt === 'string' ? { expiresAt: item.expiresAt } : {}),
+    ...(typeof item.deletedAt === 'string' ? { deletedAt: item.deletedAt } : {}),
+    ...(typeof item.cleanupError === 'string' ? { cleanupError: item.cleanupError } : {}),
+  }
 }
 
 function modeLabel(mode?: string): string {

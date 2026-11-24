@@ -34,3 +34,16 @@ configuration. After the change, the focused suite passed all 8 tests.
 Changed only the Task 10 preflight implementation, its tests, `.env.example`,
 the synchronized release preflight documentation, and this report. Unrelated
 worktree changes were left unstaged.
+
+## Fix round 1
+
+Updated `docs/autonomous/BLOCKERS.md` so its local preflight evidence includes
+the mandatory billing and distributed rate-limit contracts. Strengthened each
+new missing/invalid regression so the tested key is explicitly absent from the
+opposite result bucket.
+
+Verification for this fix:
+
+- `npm.cmd exec vitest run lib/deployment/agentic-preflight.test.js` — passed
+- `npm.cmd run typecheck` — passed
+- `npm.cmd run lint` — passed

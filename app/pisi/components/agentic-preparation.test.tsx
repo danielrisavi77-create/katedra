@@ -21,6 +21,7 @@ const manuscript = {
 
 afterEach(() => {
   cleanup()
+  window.localStorage.clear()
   vi.unstubAllGlobals()
 })
 
@@ -43,12 +44,12 @@ describe('AgenticPreparation', () => {
     render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} webResearchAvailable onRunCreated={onRunCreated} />)
     await user.click(screen.getByRole('radio', { name: /Autonomno/ }))
     await user.click(screen.getByRole('radio', { name: /Šira pretraga/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Razumijem/ }))
     await user.click(screen.getByRole('button', { name: 'Pokreni autonomni tijek' }))
 
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/agent-runs?projectId=project-1', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro'], materialIds: [], manuscript }),
-    }))
+    const request = JSON.parse(fetchMock.mock.calls.at(-1)?.[1].body as string) as Record<string, unknown>
+    expect(request).toMatchObject({ mode: 'autonomous', sourcePolicy: 'web_research', sectionIds: ['intro'], materialIds: [], manuscript })
+    expect(request.snapshotConsent).toMatchObject({ version: 'agentic-snapshot-v1', projectId: 'project-1' })
     expect(onRunCreated).toHaveBeenCalledWith('run-1')
   })
 
@@ -103,9 +104,11 @@ describe('AgenticPreparation', () => {
 
     render(<AgenticPreparation projectId="project-1" passActive sectionIds={['intro']} manuscript={manuscript} onRunCreated={vi.fn()} />)
     await screen.findByText(/Pro.*itano/)
+    await user.click(screen.getByRole('checkbox', { name: /Razumijem/ }))
     await user.click(screen.getByRole('button', { name: 'Pokreni tijek' }))
 
-    const request = JSON.parse(fetchMock.mock.calls[1][1].body as string) as { materialIds: string[] }
+    const call = fetchMock.mock.calls.find((entry) => typeof entry[1]?.body === 'string')
+    const request = JSON.parse(call?.[1].body as string) as { materialIds: string[] }
     expect(request.materialIds).toEqual(['m-ready'])
   })
 })

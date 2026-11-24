@@ -34,6 +34,7 @@ export default function AdminPage() {
   const runs = Array.isArray(overview?.agentRuns) ? overview.agentRuns : []
   const usage = overview?.usage
   const flags = overview?.featureFlags || {}
+  const productAnalytics = overview?.productAnalytics || {}
 
   return (
     <div className="katedra-page" style={{ minHeight: '100vh', padding: '28px 16px 90px' }}>
@@ -70,6 +71,11 @@ export default function AdminPage() {
               <Metric label="Naplaćeni korisnički charge" value={usage ? numberFormat.format(usage.charged) : '—'} />
             </section>
 
+            <section className="admin-metric-grid" aria-label="Dovršeni loopovi">
+              <Metric label="Dovršeni loopovi (7 dana)" value={productAnalytics.completedLoops7d ?? '—'} />
+              <Metric label="Dovršeni loopovi ukupno" value={productAnalytics.completedLoopsTotal ?? '—'} />
+            </section>
+
             <div className="admin-content-grid">
               <section className="panel" aria-labelledby="admin-projects-title">
                 <div className="admin-section-heading">
@@ -103,6 +109,7 @@ export default function AdminPage() {
                 <Flag label="Project locks" enabled={flags.projectLocks} />
                 <Flag label="Agent runs" enabled={flags.agentRuns} />
                 <Flag label="Materials" enabled={flags.materials} />
+                <Flag label="Research plan modules" enabled={flags.researchModules} />
               </div>
               {Array.isArray(overview.warnings) && overview.warnings.map((warning) => <p key={warning} className="admin-warning" role="status">{warning}</p>)}
             </section>

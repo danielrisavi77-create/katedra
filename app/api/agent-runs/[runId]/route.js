@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { recordKatedraProductEvent } from '@/lib/analytics/product-events'
 import { cancelAgentRun } from '@/lib/agents/backend-contract'
 import { createSupabaseRunPayloadManifestStore } from '@/lib/agents/run-context-loader'
 import { loadAgentRunResults } from '@/lib/agents/run-result-storage'
@@ -21,7 +23,7 @@ async function handleGet(req, { params }) {
   const runId = (await params).runId
   const requestedProjectId = new URL(req.url).searchParams.get('projectId')?.trim() || ''
   const { data: run, error } = await supabase.from('agent_runs')
-    .select('run_id, project_id, mode, source_policy, status, created_at, updated_at')
+    .select('run_id, project_id, mode, source_policy, status, created_at, updated_at, payload_cleanup_status, payload_expires_at, payload_deleted_at, payload_cleanup_error')
     .eq('run_id', runId)
     .eq('user_id', user.id)
     .maybeSingle()
@@ -49,7 +51,31 @@ async function handleGet(req, { params }) {
     logOperationalEvent({ eventName: 'agent_run_result_payload_load_failed', runId, projectId: run.project_id, error: resultError }, 'error')
     return Response.json({ error: 'Rezultate runa trenutno nije moguće učitati.' }, { status: 503 })
   }
-  return privateJson({ run, steps: steps || [], results })
+  if (run.status === 'completed') {
+    try { await recordKatedraProductEvent(createAdminClient(), { eventName: 'agent_run_completed', userId: user.id, projectId: run.project_id, idempotencyKey: run.run_id, properties: { mode: run.mode } }) } catch { /* telemetry never blocks status reads */ }
+  }
+  return privateJson({ run: { ...run, privacy: privacyStatus(run) }, steps: steps || [], results })
+}
+
+function privacyStatus(run) {
+  if (run.payload_cleanup_status === 'deleted' || run.payload_deleted_at) return {
+    status: 'deleted',
+    ...(typeof run.payload_deleted_at === 'string' ? { deletedAt: run.payload_deleted_at } : {}),
+  }
+  if (run.payload_cleanup_status === 'deletion_scheduled') return {
+    status: 'deletion_scheduled',
+    ...(typeof run.payload_expires_at === 'string' ? { expiresAt: run.payload_expires_at } : {}),
+    ...(typeof run.payload_cleanup_error === 'string' ? { cleanupError: run.payload_cleanup_error } : {}),
+  }
+  if (run.payload_cleanup_status === 'deletion_failed') return {
+    status: 'deletion_failed',
+    ...(typeof run.payload_expires_at === 'string' ? { expiresAt: run.payload_expires_at } : {}),
+    cleanupError: 'Privremeno brisanje nije završeno; sustav će pokušati ponovo.',
+  }
+  return {
+    status: 'temporarily_uploaded',
+    ...(typeof run.payload_expires_at === 'string' ? { expiresAt: run.payload_expires_at } : {}),
+  }
 }
 
 export async function DELETE(req, { params }) {

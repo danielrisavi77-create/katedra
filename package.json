@@ -17,6 +17,7 @@
     "test:e2e:agent-studio-ui": "node scripts/agent-studio-ui-smoke.mjs",
     "test:e2e:hybrid-ui": "node scripts/hybrid-mentor-ui-e2e.mjs",
     "test:e2e:pisi": "node scripts/pisi-workspace-ui-e2e.mjs",
+    "test:e2e:research-plan": "node scripts/research-plan-browser-e2e.mjs",
     "audit:dependencies": "npm audit --omit=dev --audit-level=high",
     "preflight:production": "node scripts/production-preflight.mjs",
     "preflight:agentic": "node scripts/agentic-staging-preflight.mjs",

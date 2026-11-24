@@ -53,6 +53,20 @@ it('waits for metadata sync before checking the project Pass', () => {
   expect(source).toContain('const balanceProjectId = syncResult.canonicalProjectId || syncProjectId')
 })
 
+it('records the guest-to-account project attachment after canonical metadata sync', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
+
+  expect(source).toContain("eventName: 'project_attached'")
+  expect(source).toContain('project_attached:${syncResult.canonicalProjectId || syncProjectId}')
+})
+
+it('records onboarding start only while onboarding is actually open', () => {
+  const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
+
+  expect(source).toContain("if (!showOnboarding) return")
+  expect(source).toContain("eventName: 'onboarding_started'")
+})
+
 it('does not present an admin override as a canonical agentic Pass', () => {
   const source = readFileSync(resolve(process.cwd(), 'app/pisi/components/workspace-client.tsx'), 'utf8')
 

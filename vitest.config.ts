@@ -8,6 +8,6 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: ['node_modules/**', 'Lekta/**', '.codex-pr-build/**', '.next/**', 'dist/**'],
+    exclude: ['node_modules/**', 'Lekta/**', '.codex-pr-build/**', '.worktrees/**', '.next/**', 'dist/**'],
   },
 })

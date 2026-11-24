@@ -11,9 +11,12 @@ calling the canonical Lekta RPCs.
   material identity and expiry. It never stores extracted document text.
 - Temporary material is restricted to the private
   `katedra-temporary-materials` bucket and the authenticated project namespace.
-- `cleanup_expired_agent_payloads` marks expired manifests idempotently. The
-  cleanup worker must remove the returned manifest and object paths from
-  private storage, then may run the function again safely.
+- `record_agent_run_snapshot_consent` must succeed before the run-context upload.
+- `request_agent_run_payload_deletion` tombstones terminal-run manifests, but
+  that is not deletion evidence by itself. The cleanup worker must remove both
+  private objects and then call `finalize_agent_run_payload_deletion`.
+- `record_agent_run_payload_deletion_failure` keeps a retryable status without
+  logging manuscript text or provider output.
 
 The migration is local to the Lekta repository. It must be applied to staging
 and tested before Katedra feature flags are enabled.

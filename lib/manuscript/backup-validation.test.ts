@@ -32,6 +32,32 @@ describe('validateManuscriptBackup', () => {
     if (result.ok) expect(result.value.meta).toEqual({ institution: 'FPZG' })
   })
 
+  it('preserves independent source verification metadata in a local backup', () => {
+    const result = validateManuscriptBackup({
+      ...validBackup,
+      sources: [{
+        ...validBackup.sources[0],
+        verified: true,
+        verification: {
+          status: 'verified',
+          method: 'crossref',
+          checkedAt: '2026-08-22T10:00:00.000Z',
+          titleMatch: true,
+          evidenceUrl: 'https://api.crossref.org/works/10.1000/example',
+        },
+      }],
+    }, PROJECT_ID)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.sources[0].verification?.status).toBe('verified')
+  })
+
+  it('rejects malformed source verification metadata', () => {
+    expect(validateManuscriptBackup({
+      ...validBackup,
+      sources: [{ ...validBackup.sources[0], verification: { status: 'verified', method: 'unknown', checkedAt: 'now' } }],
+    }, PROJECT_ID)).toMatchObject({ ok: false })
+  })
+
   it('rejects a backup from another project', () => {
     expect(validateManuscriptBackup(validBackup, 'project-2')).toMatchObject({ ok: false, reason: 'project_mismatch' })
   })

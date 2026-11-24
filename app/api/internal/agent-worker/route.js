@@ -1,12 +1,15 @@
 import { timingSafeEqual } from 'node:crypto'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
+import { compileAcademicContext } from '@/lib/academic-context/compile-context'
+import { loadAcademicPack } from '@/lib/academic-context/server-load-pack'
 import { createAnthropicAgentProvider } from '@/lib/agents/anthropic-provider'
 import { createGatewayAgentProvider } from '@/lib/agents/provider-gateway'
 import { createProviderRouter } from '@/lib/agents/provider-router'
 import { createProviderBackedExecutor } from '@/lib/agents/provider-worker'
 import { runAgentWorkerLoop } from '@/lib/agents/worker-loop'
-import { createSupabaseRunPayloadManifestStore, loadRunManuscriptContext, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
+import { createSupabaseRunPayloadManifestStore, loadRunManuscriptContext, loadRunResearchPlanContext, loadRunMaterialContexts } from '@/lib/agents/run-context-loader'
 import { runContextStoragePaths } from '@/lib/agents/run-context'
 import { AGENT_IDS } from '@/lib/agents/contracts'
 import { resolveAgentWorkerConfiguration } from '@/lib/agents/worker-config'
@@ -14,6 +17,7 @@ import { verifyAgentResult } from '@/lib/agents/verifier'
 import { createIndependentCitationVerifier } from '@/lib/agents/source-verification'
 import { createGatewayPassageVerifier, executeBilledPassageVerification } from '@/lib/agents/passage-verification'
 import { loadAgentRunResults, storeAgentStepResult } from '@/lib/agents/run-result-storage'
+import { deleteAgentRunPayloads } from '@/lib/agents/run-payload-deletion'
 import { isAgentVerifierProviderAvailable } from '@/lib/deployment/agentic-availability'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { privateJson } from '@/lib/observability/private-response.js'
@@ -77,11 +81,30 @@ async function handlePost(req) {
     .maybeSingle()
   if (runError) return privateJson({ error: 'Run nije moguće učitati.' }, { status: 503 })
   if (!run) return privateJson({ error: 'Run nije pronađen.' }, { status: 404 })
-  if (['completed', 'blocked', 'failed', 'cancelled'].includes(run.status)) return privateJson({ status: run.status, stepsProcessed: 0 })
+  if (['completed', 'blocked', 'failed', 'cancelled'].includes(run.status)) {
+    const cleanup = await deleteAgentRunPayloads(db, { userId: run.user_id, projectId: run.project_id, runId })
+    return privateJson({ status: run.status, stepsProcessed: 0, privacy: cleanup.ok ? { status: cleanup.status, deleted: cleanup.deleted } : { status: cleanup.status, error: cleanup.error } })
+  }
 
   if (run.status === 'initializing') return privateJson({ status: run.status, stepsProcessed: 0 }, { status: 409 })
   if (run.status === 'paused') return privateJson({ status: run.status, stepsProcessed: 0 })
   if (!['pending', 'running'].includes(run.status)) return privateJson({ status: run.status, stepsProcessed: 0 }, { status: 409 })
+
+  const canonicalProjectResult = await resolveOwnedProjectResult(db, {
+    userId: run.user_id,
+    projectId: run.project_id,
+    allowGuestAlias: false,
+  })
+  if ('error' in canonicalProjectResult) return privateJson({ error: 'Canonicalni projekt nije moguće provjeriti.' }, { status: 503 })
+  const canonicalProject = canonicalProjectResult.value
+  if (!canonicalProject) return privateJson({ error: 'Canonicalni projekt nije pronađen.' }, { status: 404 })
+  const academicContext = compileAcademicContext({
+    catalog: loadAcademicPack(),
+    unitId: canonicalProject.unitId,
+    profileId: canonicalProject.profileId,
+    workType: canonicalProject.workType,
+  })
+  if (academicContext.status !== 'verified') return privateJson({ error: 'Academic Context za ovaj run više nije verificiran.' }, { status: 403 })
 
   const provider = createAnthropicAgentProvider({
     apiKey: process.env.ANTHROPIC_API_KEY,
@@ -144,8 +167,10 @@ async function handlePost(req) {
     runId,
     sourcePolicy: run.source_policy,
     loadContext: () => loadRunManuscriptContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
+    loadResearchPlan: () => loadRunResearchPlanContext(payloadStorage, { storagePath: paths.storagePath, projectId: run.project_id }),
     loadMaterials: () => loadRunMaterialContexts(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
     loadResults: () => loadAgentRunResults(manifestStore, payloadStorage, { runId, projectId: run.project_id, userId: run.user_id, bucket: BUCKET }),
+    academicContext,
     verifyCitations: citationVerifier.verify,
     verifyPassages: passageVerifier
       ? ({ projectId, runId: currentRunId, claims, citations, requestId: passageRequestId, agent, attempt }) => executeBilledPassageVerification(db, {
@@ -182,8 +207,14 @@ async function handlePost(req) {
     { execute, verify: (agentResult) => verifyAgentResult(agentResult, { requireIndependentSourceVerification: true, requireIndependentPassageVerification: true }), storeResult },
     { maxSteps: 1 },
   )
+  const { data: finalRun } = await db.from('agent_runs').select('status').eq('run_id', runId).maybeSingle()
+  let privacy
+  if (['completed', 'blocked', 'failed', 'cancelled'].includes(String(finalRun?.status || ''))) {
+    const cleanup = await deleteAgentRunPayloads(db, { userId: run.user_id, projectId: run.project_id, runId })
+    privacy = cleanup.ok ? { status: cleanup.status, deleted: cleanup.deleted } : { status: cleanup.status, error: cleanup.error }
+  }
   if (result.error) return privateJson({ error: 'Agent worker trenutno nije mogao obraditi korak.' }, { status: 503 })
-  return privateJson({ runId, ...result })
+  return privateJson({ runId, ...result, ...(privacy ? { privacy } : {}) })
 }
 
 function isAuthorized(actual, expected) {

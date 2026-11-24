@@ -15,7 +15,7 @@ export default function UvjetiPage() {
             <div className="logo-badge">K</div>
             <div>
               <strong className="legal-brand-title">Katedra</strong>
-              <span className="legal-brand-subtitle">Od teme do obrane</span>
+              <span className="legal-brand-subtitle">Od teme do rukopisa</span>
             </div>
           </Link>
           <div className="legal-header-actions"><ThemeToggle /><Link href="/pisi" className="legal-header-action">Otvori aplikaciju</Link></div>
@@ -42,9 +42,9 @@ export default function UvjetiPage() {
           <h2>1. Tko smo i što je Katedra</h2>
           <p>
             Katedra je digitalni kopilot koji vodi izradu jednog akademskog rada (seminarski,
-            završni ili diplomski) od teme do obrane — istraživanje, struktura, pisanje uz AI
-            asistenciju u skladu s AI politikom tvoje ustanove, verificirana pravila fakulteta i
-            priprema obrane. Uslugu pruža [PRAVNI NAZIV OBRTA/TVRTKE], [OIB], [ADRESA], Hrvatska.
+            završni ili diplomski) od teme do rukopisa — istraživanje, struktura, pisanje uz AI
+            asistenciju u skladu s AI politikom tvoje ustanove i verificirana pravila fakulteta.
+            Uslugu pruža [PRAVNI NAZIV OBRTA/TVRTKE], [OIB], [ADRESA], Hrvatska.
           </p>
           <p>
             Katedra <b>nije</b> tehnički/formalni validator dokumenta. Provjeru formalne
@@ -143,7 +143,7 @@ export default function UvjetiPage() {
 
           <h2>8. Ograničenje odgovornosti</h2>
           <p>
-            Katedra ne jamči određenu ocjenu, prolaznost ili ishod obrane. Usluga se pruža
+            Katedra ne jamči određenu ocjenu, prolaznost ili ishod predaje. Usluga se pruža
             &bdquo;kakva jest&rdquo;, u mjeri dopuštenoj zakonom. Ne odgovaramo za posljedice
             oslanjanja na AI sadržaj bez vlastite provjere.
           </p>

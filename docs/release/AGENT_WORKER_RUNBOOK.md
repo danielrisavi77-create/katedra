@@ -15,6 +15,10 @@ dok cijeli tok nije dokazan na izoliranom projektu i testnim podacima.
 
 ## Redoslijed deploya
 
+Prije deploya postavi i zasebnu tajnu `KATEDRA_AGENT_PAYLOAD_CLEANUP_CRON_SECRET`.
+Ona se nikada ne smije zamijeniti sa `SUPABASE_SERVICE_ROLE_KEY` ili worker cron
+tajnom.
+
 1. U staging Lekta projektu primijeni i read-only provjeri migracije `0077` do
    `0085`. Provjeri tablice, RPC potpise, RLS, lease, payload namespace i
    tombstone cleanup prema [agentic contract preflightu](./AGENTIC_CONTRACT_PREFLIGHT.md).
@@ -28,6 +32,18 @@ dok cijeli tok nije dokazan na izoliranom projektu i testnim podacima.
 
    JWT provjera nije zamjena za `KATEDRA_AGENT_WORKER_CRON_SECRET` niti za
    `KATEDRA_AGENT_WORKER_TOKEN`.
+
+2a. Deployaj Edge Function za TTL cleanup:
+
+   ```powershell
+   supabase functions deploy cleanup-agent-payloads `
+     --project-ref <staging-project-ref> `
+     --no-verify-jwt
+   ```
+
+   Funkcija poziva `list_pending_agent_payload_deletions`, briše content i
+   manifest iz Storagea, a tek zatim poziva `finalize_agent_payload_deletions`.
+   Kod greške vraća neuspjeh i ostavlja manifest retryable.
 3. Postavi cron secret u Supabase secret store, a worker token u Lekta i
    Katedrin server-side environment. Nikad ih ne zapisuj u repo, log ili
    client bundle.
@@ -53,6 +69,9 @@ dok cijeli tok nije dokazan na izoliranom projektu i testnim podacima.
 
 ## Read-only release checks
 
+Read-only provjera mora obuhvatiti i `cleanup-agent-payloads`, zasebnu cron
+tajnu te `content_deleted_at` dokaz nakon fizickog brisanja Storage objekata.
+
 Provjeri da postoji funkcija `katedra-agent-worker`, da cron pozivi ne šalju
 service-role ključ Katedri, da su `claim_agent_step` i
 `complete_agent_step` worker-only RPC-i te da su svi temporary payloadi vezani
@@ -63,9 +82,22 @@ Lokalno, bez canonical Lekta ugovora i potrebnih environment varijabli,
 `/api/internal/agent-worker` mora ostati na kontroliranom `503`. To nije
 greška lokalnog razvoja i ne smije se zaobilaziti ručnim service-role pozivom.
 
+## TTL cleanup verification
+
+- Scheduler za `cleanup-agent-payloads` pokrece se najmanje svakih 15 minuta i
+  koristi samo `KATEDRA_AGENT_PAYLOAD_CLEANUP_CRON_SECRET`.
+- GitHub Actions workflow `Agent temporary payload cleanup` koristi repository
+  variable `KATEDRA_AGENT_PAYLOAD_CLEANUP_URL` i secret istog imena; ne smije
+  koristiti `SUPABASE_SERVICE_ROLE_KEY` kao bearer token.
+- `cron.job_run_details` mora pokazati uspjesan cleanup tick nakon staging testa.
+- Za svaki terminalni run provjeri `content_deleted_at` i `payload_deleted_at`;
+  tombstone bez fizickog Storage brisanja nije dovoljan dokaz.
+- Namjerno izazovi Storage gresku: cleanup mora vratiti neuspjeh, zapisati
+  operativni event i ostaviti manifest za idempotentan sljedeci pokusaj.
+
 ## Rollback
 
-Ako bilo koja provjera padne, prvo postavi oba feature flaga na `false`,
+Ako bilo koja provjera padne, prvo postavi sva tri feature flaga na `false`,
 zaustavi scheduler tick i sačuvaj request ID/reconciliation tragove. Ne briši
 run state niti rukopis kao dio rollbacka. Nakon toga popravi canonical Lekta
 ugovor ili konfiguraciju, ponovi read-only provjere i tek onda ponovno pokreni

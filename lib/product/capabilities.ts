@@ -2,21 +2,9 @@ import type { ProjectCapability, ProductTier } from './lifecycle'
 
 export const PRODUCT_CAPABILITIES: Record<ProductTier, readonly ProjectCapability[]> = {
   free: ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai'],
-  seminarski: [
-    'completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing',
-    'full_generation', 'source_suggestions', 'mentor_review',
-  ],
-  zavrsni: [
-    'completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing',
-    'full_generation', 'source_suggestions', 'web_research', 'mentor_review',
-    'methodology', 'defense_simulator', 'autonomous_run',
-  ],
-  diplomski: [
-    'completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing',
-    'full_generation', 'source_suggestions', 'web_research', 'mentor_review',
-    'methodology', 'research_design', 'data_analysis', 'multiple_reviews',
-    'defense_simulator', 'autonomous_run',
-  ],
+  seminarski: ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing', 'full_generation'],
+  zavrsni: ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing', 'full_generation', 'research_design', 'methodology'],
+  diplomski: ['completion_scan', 'basic_plan', 'lekta_free_check', 'contextual_ai', 'section_writing', 'full_generation', 'research_design', 'methodology'],
 }
 
 export function hasProductCapability(tier: ProductTier, capability: ProjectCapability): boolean {
@@ -39,6 +27,8 @@ export interface CapabilityContext {
   lockedProductKey?: ProductTier | null
   hasActivePass?: boolean
   verifiedPolicy?: boolean
+  verifiedAcademicProfile?: boolean
+  researchModulesEnabled?: boolean
   adminOverride?: boolean
 }
 
@@ -72,7 +62,14 @@ export function decideProjectCapability(
   if (context.lockedProductKey && !context.hasActivePass) {
     return { allowed: false, code: 'pass_required', projectId: context.projectId, tier }
   }
+  const researchCapability = capability === 'research_design' || capability === 'methodology'
+  if (researchCapability && context.researchModulesEnabled !== true) {
+    return { allowed: false, code: 'capability_unavailable', projectId: context.projectId, tier }
+  }
   if (context.lockedProductKey && !hasProductCapability(tier, capability)) {
+    return { allowed: false, code: 'capability_unavailable', projectId: context.projectId, tier }
+  }
+  if (context.lockedProductKey && context.verifiedAcademicProfile === false) {
     return { allowed: false, code: 'capability_unavailable', projectId: context.projectId, tier }
   }
   if (capability === 'web_research' && context.verifiedPolicy !== true) {

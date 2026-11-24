@@ -1,5 +1,9 @@
 import { documentText } from './model'
 import type { ManuscriptV1 } from './types'
+import { serializeAcademicContext } from '../academic-context/compile-context'
+import type { AcademicContext } from '../academic-context/types'
+import type { ResearchPlanV1 } from '../research-plan/types'
+import { serializeResearchPlanContext } from '../research-plan/context'
 
 export type ManuscriptAiAction =
   | 'question'
@@ -37,6 +41,8 @@ export function buildAiMessages({
   selectionText,
   instruction,
   materialContext,
+  academicContext,
+  researchPlan,
 }: {
   manuscript: ManuscriptV1
   sectionId: string
@@ -44,6 +50,8 @@ export function buildAiMessages({
   selectionText?: string
   instruction?: string
   materialContext?: ManuscriptMaterialContext[]
+  academicContext?: AcademicContext
+  researchPlan?: ResearchPlanV1 | null
 }) {
   const section = manuscript.sections.find((item) => item.id === sectionId)
   if (!section) throw new Error('Aktivna sekcija ne postoji.')
@@ -57,6 +65,8 @@ export function buildAiMessages({
     `RAD: ${manuscript.title || 'rad bez konačnog naslova'}`,
     `VRSTA: ${manuscript.workType}`,
     `AKTIVNA SEKCIJA: ${section.title}`,
+    ...(academicContext ? ['', 'ACADEMIC CONTEXT:', serializeAcademicContext(academicContext)] : []),
+    ...(researchPlan ? ['', 'RESEARCH DESIGN AND METHODOLOGY:', JSON.stringify(serializeResearchPlanContext(researchPlan))] : []),
     '',
     'OUTLINE:',
     outline,
@@ -105,5 +115,6 @@ function formatMaterialContext(materials?: ManuscriptMaterialContext[]): string 
 }
 
 export function capabilityForAction(action: ManuscriptAiAction): string {
+  if (action === 'shorten') return 'paraphrase_for_submission'
   return ['draft', 'expand', 'improve'].includes(action) ? 'generate_large_sections' : 'contextual_ai'
 }

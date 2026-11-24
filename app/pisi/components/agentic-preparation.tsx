@@ -6,6 +6,8 @@ import { AgentTeamSelector, type AgentRunMode, type AgentSourcePolicy } from './
 import { AgenticProcessPreview } from './agentic-process-preview'
 import { MaterialLibrary } from './material-library'
 import type { ManuscriptV1 } from '../../../lib/manuscript/types'
+import { createAgentSnapshotConsent, readStoredAgentSnapshotConsent, storeAgentSnapshotConsent, type AgentSnapshotConsentV1 } from '../../../lib/agents/privacy-consent'
+import { AgentSnapshotConsent } from './agent-run-privacy'
 
 const workTypeLabels: Record<ManuscriptV1['workType'], string> = {
   s: 'Seminarski rad',
@@ -35,6 +37,11 @@ export function AgenticPreparation({
   const [materialIds, setMaterialIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [consentProjectId, setConsentProjectId] = useState(projectId)
+  const [snapshotConsent, setSnapshotConsent] = useState<AgentSnapshotConsentV1 | null>(() => readStoredAgentSnapshotConsent(projectId))
+  const effectiveSnapshotConsent = consentProjectId === projectId
+    ? snapshotConsent
+    : readStoredAgentSnapshotConsent(projectId)
   const handleMaterialsChange = useCallback((materials: Array<{ id?: string; extractionStatus?: string }>) => {
     setMaterialIds(materials
       .filter((material) => typeof material.id === 'string' && material.id.trim().length > 0 && ['extracted', 'partial', 'needs_review'].includes(material.extractionStatus || ''))
@@ -53,18 +60,23 @@ export function AgenticPreparation({
   }
 
   const startRun = async () => {
+    if (!effectiveSnapshotConsent) {
+      setMessage('Prije pokretanja potvrdi kako se privremeno obrađuje kontekst rada.')
+      return
+    }
     setBusy(true)
     setMessage('')
     try {
       const response = await fetch(`/api/agent-runs?projectId=${encodeURIComponent(projectId)}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mode, sourcePolicy, sectionIds, materialIds, manuscript }),
+        body: JSON.stringify({ mode, sourcePolicy, sectionIds, materialIds, manuscript, snapshotConsent: effectiveSnapshotConsent || createAgentSnapshotConsent(projectId) }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(agentRequestMessage(response.status, body.error, 'Proces izrade nije moguće pokrenuti.'))
       const runId = String(body.runId || '')
       if (!runId) throw new Error('Pokrenuti tijek nema valjan ID.')
+      storeAgentSnapshotConsent(createAgentSnapshotConsent(projectId))
       onRunCreated(runId)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Pokretanje nije uspjelo.')
@@ -92,9 +104,16 @@ export function AgenticPreparation({
       </dl>
       <p className="pis-lock-note"><strong>Važno</strong> Tema i vrsta rada zaključane su za ovaj Pass. Možeš urediti materijale i plan tijeka, ali ne i pretvoriti ovaj projekt u drugi rad.</p>
 
+      <AgentSnapshotConsent checked={Boolean(effectiveSnapshotConsent)} onChange={(checked) => {
+        setConsentProjectId(projectId)
+        const nextConsent = checked ? createAgentSnapshotConsent(projectId) : null
+        setSnapshotConsent(nextConsent)
+        if (nextConsent) storeAgentSnapshotConsent(nextConsent)
+      }} />
+
       <div className="pis-preparation-step">
         <div className="pis-preparation-step-label"><span>01</span><div><b>Dodaj ono što već imaš</b><small>Rad, literaturu, mentorove upute, pravila fakulteta ili bilješke.</small></div></div>
-        <MaterialLibrary projectId={projectId} onMaterialsChange={handleMaterialsChange} />
+        <MaterialLibrary projectId={projectId} snapshotConsent={effectiveSnapshotConsent} onMaterialsChange={handleMaterialsChange} />
       </div>
 
       <div className="pis-preparation-step">
@@ -106,7 +125,7 @@ export function AgenticPreparation({
 
       <div className="pis-preparation-step pis-preparation-start">
         <div className="pis-preparation-step-label"><span>03</span><div><b>Pokreni izradu rada</b><small>Tijek se izvršava po kontrolnim točkama. Možeš zatvoriti preglednik, pauzirati ga i kasnije urediti kontekst.</small></div></div>
-        <button type="button" className="is-primary" disabled={busy} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : mode === 'autonomous' ? 'Pokreni autonomni tijek' : 'Pokreni tijek'}</button>
+        <button type="button" className="is-primary" disabled={busy || !effectiveSnapshotConsent} onClick={() => void startRun()}>{busy ? 'Pokrećem…' : mode === 'autonomous' ? 'Pokreni autonomni tijek' : 'Pokreni tijek'}</button>
       </div>
       {message && <p className="pis-agent-message" role="alert">{message}</p>}
     </section>

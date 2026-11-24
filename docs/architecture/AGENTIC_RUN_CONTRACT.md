@@ -8,6 +8,12 @@ Katedra koristi postojeći Lekta Supabase kao canonical backend. Ovaj dokument j
 
 `agent_runs` mora sadržavati `run_id`, `user_id`, `project_id`, `mode`, `source_policy`, `status`, `created_at` i `updated_at`.
 
+Za privremeni agentički snapshot mora sadržavati i `snapshot_consent_version`,
+`snapshot_consent_at`, `payload_cleanup_status`, `payload_expires_at`,
+`payload_deleted_at` i `payload_cleanup_error`. Consent nije spremljen u
+rukopis: canonical run mora dokazati da je korisnik potvrdio točno verziju
+obavijesti prije prvog upload-a.
+
 `agent_steps` mora sadržavati `step_id`, `run_id`, `project_id`, `agent`, `verifier`, `section_id`, `step_order`, `attempt`, `status`, `last_verification`, `lease_owner`, `lease_expires_at`, `created_at` i `updated_at`.
 
 Worker rezultat nije canonical rukopis niti nova tablica u Katedri. Worker ga sprema kao privatni temporary payload s `material_id` prefiksom `agent-result:`, a u `last_verification` zapisuje samo `resultPayloadId`. GET run endpoint učitava payload samo nakon provjere vlasništva runa i projekta te ga vraća `/pisi` za pregled. Prihvat rezultata uvijek radi lokalni snapshot i stale-check prije mergea u rukopis.
@@ -27,6 +33,13 @@ Worker rezultat nije canonical rukopis niti nova tablica u Katedri. Worker ga sp
 - Run context se ne smije mijenjati dok je run u statusu `running`; promjena
   je dopuštena samo tijekom inicijalizacije ili pauzirane/blokirane intervencije.
 - Temporary payload ima default TTL 72 sata i apsolutni TTL 7 dana.
+- Privremeni snapshot, pre-run materijali i agentički rezultati ne smiju se
+  uploadati bez `agentic-snapshot-v1` consenta vezanog uz isti `project_id`.
+- `deleted_at` je samo tombstone; terminalni run smije dobiti status `deleted`
+  tek nakon što Storage ukloni sadržaj i manifest te canonical RPC zapiše
+  `content_deleted_at`.
+- Kvar Storage-a postavlja `deletion_scheduled` i ostavlja retry dokaz; ne smije
+  se prikazati uspješno brisanje bez oba obrisana objekta.
 
 Neovisni verifier prolaza vraća strukturirani rezultat s `claims`, `provider`,
 `model`, `usage` kada ga gateway može dokazati i ishodom
@@ -77,6 +90,16 @@ Katedra poziva RPC-e ovim parametrima:
 - `cleanup_expired_agent_payloads(p_now)` — idempotentno uklanja samo temporary payload manifeste kojima je istekao TTL.
 - `attach_agent_payloads_to_run(p_user_id, p_project_id, p_run_id, p_material_ids)` — veže samo žive, još nedodijeljene materijale vlasnika uz aktivni run.
 - `replace_agent_payloads_for_run(p_user_id, p_project_id, p_run_id, p_material_ids)` — atomski odvaja prethodno odabrane ulazne materijale i veže novu cjelinu; ne dira run-context ni generirane rezultate.
+- `record_agent_run_snapshot_consent(p_user_id, p_project_id, p_run_id, p_consent_version, p_consent_at)` — zapisuje eksplicitnu potvrdu prije upload-a snapshot-a.
+- `request_agent_run_payload_deletion(p_user_id, p_project_id, p_run_id)` — terminalni run tombstonira sve svoje manifeste i vraća sigurne Storage putanje.
+- `finalize_agent_run_payload_deletion(p_user_id, p_project_id, p_run_id, p_manifest_ids)` — nakon uspješnog Storage brisanja zapisuje dokaz da su sadržaj i manifest uklonjeni.
+- `record_agent_run_payload_deletion_failure(p_user_id, p_project_id, p_run_id, p_error_code)` — zapisuje retryable cleanup kvar bez osobnog sadržaja.
+- `list_pending_agent_payload_deletions(p_now)` — service-role scheduler pronalazi istekle i već tombstonirane manifeste kojima još nedostaje `content_deleted_at`.
+- `finalize_agent_payload_deletions(p_manifest_ids, p_now)` — nakon Storage brisanja zapisuje dokaz za scheduler i terminalni run.
+- `record_agent_payload_deletion_failure(p_manifest_ids, p_error_code)` — bilježi retryable scheduler kvar bez teksta.
+- `request_user_agent_payload_deletion(p_user_id, p_now)` — account-delete servis označava sve privremene manifeste korisnika i dobiva content/manifest putanje.
+- `finalize_user_agent_payload_deletion(p_user_id, p_manifest_ids, p_now)` — potvrđuje brisanje svih Storage objekata prije brisanja identityja.
+- `record_user_agent_payload_deletion_failure(p_user_id, p_error_code)` — zaustavlja account deletion i ostavlja cleanup za ponovni pokušaj.
 
 Katedrin adapteri u `lib/academic-suite/project-lock.ts` i `lib/agents/backend-contract.ts` namjerno fail-closed ako RPC nije dostupan. Nema direktnog production fallback upisa u lock/run/step tablice.
 
@@ -106,6 +129,18 @@ Novi agent-run mora uz zahtjev dobiti lokalni snapshot rukopisa. Katedra ga prij
 - sanitizira tako da se u payload sprema samo validirani `manuscript` objekt;
 - sprema u privatni bucket pod namespaceom `user/project/run`;
 - registrira kroz `register_agent_payload` s default TTL-om od 72 sata i maksimumom od 7 dana.
+
+Prije ta dva koraka Katedra šalje canonical consent RPC. Pre-run materijalni
+uploadi također moraju poslati i server-side validirati isti consent prije
+ekstrakcije ili Storage uploada. Nakon `completed`,
+`blocked`, `failed` ili `cancelled` statusa worker i korisnički endpoint pozivaju
+cleanup ugovor. U korisničkom sučelju se prikazuju `Privremeno u privatnoj
+pohrani`, `Brisanje je zakazano` i `Obrisano iz privremene pohrane`, uz gumb za
+ručno brisanje terminalnog runa.
+
+TTL scheduler ne smije koristiti samo stari `deleted_at is null` filter: ručno
+zatraženo brisanje prvo tombstonira manifest da se sadržaj više ne može učitati,
+pa ga scheduler mora ponovno pokušati sve dok ne postoji `content_deleted_at`.
 
 Canonical run metadata ne sadrži tekst rukopisa. Ako upload ili registracija ne uspije, server otkazuje upravo stvoreni run kako ne bi ostao aktivan bez konteksta. Endpoint za ponovni upload konteksta služi samo za aktivan, vlasnički run.
 

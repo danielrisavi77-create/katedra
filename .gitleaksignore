@@ -1,0 +1,5 @@
+# Historical false positives: these fingerprints are the old public-key
+# placeholder from .env.example, never a credential. Keep this list explicit;
+# do not add broad path or rule ignores.
+0b727065f65d198162044febaedcee0f88d0a9ac:.env.example:generic-api-key:7
+a72b698448cc9e8f624e73f4e96027713330d602:.env.example:generic-api-key:7

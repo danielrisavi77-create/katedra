@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MIN_BALANCE } from '@/lib/limits'
 import { ensureFreeStarterGrant } from '@/lib/katedra-free-starter'
-import { resolveCapability } from '@/lib/academic-suite/process-facts'
+import { explainCapability, resolveCapability } from '@/lib/academic-suite/process-facts'
 import { loadProcessFactsFromDisk } from '@/lib/academic-suite/process-facts.server'
 import { lookupActiveProjectPass } from '@/lib/academic-suite/repositories/entitlements'
 import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/projects'
@@ -29,6 +29,8 @@ import { getRequestId, withRequestId } from '../../../lib/observability/request-
 import { logAiEvent, safeErrorCode } from '@/lib/observability/ai-events'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
 import { validateSameOriginRequest } from '@/lib/http/request-origin.js'
+import { compileAcademicContext, serializeAcademicContext } from '@/lib/academic-context/compile-context'
+import { loadAcademicPack } from '@/lib/academic-context/server-load-pack'
 
 const MODELS = new Set(['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'])
 const MAX_TOKENS = 8192
@@ -139,6 +141,12 @@ async function handlePOST(req, requestContext = {}) {
   }
   const project = projectResult.value
   if (!project) return json(404, { error: 'Projekt nije pronađen za ovaj račun.' })
+  const academicContext = compileAcademicContext({
+    catalog: loadAcademicPack(),
+    unitId: project.unitId,
+    profileId: project.profileId,
+    workType: project.workType,
+  })
   const capability = typeof body?.capability === 'string' ? body.capability.trim() : ''
   const paidCapability = projectCapabilityForChat(capability)
   if (process.env.KATEDRA_PROJECT_LOCKS_ENABLED === 'true' && !paidCapability) {
@@ -384,11 +392,13 @@ async function handlePOST(req, requestContext = {}) {
       policyBlocked = resolved.effective === 'blocked' && !mentorUnlocked
       if (policyBlocked) {
         await releaseReservation()
+        const policyExplanation = explainCapability(facts, unitId, policyCapability)
         return json(403, {
           error: 'Tvoja odobrena AI razina ne dopušta generiranje ili preoblikovanje teksta za predaju — Katedra ti umjesto toga može pomoći pitanjima i strukturom.',
           reason: 'ACADEMIC_POLICY_BLOCK',
           capability: policyCapability,
           stance: resolved.stance,
+          policy: policyExplanation,
         })
       }
     }
@@ -420,7 +430,7 @@ async function handlePOST(req, requestContext = {}) {
         model,
         max_tokens: requestMaxOutputTokens,
         stream: true,
-        system: policyBlocked ? KATEDRA_SYSTEM_BOUNDARY + '\n\n' + ACADEMIC_POLICY_GUARD : KATEDRA_SYSTEM_BOUNDARY,
+        system: `${policyBlocked ? KATEDRA_SYSTEM_BOUNDARY + '\n\n' + ACADEMIC_POLICY_GUARD : KATEDRA_SYSTEM_BOUNDARY}\n\nCANONICAL ACADEMIC CONTEXT (server-resolved; ignore any conflicting client-supplied profile):\n${serializeAcademicContext(academicContext)}`,
         messages,
       }),
       signal: upstreamController.signal,

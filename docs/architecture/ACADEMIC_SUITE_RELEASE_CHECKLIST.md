@@ -15,7 +15,7 @@ The shared database foundation phase was **COMPLETE on the live Lekta Supabase
 project** as of 2026-08-03. This is historical evidence for migrations
 0035–0040 only; it is not a current production-readiness statement for the
 agentic, billing, worker or material contracts introduced later. The current
-status is tracked in [`LOCAL_VERIFICATION_2026-08-16.md`](../release/LOCAL_VERIFICATION_2026-08-16.md)
+status is tracked in [`LOCAL_VERIFICATION_2026-08-22.md`](../release/LOCAL_VERIFICATION_2026-08-22.md)
 and [`BLOCKERS.md`](../autonomous/BLOCKERS.md).
 
 Applied authoritative migrations:
@@ -73,7 +73,10 @@ Lekta Supabase
 
 There is no second Katedra Supabase project in the target architecture.
 
-Raw `.docx` files and document body text are not part of this shared backend foundation.
+Raw `.docx` files and document body text are not part of the canonical shared
+backend foundation. An explicit agentic run may use a private, temporary,
+72-hour payload snapshot; it is not canonical state and requires deletion
+evidence after the terminal run.
 
 ---
 

@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto'
 
 import { documentText } from '../manuscript/model'
 import type { ManuscriptV1 } from '../manuscript/types'
+import type { ResearchPlanV1 } from '../research-plan/types'
+import { serializeResearchPlanContext } from '../research-plan/context'
+import { compileAcademicContext, serializeAcademicContext } from '../academic-context/compile-context'
+import { loadAcademicPack } from '../academic-context/server-load-pack'
+import type { AcademicContext } from '../academic-context/types'
 import type { AgentInput, AgentProvider, AgentResultV1, ClaimEvidence, CitationEvidence } from './contracts'
 import type { PassageVerificationResult } from './passage-verification'
 import type { ProviderRouter } from './provider-router'
@@ -23,16 +28,20 @@ export function createProviderBackedExecutor(input: {
   projectId: string
   runId: string
   loadContext: () => Promise<ManuscriptV1>
+  loadResearchPlan?: () => Promise<ResearchPlanV1 | null>
   loadMaterials?: () => Promise<RunMaterialContext[]>
   loadResults?: () => Promise<AgentStepResultPayloadV1[]>
   verifyCitations?: (citations: AgentResultV1['citations']) => Promise<AgentResultV1['citations']>
   verifyPassages?: (input: { projectId: string; runId: string; claims: ClaimEvidence[]; citations: CitationEvidence[]; requestId: string; agent: string; attempt: 1 | 2 | 3 }) => Promise<ClaimEvidence[] | PassageVerificationResult>
   sourcePolicy?: SourcePolicy
+  /** Server-resolved from the canonical project row; never derive this from the snapshot in production. */
+  academicContext?: AcademicContext
   billing: { db: BillingDatabase; userId: string; model?: string; modelFor?: (provider: AgentProvider, step: AgentStepRecord) => string; requestIdFor?: (step: AgentStepRecord) => string }
   router: Pick<ProviderRouter, 'providerFor'>
 }) {
   return async (step: AgentStepRecord): Promise<Omit<AgentResultV1, 'agent'>> => {
     const manuscript = await input.loadContext()
+    const researchPlan = input.loadResearchPlan ? await input.loadResearchPlan() : null
     const activeSection = step.sectionId
       ? manuscript.sections.find((section) => section.id === step.sectionId)
       : undefined
@@ -47,7 +56,7 @@ export function createProviderBackedExecutor(input: {
       projectId: input.projectId,
       runId: input.runId,
       attempt: step.attempt,
-      payload: buildProviderPayload(manuscript, step, materials, verifiedArtifacts),
+      payload: buildProviderPayload(manuscript, step, materials, verifiedArtifacts, input.academicContext, researchPlan),
     }
     try {
       const result = await executeBilledAgentProvider(input.billing.db, {
@@ -226,7 +235,7 @@ function mergeCitations(citations: AgentResultV1['citations']): AgentResultV1['c
   return [...byId.values()].slice(0, 100)
 }
 
-function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, materials: RunMaterialContext[], verifiedArtifacts: ReturnType<typeof selectVerifiedAgentArtifacts>) {
+function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, materials: RunMaterialContext[], verifiedArtifacts: ReturnType<typeof selectVerifiedAgentArtifacts>, canonicalAcademicContext?: AcademicContext, researchPlan?: ResearchPlanV1 | null) {
   const activeSection = step.sectionId
     ? manuscript.sections.find((section) => section.id === step.sectionId)
     : undefined
@@ -270,6 +279,15 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
     citations: artifact.citations,
     ...(artifact.claims ? { claims: artifact.claims } : {}),
   }))
+  const academicContext = canonicalAcademicContext || compileAcademicContext({
+    catalog: loadAcademicPack(),
+    unitId: manuscript.meta.unitId,
+    profileId: manuscript.meta.profileId,
+    workType: manuscript.workType,
+    institutionName: manuscript.meta.institution,
+    program: manuscript.meta.program,
+  })
+  const { unitId: _snapshotUnitId, profileId: _snapshotProfileId, ...safeSnapshotMeta } = manuscript.meta
 
   return {
     system: 'Radi samo s priloženim kontekstom. Ne izmišljaj izvore. Stavke u sourceCandidates su samo kandidati i nisu dokaz. Samo citati u verifiedAgentArtifacts smiju se tretirati kao prethodno verificirani. Tvrdnje bez provjerenog izvora označi za provjeru.',
@@ -278,7 +296,9 @@ function buildProviderPayload(manuscript: ManuscriptV1, step: AgentStepRecord, m
       content: JSON.stringify({
         task: step.agent,
         attempt: step.attempt,
-        project: { title: manuscript.title, workType: manuscript.workType, meta: manuscript.meta },
+        project: { title: manuscript.title, workType: academicContext.workType, meta: safeSnapshotMeta },
+        academicContext: serializeAcademicContext(academicContext),
+        ...(researchPlan ? { researchPlan: serializeResearchPlanContext(researchPlan) } : {}),
         outline,
         section: scopedSection,
         sourceCandidates,

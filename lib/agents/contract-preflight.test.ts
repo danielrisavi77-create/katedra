@@ -12,6 +12,16 @@ describe('agentic contract preflight', () => {
       'katedra_release_request',
       'katedra_consume',
       'katedra_mark_pending',
+      'record_agent_run_snapshot_consent',
+      'request_agent_run_payload_deletion',
+      'finalize_agent_run_payload_deletion',
+      'record_agent_run_payload_deletion_failure',
+      'list_pending_agent_payload_deletions',
+      'finalize_agent_payload_deletions',
+      'record_agent_payload_deletion_failure',
+      'request_user_agent_payload_deletion',
+      'finalize_user_agent_payload_deletion',
+      'record_user_agent_payload_deletion_failure',
     ]))
     expect(REQUIRED_AGENTIC_TABLES).toEqual(expect.arrayContaining([
       'katedra_request_reservations',

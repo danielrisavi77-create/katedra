@@ -21,6 +21,7 @@ describe('agent run route contract', () => {
     expect(source).toContain('resolveCanonicalProjectPass')
     expect(source).toContain('resolveProjectCapability')
     expect(source).toContain("'autonomous_run'")
+    expect(source).toContain('validateAgentSnapshotConsent')
   })
 
   it('cleans stale initialization before creating a replacement run', () => {

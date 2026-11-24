@@ -16,14 +16,18 @@ describe('product capability matrix', () => {
     expect(hasProductCapability('seminarski', 'defense_simulator')).toBe(false)
   })
 
-  it('gives zavrsni and diplomski the research and defense capabilities', () => {
-    expect(hasProductCapability('zavrsni', 'methodology')).toBe(true)
-    expect(hasProductCapability('zavrsni', 'defense_simulator')).toBe(true)
-    expect(hasProductCapability('zavrsni', 'autonomous_run')).toBe(true)
-    expect(hasProductCapability('zavrsni', 'research_design')).toBe(false)
-    expect(hasProductCapability('diplomski', 'research_design')).toBe(true)
-    expect(hasProductCapability('diplomski', 'data_analysis')).toBe(true)
-    expect(hasProductCapability('diplomski', 'multiple_reviews')).toBe(true)
+  it('adds research design and methodology to the final and graduate workflows', () => {
+    for (const tier of ['zavrsni', 'diplomski'] as const) {
+      expect(hasProductCapability(tier, 'section_writing')).toBe(true)
+      expect(hasProductCapability(tier, 'full_generation')).toBe(true)
+      expect(hasProductCapability(tier, 'methodology')).toBe(true)
+      expect(hasProductCapability(tier, 'research_design')).toBe(true)
+      expect(hasProductCapability(tier, 'data_analysis')).toBe(false)
+      expect(hasProductCapability(tier, 'multiple_reviews')).toBe(false)
+      expect(hasProductCapability(tier, 'defense_simulator')).toBe(false)
+      expect(hasProductCapability(tier, 'web_research')).toBe(false)
+      expect(hasProductCapability(tier, 'autonomous_run')).toBe(false)
+    }
   })
 
   it('maps legacy and canonical work types to the same product tier', () => {
@@ -42,11 +46,27 @@ describe('product capability matrix', () => {
   })
 
   it('fails closed for an expired or missing Pass', () => {
-    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'zavrsni', hasActivePass: false }, 'methodology')).toMatchObject({ allowed: false, code: 'pass_required' })
+    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'zavrsni', hasActivePass: false, researchModulesEnabled: true, verifiedAcademicProfile: true }, 'methodology')).toMatchObject({ allowed: false, code: 'pass_required' })
   })
 
-  it('does not trust an unverified policy for web research', () => {
-    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'zavrsni', hasActivePass: true, verifiedPolicy: false }, 'web_research')).toMatchObject({ allowed: false, code: 'policy_unverified' })
+  it('requires the research flag and a verified academic profile', () => {
+    const base = { userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'zavrsni' as const, hasActivePass: true }
+    expect(decideProjectCapability({ ...base, researchModulesEnabled: false, verifiedAcademicProfile: true }, 'research_design')).toMatchObject({ allowed: false, code: 'capability_unavailable' })
+    expect(decideProjectCapability({ ...base, researchModulesEnabled: true, verifiedAcademicProfile: false }, 'research_design')).toMatchObject({ allowed: false, code: 'capability_unavailable' })
+    expect(decideProjectCapability({ ...base, researchModulesEnabled: true, verifiedAcademicProfile: true }, 'research_design')).toMatchObject({ allowed: true, tier: 'zavrsni' })
+    expect(decideProjectCapability({ ...base, researchModulesEnabled: true, verifiedAcademicProfile: true }, 'methodology')).toMatchObject({ allowed: true, tier: 'zavrsni' })
+  })
+
+  it('never exposes the research modules to seminarski projects', () => {
+    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'seminarski', hasActivePass: true, researchModulesEnabled: true, verifiedAcademicProfile: true }, 'methodology')).toMatchObject({ allowed: false, code: 'capability_unavailable' })
+  })
+
+  it('does not expose web research in the V1 product matrix', () => {
+    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'zavrsni', hasActivePass: true, verifiedPolicy: false }, 'web_research')).toMatchObject({ allowed: false, code: 'capability_unavailable' })
+  })
+
+  it('does not grant paid capabilities to a non-verified academic profile', () => {
+    expect(decideProjectCapability({ userId: 'u1', projectId: 'p1', ownedProjectId: 'p1', lockedProductKey: 'diplomski', hasActivePass: true, verifiedAcademicProfile: false }, 'section_writing')).toMatchObject({ allowed: false, code: 'capability_unavailable' })
   })
 
   it('rejects a capability outside the locked product scope', () => {

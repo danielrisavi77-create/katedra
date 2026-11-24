@@ -5,6 +5,7 @@ import type {
   ManuscriptV1,
   TiptapNode,
 } from './types'
+import type { AcademicContext } from '../academic-context/types'
 
 const OUTLINES: Record<LegacyWorkType, Array<[string, ManuscriptSectionKind]>> = {
   s: [
@@ -90,6 +91,26 @@ export function createManuscript({
   }
 }
 
+export function applyAcademicRequiredSections(manuscript: ManuscriptV1, context: Pick<AcademicContext, 'requiredSections'> & { methodologyPlan?: Pick<AcademicContext, 'methodologyPlan'>['methodologyPlan'] }, now = new Date().toISOString()): ManuscriptV1 {
+  const requiredTitles = uniqueTitles([...context.requiredSections, ...(context.methodologyPlan?.requiredSections || [])])
+  if (!requiredTitles.length) return manuscript
+  const existingByTitle = new Map(manuscript.sections.map((section) => [normalizeTitle(section.title), section]))
+  const usedExistingIds = new Set<string>()
+  const requiredSections = requiredTitles.map((title, order) => {
+    const existing = existingByTitle.get(normalizeTitle(title))
+    if (existing) usedExistingIds.add(existing.id)
+    return existing
+      ? { ...existing, title, kind: kindForTitle(title), order }
+      : createSection({ title, order, kind: kindForTitle(title), now })
+  })
+  const extraSections = manuscript.sections
+    .filter((section) => !usedExistingIds.has(section.id))
+    .map((section, index) => ({ ...section, order: requiredSections.length + index }))
+  const sections = [...requiredSections, ...extraSections]
+  const activeSectionId = sections.some((section) => section.id === manuscript.activeSectionId) ? manuscript.activeSectionId : sections[0].id
+  return { ...manuscript, activeSectionId, sections, updatedAt: now }
+}
+
 export function countDocumentWords(node: TiptapNode | null | undefined): number {
   const text = collectText(node).trim()
   return text ? text.split(/\s+/u).filter(Boolean).length : 0
@@ -122,6 +143,28 @@ function collectText(node: TiptapNode | null | undefined): string {
   const own = typeof node.text === 'string' ? node.text : ''
   const separator = node.type === 'paragraph' || node.type === 'heading' ? '\n' : ' '
   return own + (node.content || []).map(collectText).join(separator)
+}
+
+function kindForTitle(title: string): ManuscriptSectionKind {
+  const normalized = normalizeTitle(title)
+  if (normalized.includes('literatura') || normalized.includes('izvori')) return 'references'
+  if (normalized.includes('zakljuc')) return 'conclusion'
+  if (/^(sazetak|abstract|sadrzaj|izjava|kljucne rijeci|keywords|uvod)$/.test(normalized)) return 'frontmatter'
+  return 'chapter'
+}
+
+function normalizeTitle(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('hr').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function uniqueTitles(values: string[]): string[] {
+  const seen = new Set<string>()
+  return values.map((value) => value.trim()).filter((value) => {
+    const normalized = normalizeTitle(value)
+    if (!normalized || seen.has(normalized)) return false
+    seen.add(normalized)
+    return true
+  })
 }
 
 export function moveSection(

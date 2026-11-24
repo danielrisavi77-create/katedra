@@ -13,6 +13,6 @@ describe('projectNavigationDestination', () => {
     expect(projectNavigationDestination('mentor')).toEqual({ kind: 'drawer', tab: 'mentor' })
     expect(projectNavigationDestination('lekta')).toEqual({ kind: 'drawer', tab: 'lekta' })
     expect(projectNavigationDestination('history')).toEqual({ kind: 'drawer', tab: 'history' })
-    expect(projectNavigationDestination('defense')).toEqual({ kind: 'drawer', tab: 'defense' })
+    expect(projectNavigationDestination('defense')).toEqual({ kind: 'drawer', tab: 'plan' })
   })
 })

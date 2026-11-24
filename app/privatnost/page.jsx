@@ -50,7 +50,8 @@ export default function PrivatnostPage() {
             <li><b>Podaci računa:</b> e-mail adresa i lozinka (lozinku obrađuje Supabase Auth — mi je nikad ne vidimo u čitljivom obliku).</li>
             <li><b>Sadržaj rada:</b> tema, upute fakulteta, napomene, poruke koje upišeš u chat i AI odgovori — dok koristiš &bdquo;Piši ovdje&rdquo; unutar aplikacije. Prije prvog razgovora prikazujemo jednokratnu obavijest da koristimo generativnu umjetnu inteligenciju.</li>
             <li><b>Prilozi:</b> datoteke koje priložiš u chatu (PDF, slike, Word/.docx dokumenti). .docx datoteke obrađujemo <b>privremeno, u memoriji poslužitelja</b>, isključivo radi izdvajanja teksta za AI odgovor — ne spremamo trajnu kopiju priloženog dokumenta.</li>
-            <li><b>Napredak i postavke:</b> checklist, faze, odabrani fakultet i status AI dopuštenja tvoje ustanove — najvećim dijelom lokalno u tvom pregledniku (localStorage). Prijavljenima se na račun šalju samo projektni metapodaci radi provjere vlasništva i Passa; tekst rukopisa, mentorove upute, izvori i AI prijedlozi ostaju na ovom uređaju i trenutačno se ne mogu nastaviti na drugom uređaju.</li>
+            <li><b>Napredak i postavke:</b> checklist, faze, odabrani fakultet i status AI dopuštenja tvoje ustanove — najvećim dijelom lokalno u tvom pregledniku (localStorage). Prijavljenima se na račun šalju samo projektni metapodaci radi provjere vlasništva i Passa. Uobičajeni rukopis, lokalne verzije i prijedlozi ostaju na ovom uređaju.</li>
+            <li><b>Agenticni tijek:</b> prije prvog pokretanja tražimo zasebnu potvrdu za privremeni snapshot rukopisa i odabranih materijala u privatnoj Supabase Storage pohrani preko zaštićene veze. Snapshot služi samo za nastavak rada nakon zatvaranja preglednika i obradu odabranog runa; nije canonical rukopis i nije end-to-end šifriran. Čuva se najviše 72 sata, a nakon završetka, otkazivanja ili blokade runa sadržaj i manifest šalju se u brisanje odmah. Ako korisnik izričito zatraži brisanje, prikazujemo status brisanja i ponovno pokušavamo nakon privremenog kvara.</li>
             <li><b>Podaci o plaćanju:</b> Stripe obrađuje podatke kartice izravno — mi vidimo samo iznos, status transakcije i identifikator narudžbe, nikad broj kartice. Kupnja Pass paketa vezuje se uz konkretan projekt (radi jednog rada).</li>
             <li><b>Tehnički podaci:</b> IP adresa i standardni podaci poslužiteljskih logova, radi sigurnosti i sprječavanja zlouporabe.</li>
           </ul>
@@ -80,7 +81,8 @@ export default function PrivatnostPage() {
 
           <h2>5. Razdoblje čuvanja</h2>
           <ul>
-            <li>Podaci računa i sadržaj rada: dok postoji tvoj korisnički račun ili dok ga ne zatražiš obrisati.</li>
+            <li>Podaci računa i lokalni sadržaj rada: dok postoji tvoj korisnički račun ili dok ga ne zatražiš obrisati.</li>
+            <li>Agenticni snapshot rukopisa, odabrani materijali, agentički rezultati i njihovi manifesti: najviše 72 sata od stvaranja ili do završetka/otkazivanja/blokade runa i potvrđenog brisanja, ovisno što nastupi prije.</li>
             <li>Priložene .docx datoteke: nisu trajno pohranjene — brišu se odmah nakon obrade zahtjeva.</li>
             <li>Podaci o transakcijama: knjigovodstvene isprave (računi i evidencije prometa) čuvaju se najmanje <b>11 godina</b> po Zakonu o računovodstvu, računajući od zadnjeg dana poslovne godine na koju se odnose; eRačuni 6 godina. [PRAVNIK: potvrditi primjenjuje li se 11-godišnji rok na sve podatke o transakciji koje Katedra vodi, ili samo na formalne knjigovodstvene isprave.]</li>
           </ul>

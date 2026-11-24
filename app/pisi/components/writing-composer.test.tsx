@@ -52,6 +52,7 @@ describe('WritingComposer', () => {
 
     const file = new File(['naslov'], 'upute.pdf', { type: 'application/pdf' })
     await user.upload(screen.getByLabelText('Dodaj materijal u chat'), file)
+    expect(screen.getByText(/privatnu privremenu pohranu, najviše 72 sata/)).toBeTruthy()
 
     expect(onUpload).toHaveBeenCalledWith(file)
     expect(await screen.findByText('upute.pdf')).toBeTruthy()

@@ -97,15 +97,18 @@ Ne prihvaćaj “uspješan odgovor bez billing traga”.
 
 ## Verifikacija privatnosti
 
-Nakon testa provjeri shared state zapise. Ne smiju sadržavati:
+Nakon testa provjeri shared state i privatne temporary payload zapise. Canonical
+shared state ne smije sadržavati:
 
 - tekst rukopisa;
 - sirovi `.docx` ili base64 prilog;
 - AI prompt/response tekst;
 - slobodne mentorove komentare.
 
-IndexedDB rukopis ostaje local-only u ovoj verziji. Export JSON backup prije
-brisanja testnog profila.
+IndexedDB rukopis ostaje canonical kopija. Agenticni test smije imati samo
+explicitno odobreni snapshot u privatnom bucketu, s manifestom, TTL-om i dokazom
+da su nakon terminalnog runa obrisani i objekt i manifest. Export JSON backup
+prije brisanja testnog profila.
 
 ## Dokaz i čišćenje
 
@@ -132,10 +135,11 @@ Automatizirani authenticated browser gate pokreće se ručno iz GitHub Actionsa
 nakon što su postavljeni `KATEDRA_INTEGRATION_URL`,
 `KATEDRA_AUTH_E2E_EMAIL` i `KATEDRA_AUTH_E2E_PASSWORD`. Skripta
 `scripts/authenticated-money-flow-e2e.mjs` provjerava prijavu, projekt,
-lokalni rukopis, AI prijedlog, `x-request-id` i opcionalni Stripe checkout
-ulaz. Webhook, settlement i failure matrix i dalje se moraju potvrditi u
-staging logovima i Supabaseu; browser prolaz sam po sebi nije dokaz RPC
-idempotencije.
+lokalni rukopis, AI prijedlog, `x-request-id`, reload, drugi tab, odbijanje
+tuđeg project ID-a i činjenicu da `/api/state` ne vraća `manuscript` ili
+`sections`, uz opcionalni Stripe checkout ulaz. Webhook, settlement i failure
+matrix i dalje se moraju potvrditi u staging logovima i Supabaseu; browser
+prolaz sam po sebi nije dokaz RPC idempotencije.
 
 Agenticni browser gate pokreće se nakon potvrđenog Passa:
 
@@ -148,9 +152,10 @@ workflow i izvršava se nakon authenticated money-flow gatea. Ako staging
 provider ili worker nije konfiguriran, rezultat ostaje release blocker.
 
 `scripts/agentic-workflow-e2e.mjs` provjerava da se run kreira s lokalnim
-snapshotom rukopisa i da agenticni tijek dođe do verificiranog terminalnog
-stanja. Ako staging provider ili worker nije konfiguriran, test mora ostati
-release blocker; ne označava se kao prolazan samo zato što je UI otvoren.
+snapshotom rukopisa, zatvara otvoreni tab nakon pokretanja i nastavlja run iz
+novog taba do verificiranog terminalnog stanja. Ako staging provider ili
+worker nije konfiguriran, test mora ostati release blocker; ne označava se kao
+prolazan samo zato što je UI otvoren.
 UI release gate za hibridni `/pisi` workspace pokreće se zasebno:
 
 ```powershell

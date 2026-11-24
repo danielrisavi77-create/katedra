@@ -1,6 +1,8 @@
 import { MAX_AGENT_CONTEXT_BYTES, validateAgentRunContext } from './run-context'
 import { mapWithConcurrency } from '../async/map-limited'
 import type { ManuscriptV1 } from '../manuscript/types'
+import type { ResearchPlanV1 } from '../research-plan/types'
+import { validateResearchPlan } from '../research-plan/validation'
 import { isScopedAgentPayload } from './payload-scope'
 
 const MAX_RUN_MATERIALS = 100
@@ -93,6 +95,27 @@ export async function loadRunManuscriptContext(
   const result = validateAgentRunContext(body, input.projectId, bytes.byteLength)
   if (result.ok === false) throw new Error(result.error)
   return result.manuscript
+}
+
+export async function loadRunResearchPlanContext(
+  storage: RunPayloadStorage,
+  input: { storagePath: string; projectId: string },
+): Promise<ResearchPlanV1 | null> {
+  const raw = await storage.download(input.storagePath)
+  const bytes = toBytes(raw)
+  if (bytes.byteLength > MAX_AGENT_CONTEXT_BYTES) throw new Error('Kontekst rukopisa je prevelik.')
+  let body: unknown
+  try {
+    body = JSON.parse(new TextDecoder().decode(bytes))
+  } catch {
+    throw new Error('Run payload kontekst nije valjan JSON.')
+  }
+  const manuscriptResult = validateAgentRunContext(body, input.projectId, bytes.byteLength)
+  if (manuscriptResult.ok === false) throw new Error(manuscriptResult.error)
+  if (!body || typeof body !== 'object' || !('researchPlan' in body) || body.researchPlan === undefined) return null
+  const result = validateResearchPlan(body.researchPlan, input.projectId)
+  if (result.ok === false) throw new Error(result.error)
+  return result.value
 }
 
 export async function loadRunMaterialContexts(

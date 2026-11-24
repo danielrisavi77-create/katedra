@@ -6,6 +6,7 @@ import { storeAgentRunContext } from '@/lib/agents/run-context-storage'
 import { replaceAgentPayloadsForRun } from '@/lib/agents/backend-contract'
 import { productTierForWorkType } from '@/lib/product/lifecycle'
 import { canEditAgentRunContext } from '@/lib/agents/run-context-policy'
+import { validateAgentSnapshotConsent } from '@/lib/agents/privacy-consent'
 import { privateJson } from '@/lib/observability/private-response.js'
 import { logOperationalEvent } from '@/lib/observability/operational-events'
 import { JSON_BODY_LIMITS, readJsonBody } from '@/lib/http/json-body.js'
@@ -68,6 +69,8 @@ async function handlePost(req, { params }) {
     workType: validatedContext.manuscript.workType,
   })
   if (!lockValidation.ok) return Response.json({ error: lockValidation.error }, { status: lockValidation.status })
+  const snapshotConsent = validateAgentSnapshotConsent(body?.snapshotConsent, run.project_id)
+  if (!snapshotConsent.ok) return Response.json({ error: snapshotConsent.error }, { status: 400 })
   const materialIds = body?.materialIds === undefined ? [] : body.materialIds
   if (!Array.isArray(materialIds) || materialIds.length > 100 || materialIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 200)) {
     return Response.json({ error: 'Popis materijala nije valjan.' }, { status: 400 })

@@ -4,6 +4,7 @@ import { resolveOwnedProjectResult } from '@/lib/academic-suite/repositories/pro
 import { createMaterialProvider } from '@/lib/materials/provider'
 import { MATERIAL_LIMITS } from '@/lib/materials/extractors'
 import { registerAgentPayload } from '@/lib/agents/backend-contract'
+import { validateAgentSnapshotConsent } from '@/lib/agents/privacy-consent'
 import { resolveCanonicalProjectPass } from '@/lib/product/server-capabilities'
 import { isDistributedRateLimitConfigured, releaseRateLimitReservation, reserveDistributedRequest, reserveUserRequest } from '@/lib/ai/rate-limit'
 import { createRequestContext, withRequestId } from '@/lib/observability/request-id.js'
@@ -92,6 +93,19 @@ async function handlePost(req, requestContext) {
     const status = decision.code === 'pass_required' ? 402
       : 503
     return Response.json({ error: 'Upload materijala zahtijeva aktivan Pass za ovaj projekt.' }, { status })
+  }
+
+  let consentValue = null
+  try {
+    consentValue = form.fields.snapshotConsent ? JSON.parse(String(form.fields.snapshotConsent)) : null
+  } catch {
+    consentValue = null
+  }
+  const snapshotConsent = validateAgentSnapshotConsent(consentValue, project.projectId)
+  if (!snapshotConsent.ok) {
+    return Response.json({
+      error: consentValue ? snapshotConsent.error : 'Prije slanja materijala moraš potvrditi privremenu obradu sadržaja.',
+    }, { status: 400 })
   }
 
   const buffer = file.buffer

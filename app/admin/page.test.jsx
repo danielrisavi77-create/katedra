@@ -21,7 +21,7 @@ describe('/admin', () => {
         projects: [{ project_id: 'project-1', topic: 'Tema rada', work_type_canonical: 'zavrsni' }],
         agentRuns: [{ run_id: 'run-1', status: 'running' }],
         usage: { requests: 2, inputTokens: 10, outputTokens: 20, charged: 0 },
-        featureFlags: { projectLocks: true, agentRuns: false, materials: false, billingContract: 'v2' },
+        featureFlags: { projectLocks: true, agentRuns: false, materials: false, researchModules: false, billingContract: 'v2' },
         warnings: [],
       }),
     }))

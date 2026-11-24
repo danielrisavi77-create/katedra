@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { createCompletionScan } from './completion-scan'
+import type { AcademicContext } from '../academic-context/types'
 
 const base = {
   startMode: 'new' as const,
@@ -10,6 +11,28 @@ const base = {
   mentor: '',
   deadline: '',
   materials: [],
+}
+
+const fpzgGraduateContext: AcademicContext = {
+  unitId: 'fpzg',
+  profileId: 'fpzg-politologija-diplomski',
+  institutionName: 'Fakultet političkih znanosti',
+  institutionLabel: 'Sveučilište u Zagrebu',
+  profileLabel: 'FPZG · diplomska Politologija · diplomski rad',
+  workType: 'd',
+  status: 'verified',
+  verifiedAt: '2026-06-28',
+  wordRange: { min: 10000, max: 12000 },
+  minimumReferences: 15,
+  minimumBooks: 3,
+  citationStyle: 'FPZG autor–godina',
+  requiredSections: ['Uvod', 'Metodologija', 'Zaključak'],
+  manualChecks: ['Provjeri metodološki dio.'],
+  facts: [],
+  submissionFacts: [],
+  sources: [{ title: 'Službene FPZG upute', url: 'https://fpzg.example/upute' }],
+  aiPolicy: { mode: 'full', claims: ['Profil je verificiran.'] },
+  capabilities: { facultyCoaching: true, paidPass: true, webResearch: true, autonomousRun: true },
 }
 
 describe('completion scan', () => {
@@ -37,5 +60,15 @@ describe('completion scan', () => {
     const scan = createCompletionScan({ ...base, startMode: 'existing', currentState: 'draft', importedText: 'Početni tekst rada.' })
     expect(scan.hasExistingDraft).toBe(true)
     expect(scan.missing).not.toContain('dodati postojeći tekst, upute ili literaturu')
+  })
+
+  it('uses the selected academic context for targets, source guidance and next actions', () => {
+    const scan = createCompletionScan({ ...base, academicContext: fpzgGraduateContext })
+
+    expect(scan.academicContext).toBe(fpzgGraduateContext)
+    expect(scan.strengths.join(' ')).toContain('10.000–12.000')
+    expect(scan.missing.join(' ')).toContain('15')
+    expect(scan.nextActions.join(' ')).toContain('Metodologija')
+    expect(scan.nextActions.join(' ')).toContain('FPZG autor–godina')
   })
 })

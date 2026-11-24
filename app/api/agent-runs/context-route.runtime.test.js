@@ -196,6 +196,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
         body: JSON.stringify({
           manuscript,
           materialIds: ['material-1', 'material-2'],
+          snapshotConsent: { version: 'agentic-snapshot-v1', projectId: 'project-1', acceptedAt: new Date().toISOString() },
         }),
       }),
       { params: { runId: 'run-1' } },
@@ -238,7 +239,7 @@ describe('POST /api/agent-runs/:runId/context entitlement guard', () => {
       new Request('http://localhost/api/agent-runs/run-1/context', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ manuscript, materialIds: [] }),
+        body: JSON.stringify({ manuscript, materialIds: [], snapshotConsent: { version: 'agentic-snapshot-v1', projectId: 'project-1', acceptedAt: new Date().toISOString() } }),
       }),
       { params: { runId: 'run-1' } },
     )

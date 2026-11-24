@@ -158,7 +158,13 @@ async function completeGuestOnboarding() {
   const home = page.getByRole('main', { name: 'Projektna početna' })
   await home.getByRole('heading', { name: expectedProject.topic, exact: true }).waitFor({ state: 'visible', timeout: 15_000 })
   assert.ok(await home.getByText(expectedProject.faculty, { exact: false }).isVisible(), 'fakultet nije vidljiv na projektnoj početnoj')
-  assert.ok(await home.getByText(/Politologija/i).isVisible(), 'program nije vidljiv na projektnoj početnoj')
+  assert.ok(await home.getByText(/Politologija/i).first().isVisible(), 'program nije vidljiv na projektnoj početnoj')
+
+  await home.getByText(/10[.]000.?12[.]000/).waitFor({ state: 'visible', timeout: 15_000 })
+  await home.getByText(/Najmanje 15 izvora.*3 knjige/i).waitFor({ state: 'visible', timeout: 15_000 })
+  await home.getByText(/FPZG autor/i).waitFor({ state: 'visible', timeout: 15_000 })
+  await home.getByText(/Pravila verificirana/i).waitFor({ state: 'visible', timeout: 15_000 })
+  await home.getByText(/Web istraživanje/i).waitFor({ state: 'visible', timeout: 15_000 })
 
   const primaryActions = page.locator('[data-primary-action="true"]')
   assert.equal(await primaryActions.count(), 1, 'projektni pregled mora imati točno jednu primarnu akciju')
@@ -282,7 +288,7 @@ async function verifyRouteMatrix() {
         await assertPageContract(label)
         if (route === '/pisi' && width >= 901) {
           const projectNav = page.getByRole('navigation', { name: 'Projekt' })
-          assert.equal(await projectNav.getByRole('button').count(), 10, `${label}: neočekivan broj projektnih ciljeva`)
+          assert.equal(await projectNav.getByRole('button').count(), 9, `${label}: neočekivan broj projektnih ciljeva`)
         }
       }
     }

@@ -76,7 +76,7 @@ describe('GET /api/admin/overview', () => {
     expect(body.projects).toEqual([{ project_id: 'project-1', topic: 'Tema', user_id: 'user-daniel' }])
     expect(body.agentRuns).toEqual([{ run_id: 'run-1', project_id: 'project-1', status: 'running' }])
     expect(body.usage).toEqual({ requests: 1, inputTokens: 10, outputTokens: 4, charged: 30 })
-    expect(body.featureFlags).toEqual({ projectLocks: true, agentRuns: false, materials: false, billingContract: 'v2' })
+    expect(body.featureFlags).toEqual({ projectLocks: true, agentRuns: false, materials: false, researchModules: false, billingContract: 'v2' })
     expect(JSON.stringify(body)).not.toContain('KATEDRA_ADMIN_EMAILS')
     expect(JSON.stringify(body)).not.toContain('manuscript')
   })

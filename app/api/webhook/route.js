@@ -42,6 +42,7 @@
 // ============================================================
 import { getStripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { recordKatedraProductEvent } from '@/lib/analytics/product-events'
 import { getKatedraPackage, PURCHASE_WINDOW_DAYS } from '@/lib/stripe/catalog'
 import { validateCheckoutConfirmation } from '../../../lib/stripe/checkout-validation.js'
 import { refundDuplicateProjectPass } from '../../../lib/stripe/duplicate-refund.js'
@@ -306,10 +307,12 @@ async function handlePOST(req) {
           return new Response('grant failed', { status: 500 }) // Stripe će retry-ati
         }
 
-        // SharedAnalyticsEvent shape (lib/academic-suite/contracts.ts) bez backend
-        // sinka — nova events tablica ide kroz Lekta migraciju prvo (CLAUDE.md
-        // "Database authority rule"). Do tada strukturirani function log ostaje
-        // jedini trag; trivijalno zamjenjivo INSERT-om kad tablica postoji.
+        // The canonical analytics sink is the Lekta-owned
+        // katedra_product_events table. The local source contract is present,
+        // but staging must deploy it before this event can be treated as a
+        // production north-star signal; a failed insert remains observable and
+        // does not silently claim completion.
+        await recordKatedraProductEvent(db, { eventName: 'purchase_completed', userId, projectId, idempotencyKey: s.id, properties: { productKey, tokens, amountEur: amount, stripeSessionId: s.id } })
         console.log(JSON.stringify({
           eventName: 'purchase_completed', occurredAt: new Date().toISOString(),
           userId, projectId, app: 'katedra',

@@ -4,6 +4,8 @@ import { readProjectLock } from '../academic-suite/project-lock'
 import { resolveOwnedProjectResult } from '../academic-suite/repositories/projects'
 import { lookupActiveProjectPassForProduct } from '../academic-suite/repositories/entitlements'
 import { isAdminOverrideUser } from '../auth/admin-access'
+import { compileAcademicContext } from '../academic-context/compile-context'
+import { loadAcademicPack } from '../academic-context/server-load-pack'
 import { productTierForWorkType, type ProjectCapability, type ProductTier } from './lifecycle'
 import { decideProjectCapability, type CapabilityDecision } from './capabilities'
 
@@ -80,6 +82,12 @@ export async function resolveProjectCapability(
     return { allowed: false, code: 'capability_unavailable', projectId: owned.projectId, tier: lockedProductKey || 'free' }
   }
   const hasActivePass = passLookup.active
+  const academicContext = compileAcademicContext({
+    catalog: loadAcademicPack(),
+    unitId: owned.unitId,
+    profileId: owned.profileId,
+    workType: lock?.workType || owned.workType || '',
+  })
 
   return decideProjectCapability({
     userId: input.userId,
@@ -87,9 +95,9 @@ export async function resolveProjectCapability(
     ownedProjectId: owned.projectId,
     lockedProductKey,
     hasActivePass,
-    // No client or route payload can assert institutional policy verification.
-    // Until a canonical policy repository is connected, research is blocked.
-    verifiedPolicy: false,
+    verifiedPolicy: academicContext.status === 'verified',
+    verifiedAcademicProfile: academicContext.status === 'verified',
+    researchModulesEnabled: process.env.KATEDRA_RESEARCH_MODULES_ENABLED === 'true',
   }, input.capability)
 }
 
